@@ -6,12 +6,16 @@ Fetches data from NHL public API (api-web.nhle.com/v1):
 - Standings (classements)
 - Club-stats (rosters de joueurs + stats saison)
 - Goalie form (5 derniers matchs)
+- Back-to-back detection
 
 Calcule les scores de probabilité pour chaque joueur (but, passe, point, tir)
-et push dans nhl_data_lake + nhl_fixtures dans Supabase.
+avec ajustements: PP%, PK%, fatigue B2B, IA game context (Claude).
+Push dans nhl_data_lake + nhl_fixtures dans Supabase.
 """
 
+import os
 import sys
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
@@ -49,14 +53,12 @@ def _fetch_json(endpoint: str) -> Optional[dict]:
             if resp.status_code == 200:
                 return resp.json()
             elif resp.status_code in (429, 500, 502, 503):
-                import time
                 time.sleep(1.5 * (attempt + 1))
             else:
                 logger.error(f"[NHL] HTTP {resp.status_code} on {endpoint}")
                 return None
         except Exception as e:
             logger.error(f"[NHL] Error fetching {endpoint}: {e}")
-            import time
             time.sleep(1.0 * (attempt + 1))
     return None
 
@@ -73,7 +75,6 @@ def fetch_schedule() -> list[dict]:
     for day in data["gameWeek"]:
         if day["date"] == today:
             return day.get("games", [])
-    # If today not found, return first day with games
     for day in data["gameWeek"]:
         if day.get("games"):
             return day["games"]
@@ -91,8 +92,10 @@ def fetch_standings() -> dict:
         abbrev = t.get("teamAbbrev", {}).get("default", "")
         gp = max(1, t.get("gamesPlayed", 1))
         ga = t.get("goalAgainst", 0)
+        gf = t.get("goalFor", 0)
         team_stats[abbrev] = {
             "gaa": round(ga / gp, 2),
+            "gf_per_game": round(gf / gp, 2),
             "pp_pct": t.get("powerPlayPctg", 0.20),
             "pk_pct": t.get("penaltyKillPctg", 0.80),
             "l10_pts_pct": t.get("l10PtsPctg", 0.5),
@@ -163,11 +166,96 @@ def fetch_goalie_form(teams: list[str]) -> dict:
     return goalie_stats
 
 
+def detect_back_to_back(games: list[dict]) -> set[str]:
+    """Detect teams playing back-to-back (played yesterday)."""
+    tired_teams = set()
+    yesterday = (datetime.utcnow() - timedelta(days=1)).strftime("%Y-%m-%d")
+
+    schedule_data = _fetch_json("/schedule/now")
+    if not schedule_data or "gameWeek" not in schedule_data:
+        return tired_teams
+
+    for day in schedule_data["gameWeek"]:
+        if day["date"] == yesterday:
+            for g in day.get("games", []):
+                if g.get("gameState") in ("FINAL", "OFF"):
+                    tired_teams.add(g.get("homeTeam", {}).get("abbrev", ""))
+                    tired_teams.add(g.get("awayTeam", {}).get("abbrev", ""))
+            break
+
+    today_teams = set()
+    for g in games:
+        today_teams.add(g.get("homeTeam", {}).get("abbrev", ""))
+        today_teams.add(g.get("awayTeam", {}).get("abbrev", ""))
+
+    return tired_teams & today_teams
+
+
+# ─── AI Game Context (Claude) ───────────────────────────────────
+
+def get_ai_game_context(games: list[dict], standings: dict) -> dict:
+    """Use Claude to analyze game context and get offensive factors per team.
+
+    Returns dict like {"EDM": 1.4, "TOR": 1.0, ...}
+    - 0.7 = Defensive game
+    - 1.0 = Standard
+    - 1.3 = Open game
+    - 1.5+ = Offensive festival
+    """
+    try:
+        from brain import ask_claude
+    except ImportError:
+        logger.warning("[NHL] brain.ask_claude not available — skipping AI context")
+        return {}
+
+    games_desc = []
+    for g in games:
+        h = g.get("homeTeam", {}).get("abbrev", "")
+        a = g.get("awayTeam", {}).get("abbrev", "")
+        h_stats = standings.get(h, {})
+        a_stats = standings.get(a, {})
+        games_desc.append(
+            f"- {TEAM_NAMES.get(h, h)} (GF/m: {h_stats.get('gf_per_game', '?')}, GAA: {h_stats.get('gaa', '?')}, "
+            f"PP: {round(h_stats.get('pp_pct', 0) * 100)}%, L10: {round(h_stats.get('l10_pts_pct', 0) * 100)}%)"
+            f" vs "
+            f"{TEAM_NAMES.get(a, a)} (GF/m: {a_stats.get('gf_per_game', '?')}, GAA: {a_stats.get('gaa', '?')}, "
+            f"PP: {round(a_stats.get('pp_pct', 0) * 100)}%, L10: {round(a_stats.get('l10_pts_pct', 0) * 100)}%)"
+        )
+
+    system_prompt = (
+        "Tu es un expert en analyse NHL. Pour chaque match, donne un OFFENSIVE_FACTOR "
+        "multiplicateur pour chaque équipe.\n"
+        "- 0.7 = Match fermé/Défensif\n- 1.0 = Standard\n- 1.3 = Match ouvert\n- 1.5+ = Festival offensif\n\n"
+        "Réponds UNIQUEMENT avec un JSON valide: {\"EDM\": 1.4, \"TOR\": 1.0, ...}\n"
+        "Pas d'explication, juste le JSON."
+    )
+
+    user_prompt = f"Analyse ces matchs NHL ce soir:\n" + "\n".join(games_desc)
+
+    try:
+        response = ask_claude(system_prompt, user_prompt)
+        if response:
+            import json
+            cleaned = response.strip()
+            if cleaned.startswith("```"):
+                cleaned = cleaned.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+            return json.loads(cleaned)
+    except Exception as e:
+        logger.warning(f"[NHL] AI context parsing failed: {e}")
+
+    return {}
+
+
 # ─── Player scoring ─────────────────────────────────────────────
 
 def _score_player(skater: dict, team: str, opp: str, my_stats: dict, opp_stats: dict,
-                  is_home: bool, goalie_form: dict) -> dict:
-    """Score a single player for goal, assist, point, shot probabilities."""
+                  is_home: bool, goalie_form: dict, tired_teams: set,
+                  ai_factors: dict) -> dict:
+    """Score a single player for goal, assist, point, shot probabilities.
+
+    Uses: per-game rates, TOI, opponent GAA, goalie form, PP%, PK%,
+    back-to-back fatigue, AI offensive factor.
+    """
     name = skater.get("firstName", {}).get("default", "") + " " + skater.get("lastName", {}).get("default", "")
     player_id = str(skater.get("playerId", ""))
 
@@ -175,7 +263,6 @@ def _score_player(skater: dict, team: str, opp: str, my_stats: dict, opp_stats: 
     goals = skater.get("goals", 0)
     assists = skater.get("assists", 0)
     points = skater.get("points", 0)
-    shots = skater.get("shootingPctg", 0)
     toi_per_game = skater.get("avgToi", "00:00")
 
     # Parse TOI
@@ -186,46 +273,58 @@ def _score_player(skater: dict, team: str, opp: str, my_stats: dict, opp_stats: 
         toi_minutes = 0
 
     # Per-game rates
-    gpg = goals / gp  # Goals per game
-    apg = assists / gp  # Assists per game
-    ppg = points / gp  # Points per game
-    spg = skater.get("shootingPctg", 0)  # We'll use shots per game instead
+    gpg = goals / gp
+    apg = assists / gp
+    ppg = points / gp
 
-    # Calculate shots per game from goals and shooting percentage
+    # Calculate shots per game
     shooting_pct = skater.get("shootingPctg", 0)
     shots_per_game = (goals / max(0.01, shooting_pct)) / gp if shooting_pct > 0 else 2.0
 
-    # --- Goal probability ---
-    base_goal_prob = min(gpg * 100, 60)
-    # Adjust for opponent defense
+    # ─── Adjustment factors ───
     opp_gaa = opp_stats.get("gaa", 3.0) if opp_stats else 3.0
-    defense_factor = opp_gaa / 3.0  # >1 = weak defense, <1 = strong
-    # Adjust for goalie form
+    defense_factor = opp_gaa / 3.0  # >1 = weak defense
+
     goalie_adj = goalie_form.get(opp, {}).get("form", 0)
-    base_goal_prob *= defense_factor * (1 + goalie_adj)
-    # Home ice advantage
+
+    # Power Play boost: good PP% of own team + bad PK% of opponent
+    my_pp = my_stats.get("pp_pct", 0.20) if my_stats else 0.20
+    opp_pk = opp_stats.get("pk_pct", 0.80) if opp_stats else 0.80
+    pp_boost = 1.0 + (my_pp - 0.20) * 0.5 + (0.80 - opp_pk) * 0.5  # Boost if strong PP vs weak PK
+
+    # Back-to-back fatigue penalty
+    b2b_penalty = 0.92 if team in tired_teams else 1.0
+
+    # AI offensive factor
+    ai_factor = ai_factors.get(team, 1.0)
+
+    # ─── Goal probability ───
+    base_goal_prob = min(gpg * 100, 60)
+    base_goal_prob *= defense_factor * (1 + goalie_adj) * pp_boost * b2b_penalty * ai_factor
     if is_home:
         base_goal_prob *= 1.05
-    # TOI bonus
     if toi_minutes > 20:
-        base_goal_prob *= 1.1
+        base_goal_prob *= 1.10
     elif toi_minutes > 18:
         base_goal_prob *= 1.05
 
-    # --- Assist probability ---
+    # ─── Assist probability ───
     base_assist_prob = min(apg * 100, 60)
-    base_assist_prob *= defense_factor
+    base_assist_prob *= defense_factor * pp_boost * b2b_penalty * ai_factor
     if is_home:
         base_assist_prob *= 1.03
+    if toi_minutes > 19:
+        base_assist_prob *= 1.08
 
-    # --- Point probability ---
+    # ─── Point probability ───
     base_point_prob = min(ppg * 100, 80)
-    base_point_prob *= defense_factor * (1 + goalie_adj * 0.5)
+    base_point_prob *= defense_factor * (1 + goalie_adj * 0.5) * pp_boost * b2b_penalty * ai_factor
     if is_home:
         base_point_prob *= 1.05
 
-    # --- Shot probability (2.5+ shots on goal) ---
-    base_shot_prob = min(shots_per_game / 2.5 * 50, 90)  # Normalize around 2.5 SOG
+    # ─── Shot probability (2.5+ SOG) ───
+    base_shot_prob = min(shots_per_game / 2.5 * 50, 90)
+    base_shot_prob *= b2b_penalty * ai_factor
     if toi_minutes > 19:
         base_shot_prob *= 1.15
     if is_home:
@@ -248,22 +347,36 @@ def _score_player(skater: dict, team: str, opp: str, my_stats: dict, opp_stats: 
         "shots_per_game": round(shots_per_game, 1),
         "toi_minutes": round(toi_minutes, 1),
         "games_played": gp,
+        "ai_factor": ai_factor,
+        "b2b": team in tired_teams,
+        "pp_boost": round(pp_boost, 3),
     }
 
 
 # ─── Win probability ────────────────────────────────────────────
 
-def calculate_win_prob(home: str, away: str, standings: dict) -> dict:
-    """Calculate win probability based on standings."""
+def calculate_win_prob(home: str, away: str, standings: dict, tired_teams: set) -> dict:
+    """Calculate win probability based on standings, PP/PK, and fatigue."""
     h = standings.get(home, {})
     a = standings.get(away, {})
 
     h_pts = h.get("l10_pts_pct", 0.5)
     a_pts = a.get("l10_pts_pct", 0.5)
 
-    # Simple Elo-ish calculation
+    # Power index: L10 form + offensive/defensive balance
     h_power = h_pts * 1.05  # Home ice advantage
+    h_power += (h.get("pp_pct", 0.20) - 0.20) * 0.15  # PP bonus
+    h_power += (h.get("pk_pct", 0.80) - 0.80) * 0.10  # PK bonus
+
     a_power = a_pts
+    a_power += (a.get("pp_pct", 0.20) - 0.20) * 0.15
+    a_power += (a.get("pk_pct", 0.80) - 0.80) * 0.10
+
+    # Back-to-back fatigue
+    if home in tired_teams:
+        h_power *= 0.95
+    if away in tired_teams:
+        a_power *= 0.95
 
     total = h_power + a_power
     if total == 0:
@@ -280,7 +393,7 @@ def calculate_win_prob(home: str, away: str, standings: dict) -> dict:
 def run_nhl_pipeline() -> dict:
     """Run the full NHL pipeline: fetch data, score players, save to Supabase."""
     logger.info("=" * 60)
-    logger.info("🏒 NHL PIPELINE — Collecte + Analyse")
+    logger.info("🏒 NHL PIPELINE — Collecte + Analyse + IA")
     logger.info("=" * 60)
 
     # 1. Fetch schedule
@@ -292,20 +405,36 @@ def run_nhl_pipeline() -> dict:
     future_games = [g for g in games if datetime.fromisoformat(
         g["startTimeUTC"].replace("Z", "+00:00")) > datetime.now().astimezone()]
 
-    logger.info(f"[NHL] {len(games)} matchs trouvés ({len(future_games)} à venir)")
+    if not future_games:
+        future_games = games  # If all started, analyze all anyway
+
+    logger.info(f"[NHL] {len(games)} matchs trouvés ({len(future_games)} à analyser)")
 
     # 2. Fetch standings
     standings = fetch_standings()
     logger.info(f"[NHL] Standings chargés pour {len(standings)} équipes")
 
-    # 3. Fetch goalie form
+    # 3. Detect back-to-back teams
+    tired_teams = detect_back_to_back(future_games)
+    if tired_teams:
+        logger.info(f"[NHL] ⚠️ Back-to-back détecté: {', '.join(tired_teams)}")
+
+    # 4. Fetch goalie form
     all_teams = []
     for g in future_games:
         all_teams.append(g.get("homeTeam", {}).get("abbrev", ""))
         all_teams.append(g.get("awayTeam", {}).get("abbrev", ""))
     goalie_form = fetch_goalie_form(all_teams)
 
-    # 4. Analyze each game
+    # 5. 🧠 AI Game Context (Claude)
+    logger.info("[NHL] 🧠 Analyse IA du contexte des matchs...")
+    ai_factors = get_ai_game_context(future_games, standings)
+    if ai_factors:
+        logger.info(f"[NHL] 🧠 AI factors: {ai_factors}")
+    else:
+        logger.info("[NHL] 🧠 AI factors: aucun (fallback = 1.0)")
+
+    # 6. Analyze each game
     today = datetime.utcnow().strftime("%Y-%m-%d")
     all_players = []
     fixtures_data = []
@@ -319,7 +448,19 @@ def run_nhl_pipeline() -> dict:
         home_name = TEAM_NAMES.get(home_abbrev, home_abbrev)
         away_name = TEAM_NAMES.get(away_abbrev, away_abbrev)
 
-        logger.info(f"[NHL] Analyse: {home_name} vs {away_name}")
+        b2b_tag = ""
+        if home_abbrev in tired_teams:
+            b2b_tag += f" ⚠️{home_abbrev} B2B"
+        if away_abbrev in tired_teams:
+            b2b_tag += f" ⚠️{away_abbrev} B2B"
+
+        ai_tag = ""
+        h_ai = ai_factors.get(home_abbrev, 1.0)
+        a_ai = ai_factors.get(away_abbrev, 1.0)
+        if h_ai > 1.15 or a_ai > 1.15:
+            ai_tag = " 🔥"
+
+        logger.info(f"[NHL] Analyse: {home_name} vs {away_name}{b2b_tag}{ai_tag}")
 
         # Fetch rosters
         home_roster = fetch_roster(home_abbrev)
@@ -330,17 +471,19 @@ def run_nhl_pipeline() -> dict:
 
         # Score players
         for skater in home_roster:
-            player = _score_player(skater, home_abbrev, away_abbrev, h_stats, a_stats, True, goalie_form)
+            player = _score_player(skater, home_abbrev, away_abbrev, h_stats, a_stats,
+                                   True, goalie_form, tired_teams, ai_factors)
             if player["prob_goal"] > 5 or player["prob_shot"] > 15:
                 all_players.append(player)
 
         for skater in away_roster:
-            player = _score_player(skater, away_abbrev, home_abbrev, a_stats, h_stats, False, goalie_form)
+            player = _score_player(skater, away_abbrev, home_abbrev, a_stats, h_stats,
+                                   False, goalie_form, tired_teams, ai_factors)
             if player["prob_goal"] > 5 or player["prob_shot"] > 15:
                 all_players.append(player)
 
         # Win probabilities
-        win_prob = calculate_win_prob(home_abbrev, away_abbrev, standings)
+        win_prob = calculate_win_prob(home_abbrev, away_abbrev, standings, tired_teams)
 
         fixtures_data.append({
             "api_fixture_id": game_id,
@@ -350,9 +493,11 @@ def run_nhl_pipeline() -> dict:
             "away_team": away_name,
             "proba_home": win_prob["home"],
             "proba_away": win_prob["away"],
+            "ai_home_factor": h_ai,
+            "ai_away_factor": a_ai,
         })
 
-    # 5. Save to Supabase — nhl_data_lake
+    # 7. Save to Supabase — nhl_data_lake
     if all_players:
         rows = [
             {
@@ -384,7 +529,7 @@ def run_nhl_pipeline() -> dict:
 
         logger.info(f"[NHL] ✅ {len(rows)} joueurs insérés dans nhl_data_lake")
 
-    # 6. Save to Supabase — nhl_fixtures (upsert)
+    # 8. Save to Supabase — nhl_fixtures (upsert)
     for f in fixtures_data:
         try:
             existing = (
@@ -394,13 +539,19 @@ def run_nhl_pipeline() -> dict:
                 .execute()
                 .data
             )
+            predictions = {
+                "proba_home": f["proba_home"],
+                "proba_away": f["proba_away"],
+                "ai_home_factor": f.get("ai_home_factor", 1.0),
+                "ai_away_factor": f.get("ai_away_factor", 1.0),
+            }
             if existing:
                 supabase.table("nhl_fixtures").update({
                     "date": f["date"],
                     "status": f["status"],
                     "home_team": f["home_team"],
                     "away_team": f["away_team"],
-                    "predictions_json": {"proba_home": f["proba_home"], "proba_away": f["proba_away"]},
+                    "predictions_json": predictions,
                 }).eq("api_fixture_id", f["api_fixture_id"]).execute()
             else:
                 supabase.table("nhl_fixtures").insert({
@@ -409,7 +560,7 @@ def run_nhl_pipeline() -> dict:
                     "status": f["status"],
                     "home_team": f["home_team"],
                     "away_team": f["away_team"],
-                    "predictions_json": {"proba_home": f["proba_home"], "proba_away": f["proba_away"]},
+                    "predictions_json": predictions,
                 }).execute()
         except Exception as e:
             logger.error(f"[NHL] Error upserting fixture {f['home_team']} vs {f['away_team']}: {e}")
@@ -420,8 +571,15 @@ def run_nhl_pipeline() -> dict:
         "status": "ok",
         "matches": len(fixtures_data),
         "players_analyzed": len(all_players),
+        "tired_teams": list(tired_teams),
+        "ai_factors": ai_factors,
         "fixtures": [
-            {"match": f"{f['home_team']} vs {f['away_team']}", "home_pct": f["proba_home"], "away_pct": f["proba_away"]}
+            {
+                "match": f"{f['home_team']} vs {f['away_team']}",
+                "home_pct": f["proba_home"],
+                "away_pct": f["proba_away"],
+                "ai": f"🔥" if f.get("ai_home_factor", 1) > 1.15 or f.get("ai_away_factor", 1) > 1.15 else "",
+            }
             for f in fixtures_data
         ],
     }

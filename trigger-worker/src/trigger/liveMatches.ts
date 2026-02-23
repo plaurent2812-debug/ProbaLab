@@ -82,10 +82,10 @@ export const scheduleDailyMatches = schedules.task({
     },
 });
 
-// ─── Task 4: Update Live Scores (CRON every 2 min, 18h-23h) ───
+// ─── Task 4: Update Live Scores (CRON every 5 min, 12h-23h) ───
 export const updateLiveScores = schedules.task({
     id: "update-live-scores",
-    cron: "*/2 18-23 * * *",
+    cron: "*/5 11-23 * * *",  // Every 5 min, 12h-00h Paris (11h-23h UTC)
     run: async () => {
         const res = await fetch(`${API_URL}/api/trigger/update-live-scores`, {
             method: "POST",
