@@ -1,13 +1,15 @@
 
 import { useState, useEffect } from 'react'
 import { Protected } from '@/lib/auth'
-import { triggerPipeline, fetchPipelineStatus } from '@/lib/api'
+import { triggerPipeline, triggerNHLPipeline, fetchPipelineStatus } from '@/lib/api'
 import { Shield, Play, Loader2, Cpu, Terminal, Activity, Server, Database } from 'lucide-react'
 
 function AdminDashboard() {
     const [status, setStatus] = useState(null)
     const [loading, setLoading] = useState(false)
     const [msg, setMsg] = useState('')
+    const [nhlLoading, setNhlLoading] = useState(false)
+    const [nhlMsg, setNhlMsg] = useState('')
 
     const refreshStatus = async () => {
         try {
@@ -20,7 +22,7 @@ function AdminDashboard() {
 
     useEffect(() => {
         refreshStatus()
-        const interval = setInterval(refreshStatus, 3000) // Rafraîchissement plus rapide pour suivre le live
+        const interval = setInterval(refreshStatus, 3000)
         return () => clearInterval(interval)
     }, [])
 
@@ -29,12 +31,24 @@ function AdminDashboard() {
         setMsg('')
         try {
             await triggerPipeline(mode)
-            // On attend un peu que le serveur lance le process avant de refresh
             setTimeout(refreshStatus, 1000)
         } catch (err) {
             setMsg(`Erreur: ${err.message}`)
         } finally {
             setLoading(false)
+        }
+    }
+
+    const handleNHLRun = async () => {
+        setNhlLoading(true)
+        setNhlMsg('')
+        try {
+            const result = await triggerNHLPipeline()
+            setNhlMsg(`✅ ${result.matches || 0} matchs analysés, ${result.players_analyzed || 0} joueurs scorés`)
+        } catch (err) {
+            setNhlMsg(`Erreur: ${err.message}`)
+        } finally {
+            setNhlLoading(false)
         }
     }
 
@@ -57,7 +71,7 @@ function AdminDashboard() {
                             <h1 className="text-3xl font-bold tracking-tight">
                                 <span className="gradient-text">Centre Admin</span>
                             </h1>
-                            <p className="text-muted-foreground mt-1">Pilotage du pipeline de données et monitoring système</p>
+                            <p className="text-muted-foreground mt-1">Pilotage des pipelines Football & NHL</p>
                         </div>
                     </div>
 
@@ -72,12 +86,13 @@ function AdminDashboard() {
                 <div className="grid lg:grid-cols-3 gap-6">
                     {/* Colonne Gauche : Contrôles */}
                     <div className="lg:col-span-1 space-y-6">
+                        {/* ⚽ Football Pipeline */}
                         <div className="glass rounded-2xl border border-white/5 p-6 shadow-xl relative overflow-hidden group">
                             <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
 
                             <h2 className="text-lg font-semibold flex items-center gap-2 mb-6">
                                 <Cpu className="w-5 h-5 text-indigo-400" />
-                                <span>Contrôle Pipeline</span>
+                                <span>⚽ Pipeline Football</span>
                             </h2>
 
                             <div className="space-y-3 relative z-10">
@@ -92,7 +107,7 @@ function AdminDashboard() {
                                             <span className="font-semibold text-white">Lancer Analyse Complète</span>
                                             <span className="text-xs text-muted-foreground">Données + IA + Prédictions</span>
                                         </div>
-                                        {loading && msg.includes('full') ? (
+                                        {loading ? (
                                             <Loader2 className="w-5 h-5 text-indigo-400 animate-spin" />
                                         ) : (
                                             <Play className="w-5 h-5 text-indigo-400 group-hover:scale-110 transition-transform" />
@@ -124,6 +139,47 @@ function AdminDashboard() {
                                 <div className="mt-4 p-3 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-xs text-indigo-300 flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
                                     <Server className="w-3 h-3" />
                                     {msg}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* 🏒 NHL Pipeline */}
+                        <div className="glass rounded-2xl border border-cyan-500/20 p-6 shadow-xl relative overflow-hidden group">
+                            <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+
+                            <h2 className="text-lg font-semibold flex items-center gap-2 mb-6">
+                                <span className="text-xl">🏒</span>
+                                <span>Pipeline NHL</span>
+                            </h2>
+
+                            <div className="space-y-3 relative z-10">
+                                <button
+                                    onClick={handleNHLRun}
+                                    disabled={nhlLoading}
+                                    className="w-full relative group overflow-hidden rounded-xl p-[1px] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                                >
+                                    <span className="absolute inset-0 bg-gradient-to-r from-cyan-500 via-teal-500 to-cyan-500 opacity-70 group-hover:opacity-100 animate-gradient-xy transition-opacity" />
+                                    <div className="relative bg-background/90 backdrop-blur-sm rounded-xl px-4 py-4 flex items-center justify-between group-hover:bg-background/80 transition-all">
+                                        <div className="flex flex-col items-start">
+                                            <span className="font-semibold text-white">Lancer Pipeline NHL</span>
+                                            <span className="text-xs text-muted-foreground">Schedule + Roster + Scoring</span>
+                                        </div>
+                                        {nhlLoading ? (
+                                            <Loader2 className="w-5 h-5 text-cyan-400 animate-spin" />
+                                        ) : (
+                                            <Play className="w-5 h-5 text-cyan-400 group-hover:scale-110 transition-transform" />
+                                        )}
+                                    </div>
+                                </button>
+                            </div>
+
+                            {nhlMsg && (
+                                <div className={`mt-4 p-3 rounded-lg text-xs flex items-center gap-2 animate-in fade-in slide-in-from-top-2 ${nhlMsg.startsWith('✅')
+                                        ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-300'
+                                        : 'bg-red-500/10 border border-red-500/20 text-red-300'
+                                    }`}>
+                                    <Server className="w-3 h-3" />
+                                    {nhlMsg}
                                 </div>
                             )}
                         </div>
@@ -164,11 +220,11 @@ function AdminDashboard() {
                                 {status?.logs ? (
                                     <div className="text-slate-300 whitespace-pre-wrap">
                                         {status.logs.split('\n').map((line, i) => {
-                                            // Coloration syntaxique basique
                                             if (line.includes('[INFO]')) return <div key={i}><span className="text-blue-500">[INFO]</span> {line.replace(/.*\[INFO\]/, '')}</div>
                                             if (line.includes('[ERROR]')) return <div key={i}><span className="text-red-500">[ERROR]</span> {line.replace(/.*\[ERROR\]/, '')}</div>
                                             if (line.includes('✅')) return <div key={i} className="text-emerald-400">{line}</div>
                                             if (line.includes('📊')) return <div key={i} className="text-purple-400 font-bold mt-2">{line}</div>
+                                            if (line.includes('🏒')) return <div key={i} className="text-cyan-400 font-bold">{line}</div>
                                             return <div key={i} className="opacity-80">{line}</div>
                                         })}
                                         {isRunning && <span className="inline-block w-2 h-4 bg-emerald-500 animate-pulse ml-1 align-middle" />}
