@@ -3,13 +3,13 @@ import { useNavigate } from "react-router-dom"
 import {
     Zap, ArrowRight, ChevronRight, Flame, Clock,
     TrendingUp, BarChart3, BrainCircuit, Target,
-    Activity, Newspaper, ExternalLink, Trophy
+    Activity, Newspaper, ExternalLink, Trophy, BellRing
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { fetchPredictions, fetchPerformance, fetchNews } from "@/lib/api"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { useAuth } from "@/lib/auth"
+import { useAuth, supabase } from "@/lib/auth"
 
 /* ── Stat card ─────────────────────────────────────────────── */
 function StatCard({ label, value, sub, color = "text-primary" }) {
@@ -133,6 +133,33 @@ function NewsCard({ item }) {
     )
 }
 
+/* ── Live Alert Banner ────────────────────────────────────────── */
+function LiveAlertBanner({ alert }) {
+    if (!alert) return null
+
+    return (
+        <div className="rounded-xl border border-red-500/30 bg-gradient-to-r from-red-500/10 to-orange-500/10 p-4 shadow-lg shadow-red-500/5 animate-pulse-slow">
+            <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center shrink-0">
+                    <BellRing className="w-5 h-5 text-red-500" />
+                </div>
+                <div>
+                    <div className="flex items-center gap-2 mb-1">
+                        <span className="text-[10px] font-bold text-red-500 uppercase tracking-wider bg-red-500/10 px-2 py-0.5 rounded">
+                            🔥 Alerte Mi-Temps
+                        </span>
+                        <span className="text-sm font-bold">
+                            {alert.fixtures?.home_team} vs {alert.fixtures?.away_team}
+                        </span>
+                    </div>
+                    <p className="text-sm text-foreground/90 font-medium mb-1">{alert.analysis_text}</p>
+                    <p className="text-sm font-bold text-orange-500">Pari suggéré : {alert.recommended_bet}</p>
+                </div>
+            </div>
+        </div>
+    )
+}
+
 /* ═══════════════════════════════════════════════════════════
    Home Page
    ═══════════════════════════════════════════════════════════ */
@@ -145,6 +172,7 @@ export default function HomePage() {
     const [news, setNews] = useState([])
     const [loading, setLoading] = useState(true)
     const [newsLoading, setNewsLoading] = useState(true)
+    const [liveAlert, setLiveAlert] = useState(null)
 
     useEffect(() => {
         const today = new Date().toISOString().slice(0, 10)
@@ -171,10 +199,26 @@ export default function HomePage() {
             .then(r => setNews(r.news || []))
             .catch(() => { })
             .finally(() => setNewsLoading(false))
+
+        // Fetch recent live alerts (last 30 minutes)
+        const thirtyMinsAgo = new Date(Date.now() - 30 * 60000).toISOString()
+        supabase
+            .from("live_alerts")
+            .select("*, fixtures(home_team, away_team)")
+            .gte("created_at", thirtyMinsAgo)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .then(({ data }) => {
+                if (data && data.length > 0) setLiveAlert(data[0])
+            })
+            .catch(console.error)
     }, [])
 
     return (
         <div className="space-y-10 pb-12 animate-fade-in-up">
+
+            {/* ── Live Alert ────────────────────────────────── */}
+            {liveAlert && <LiveAlertBanner alert={liveAlert} />}
 
             {/* ── Hero ──────────────────────────────────────── */}
             <section className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-primary to-blue-700 dark:from-primary/90 dark:to-blue-900 p-8 sm:p-12 text-white shadow-xl shadow-primary/20">
