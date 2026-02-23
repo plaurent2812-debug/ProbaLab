@@ -18,7 +18,7 @@ except ImportError:
 
 # ─── Telegram Config ────────────────────────────────────────────
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8313502721:AAFOlAmD3zyiz8P143Kc16XcArBg-4g3AzY")
-TELEGRAM_CHAT_IDS = os.getenv("TELEGRAM_CHAT_IDS", "5721158019").split(",")
+TELEGRAM_CHAT_IDS = os.getenv("TELEGRAM_CHAT_IDS", "5721158019,7003371099").split(",")
 
 
 def _send_telegram_alert(home: str, away: str, analysis: str, bet: str, confidence: int) -> bool:
