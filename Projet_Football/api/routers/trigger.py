@@ -1,4 +1,5 @@
 from __future__ import annotations
+import os
 from datetime import datetime
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -8,6 +9,55 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 from config import supabase, api_get, logger
 from brain import ask_claude, extract_json
+
+try:
+    import httpx
+    HTTPX_AVAILABLE = True
+except ImportError:
+    HTTPX_AVAILABLE = False
+
+# ─── Telegram Config ────────────────────────────────────────────
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8313502721:AAFOlAmD3zyiz8P143Kc16XcArBg-4g3AzY")
+TELEGRAM_CHAT_IDS = os.getenv("TELEGRAM_CHAT_IDS", "5721158019").split(",")
+
+
+def _send_telegram_alert(home: str, away: str, analysis: str, bet: str, confidence: int) -> bool:
+    """Send a Telegram message to all registered chat IDs."""
+    if not HTTPX_AVAILABLE or not TELEGRAM_BOT_TOKEN:
+        logger.warning("[Telegram] httpx not available or no token")
+        return False
+
+    message = (
+        f"🔥 *ALERTE LIVE — ProbaLab*\n\n"
+        f"⚽ *{home} vs {away}*\n\n"
+        f"{analysis}\n\n"
+        f"💰 *Pari suggéré :* {bet}\n"
+        f"📊 *Confiance :* {confidence}/10"
+    )
+
+    sent = False
+    for chat_id in TELEGRAM_CHAT_IDS:
+        chat_id = chat_id.strip()
+        if not chat_id:
+            continue
+        try:
+            resp = httpx.post(
+                f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
+                json={
+                    "chat_id": chat_id,
+                    "text": message,
+                    "parse_mode": "Markdown",
+                },
+                timeout=10.0,
+            )
+            if resp.status_code == 200:
+                logger.info(f"[Telegram] ✅ Message envoyé à {chat_id}")
+                sent = True
+            else:
+                logger.error(f"[Telegram] Erreur {resp.status_code}: {resp.text}")
+        except Exception as e:
+            logger.error(f"[Telegram] Erreur envoi à {chat_id}: {e}")
+    return sent
 
 router = APIRouter(prefix="/api/trigger", tags=["Trigger"])
 
@@ -198,12 +248,25 @@ Analyse ces anomalies et recommande le meilleur pari en direct. Retourne le JSON
         return {"status": "error", "message": "AI failed to return valid JSON"}
 
     # 6. Save to live_alerts
+    alert_text = ai_result.get("analysis_text", "")
+    alert_bet = ai_result.get("recommended_bet", "")
+    alert_confidence = ai_result.get("confidence_score", 5)
+
     supabase.table("live_alerts").insert({
         "fixture_id": req.fixture_id,
-        "analysis_text": ai_result.get("analysis_text", ""),
-        "recommended_bet": ai_result.get("recommended_bet", ""),
-        "confidence_score": ai_result.get("confidence_score", 5)
+        "analysis_text": alert_text,
+        "recommended_bet": alert_bet,
+        "confidence_score": alert_confidence
     }).execute()
+
+    # 7. Send Telegram notification
+    _send_telegram_alert(
+        home=fixture["home_team"],
+        away=fixture["away_team"],
+        analysis=alert_text,
+        bet=alert_bet,
+        confidence=alert_confidence,
+    )
 
     logger.info(f"[Live] 🔥 ALERTE CRÉÉE pour {fixture['home_team']} vs {fixture['away_team']}")
     return {"status": "alert_created", "anomalies": anomalies, "alert": ai_result}
