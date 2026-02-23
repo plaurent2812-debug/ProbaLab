@@ -326,3 +326,288 @@ def update_live_scores():
 
     logger.info(f"[Live Scores] ✅ {updated} scores mis à jour, {errors} erreurs")
     return {"status": "ok", "updated": updated, "errors": errors, "total_live": len(live_fixtures)}
+
+
+# ─── Generic Telegram sender ────────────────────────────────────
+
+def _send_telegram_message(text: str) -> bool:
+    """Send a raw Telegram message to all registered chat IDs."""
+    if not HTTPX_AVAILABLE or not TELEGRAM_BOT_TOKEN:
+        return False
+    sent = False
+    for chat_id in TELEGRAM_CHAT_IDS:
+        chat_id = chat_id.strip()
+        if not chat_id:
+            continue
+        try:
+            resp = httpx.post(
+                f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
+                json={"chat_id": chat_id, "text": text, "parse_mode": "Markdown"},
+                timeout=10.0,
+            )
+            if resp.status_code == 200:
+                sent = True
+        except Exception as e:
+            logger.error(f"[Telegram] Erreur: {e}")
+    return sent
+
+
+# ─── 1. Automated Daily Pipeline ────────────────────────────────
+
+@router.post("/run-daily-pipeline")
+def run_daily_pipeline():
+    """Run the full prediction pipeline (data collection + AI analysis) and send a Telegram summary."""
+    import time as _time
+    logger.info("[Pipeline] 🚀 Démarrage du pipeline automatique...")
+    start = _time.time()
+
+    try:
+        from run_pipeline import run_data_pipeline, run_analysis
+        run_data_pipeline()
+        run_analysis()
+    except Exception as e:
+        logger.error(f"[Pipeline] ❌ Erreur: {e}")
+        _send_telegram_message(f"❌ *Pipeline échoué*\n\nErreur: {e}")
+        return {"status": "error", "message": str(e)}
+
+    elapsed = round(_time.time() - start)
+
+    # Count today's predictions
+    today = datetime.now().strftime("%Y-%m-%d")
+    predictions = (
+        supabase.table("fixtures")
+        .select("id, home_team, away_team, proba_home, proba_draw, proba_away")
+        .gte("date", f"{today}T00:00:00Z")
+        .lt("date", f"{today}T23:59:59Z")
+        .not_.is_("proba_home", "null")
+        .execute()
+        .data or []
+    )
+
+    # Build Telegram summary
+    summary_lines = [f"📋 *Pipeline terminé* ({elapsed}s)\n"]
+    summary_lines.append(f"📊 *{len(predictions)} matchs analysés*\n")
+
+    for p in predictions[:8]:  # Max 8 matches to keep message short
+        home_pct = p.get("proba_home", 0)
+        draw_pct = p.get("proba_draw", 0)
+        away_pct = p.get("proba_away", 0)
+        fav = p["home_team"] if home_pct >= away_pct else p["away_team"]
+        fav_pct = max(home_pct, away_pct)
+        summary_lines.append(f"⚽ {p['home_team']} vs {p['away_team']} → {fav} ({fav_pct}%)")
+
+    _send_telegram_message("\n".join(summary_lines))
+
+    logger.info(f"[Pipeline] ✅ Terminé en {elapsed}s — {len(predictions)} matchs")
+    return {"status": "ok", "elapsed_seconds": elapsed, "matches_analyzed": len(predictions)}
+
+
+# ─── 2. Daily Recap (Evening) ───────────────────────────────────
+
+@router.post("/daily-recap")
+def daily_recap():
+    """Compare today's predictions vs actual results and send a Telegram recap."""
+    logger.info("[Recap] 📊 Bilan du jour...")
+
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    # Get all finished matches today with predictions
+    fixtures = (
+        supabase.table("fixtures")
+        .select("home_team, away_team, proba_home, proba_draw, proba_away, "
+                "proba_btts, proba_over_25, proba_over_15, "
+                "home_goals, away_goals, status")
+        .gte("date", f"{today}T00:00:00Z")
+        .lt("date", f"{today}T23:59:59Z")
+        .eq("status", "FT")
+        .not_.is_("proba_home", "null")
+        .execute()
+        .data or []
+    )
+
+    if not fixtures:
+        msg = "📊 *Bilan du jour*\n\nAucun match terminé avec prédictions aujourd'hui."
+        _send_telegram_message(msg)
+        return {"status": "no_matches", "message": msg}
+
+    # Calculate accuracy per market
+    markets = {
+        "1X2": {"correct": 0, "total": 0},
+        "BTTS": {"correct": 0, "total": 0},
+        "Over 1.5": {"correct": 0, "total": 0},
+        "Over 2.5": {"correct": 0, "total": 0},
+    }
+
+    match_results = []
+
+    for f in fixtures:
+        hg = f.get("home_goals", 0) or 0
+        ag = f.get("away_goals", 0) or 0
+        total_goals = hg + ag
+
+        ph = f.get("proba_home", 0) or 0
+        pd = f.get("proba_draw", 0) or 0
+        pa = f.get("proba_away", 0) or 0
+
+        # 1X2
+        predicted = "home" if ph >= pd and ph >= pa else ("draw" if pd >= pa else "away")
+        actual = "home" if hg > ag else ("draw" if hg == ag else "away")
+        markets["1X2"]["total"] += 1
+        correct = predicted == actual
+        if correct:
+            markets["1X2"]["correct"] += 1
+        match_results.append(f"{'✅' if correct else '❌'} {f['home_team']} {hg}-{ag} {f['away_team']}")
+
+        # BTTS
+        p_btts = f.get("proba_btts")
+        if p_btts is not None:
+            markets["BTTS"]["total"] += 1
+            btts_actual = hg > 0 and ag > 0
+            if (p_btts > 50) == btts_actual:
+                markets["BTTS"]["correct"] += 1
+
+        # Over 1.5
+        p_o15 = f.get("proba_over_15")
+        if p_o15 is not None:
+            markets["Over 1.5"]["total"] += 1
+            if (p_o15 > 50) == (total_goals > 1.5):
+                markets["Over 1.5"]["correct"] += 1
+
+        # Over 2.5
+        p_o25 = f.get("proba_over_25")
+        if p_o25 is not None:
+            markets["Over 2.5"]["total"] += 1
+            if (p_o25 > 50) == (total_goals > 2.5):
+                markets["Over 2.5"]["correct"] += 1
+
+    # Build Telegram recap
+    lines = [f"📊 *Bilan du jour — {today}*\n"]
+    lines.append(f"*{len(fixtures)} matchs terminés*\n")
+
+    for name, m in markets.items():
+        if m["total"] > 0:
+            pct = round(100 * m["correct"] / m["total"])
+            emoji = "🟢" if pct >= 70 else ("🟡" if pct >= 50 else "🔴")
+            lines.append(f"{emoji} *{name}* : {m['correct']}/{m['total']} ({pct}%)")
+
+    lines.append("")
+    lines.extend(match_results[:10])
+
+    msg = "\n".join(lines)
+    _send_telegram_message(msg)
+
+    logger.info(f"[Recap] ✅ Bilan envoyé : {len(fixtures)} matchs")
+    return {"status": "ok", "matches": len(fixtures), "markets": markets}
+
+
+# ─── 3. Value Bet Detection ─────────────────────────────────────
+
+@router.post("/detect-value-bets")
+def detect_value_bets():
+    """Compare model probabilities with bookmaker odds to find value bets."""
+    logger.info("[Value Bets] 🔍 Recherche de value bets...")
+
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    # Get today's predictions
+    fixtures = (
+        supabase.table("fixtures")
+        .select("id, api_fixture_id, home_team, away_team, "
+                "proba_home, proba_draw, proba_away, "
+                "proba_btts, proba_over_25")
+        .gte("date", f"{today}T00:00:00Z")
+        .lt("date", f"{today}T23:59:59Z")
+        .in_("status", ["NS", "TBD"])
+        .not_.is_("proba_home", "null")
+        .execute()
+        .data or []
+    )
+
+    if not fixtures:
+        return {"status": "no_matches", "value_bets": []}
+
+    value_bets = []
+
+    for fix in fixtures:
+        api_id = fix.get("api_fixture_id")
+        if not api_id:
+            continue
+
+        # Get bookmaker odds from API-Football
+        odds_resp = api_get("odds", {"fixture": api_id})
+        if not odds_resp or not odds_resp.get("response"):
+            continue
+
+        bookmakers = odds_resp["response"]
+        if not bookmakers:
+            continue
+
+        # Parse odds (take first bookmaker's 1X2 market)
+        for bm in bookmakers:
+            for bet in bm.get("bookmakers", []):
+                for mkt in bet.get("bets", []):
+                    if mkt.get("name") == "Match Winner":
+                        odds_map = {}
+                        for val in mkt.get("values", []):
+                            odds_map[val["value"]] = float(val["odd"])
+
+                        home_odd = odds_map.get("Home", 0)
+                        draw_odd = odds_map.get("Draw", 0)
+                        away_odd = odds_map.get("Away", 0)
+
+                        if home_odd <= 0 or draw_odd <= 0 or away_odd <= 0:
+                            continue
+
+                        # Implied probabilities (with margin)
+                        implied_home = round(100 / home_odd)
+                        implied_draw = round(100 / draw_odd)
+                        implied_away = round(100 / away_odd)
+
+                        # Our probabilities
+                        our_home = fix.get("proba_home", 0) or 0
+                        our_draw = fix.get("proba_draw", 0) or 0
+                        our_away = fix.get("proba_away", 0) or 0
+
+                        # Value = our probability - implied probability
+                        # If > 15% edge, it's a value bet
+                        MIN_EDGE = 15
+
+                        checks = [
+                            ("Victoire " + fix["home_team"], our_home, implied_home, home_odd),
+                            ("Match Nul", our_draw, implied_draw, draw_odd),
+                            ("Victoire " + fix["away_team"], our_away, implied_away, away_odd),
+                        ]
+
+                        for label, our_prob, implied_prob, odd in checks:
+                            edge = our_prob - implied_prob
+                            if edge >= MIN_EDGE and our_prob >= 40:
+                                value_bets.append({
+                                    "match": f"{fix['home_team']} vs {fix['away_team']}",
+                                    "bet": label,
+                                    "our_proba": our_prob,
+                                    "implied_proba": implied_prob,
+                                    "edge": edge,
+                                    "odd": odd,
+                                })
+
+                        break  # Only need one bookmaker
+                break
+            break
+
+    # Send Telegram alert if value bets found
+    if value_bets:
+        lines = [f"💎 *VALUE BETS — {today}*\n"]
+        for vb in value_bets:
+            lines.append(
+                f"⚽ *{vb['match']}*\n"
+                f"   💰 {vb['bet']} @ {vb['odd']}\n"
+                f"   📊 Notre modèle: {vb['our_proba']}% vs Marché: {vb['implied_proba']}% "
+                f"(*+{vb['edge']}% edge*)\n"
+            )
+        _send_telegram_message("\n".join(lines))
+        logger.info(f"[Value Bets] 🔥 {len(value_bets)} value bets détectés !")
+    else:
+        _send_telegram_message(f"💎 *Value Bets — {today}*\n\nAucun value bet détecté aujourd'hui.")
+        logger.info("[Value Bets] Aucun value bet aujourd'hui.")
+
+    return {"status": "ok", "value_bets": value_bets}
