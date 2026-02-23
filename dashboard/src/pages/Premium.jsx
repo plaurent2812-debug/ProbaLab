@@ -22,7 +22,6 @@ const features = [
     { label: "Top 5 Passeurs NHL", free: false, premium: true },
     { label: "Top 5 Tirs (SOG) NHL", free: false, premium: true },
     { label: "Analyse IA complète de chaque match", free: false, premium: true },
-    { label: "Page Performance du modèle", free: true, premium: true },
 ]
 
 const faqs = [
