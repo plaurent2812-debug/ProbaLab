@@ -611,3 +611,215 @@ def detect_value_bets():
         logger.info("[Value Bets] Aucun value bet aujourd'hui.")
 
     return {"status": "ok", "value_bets": value_bets}
+
+
+# =============================================================================
+# NHL ENDPOINTS
+# =============================================================================
+
+@router.get("/nhl-daily-matches")
+def get_nhl_daily_matches():
+    """Returns all NHL matches planned for today."""
+    today = datetime.now().strftime("%Y-%m-%d")
+    fixtures = (
+        supabase.table("nhl_fixtures")
+        .select("id, api_fixture_id, date, home_team, away_team")
+        .gte("date", f"{today}T00:00:00Z")
+        .lt("date", f"{today}T23:59:59Z")
+        .in_("status", ["NS", "TBD", ""])
+        .execute()
+        .data or []
+    )
+    return {"date": today, "matches": fixtures, "sport": "NHL"}
+
+
+@router.post("/nhl-value-bets")
+def nhl_value_bets():
+    """Detect NHL value bets and send Telegram alerts with Top 5 players per category."""
+    logger.info("[NHL Value Bets] 🏒 Recherche de value bets NHL...")
+
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    # 1. Get today's NHL fixtures
+    fixtures = (
+        supabase.table("nhl_fixtures")
+        .select("id, api_fixture_id, date, home_team, away_team, "
+                "proba_home, proba_away")
+        .gte("date", f"{today}T00:00:00Z")
+        .lt("date", f"{today}T23:59:59Z")
+        .in_("status", ["NS", "TBD", ""])
+        .not_.is_("proba_home", "null")
+        .execute()
+        .data or []
+    )
+
+    if not fixtures:
+        _send_telegram_message(f"🏒 *NHL Value Bets — {today}*\n\nAucun match NHL avec prédictions aujourd'hui.")
+        return {"status": "no_matches", "value_bets": []}
+
+    # 2. Get top players from nhl_data_lake
+    all_players = (
+        supabase.table("nhl_data_lake")
+        .select("player_name, team, python_prob, algo_score_goal, algo_score_shot, is_home")
+        .eq("date", today)
+        .execute()
+        .data or []
+    )
+
+    value_bets = []
+
+    for fix in fixtures:
+        home = fix["home_team"]
+        away = fix["away_team"]
+        our_home = fix.get("proba_home", 0) or 0
+        our_away = fix.get("proba_away", 0) or 0
+
+        # Filter players for this match
+        match_players = [
+            p for p in all_players
+            if (p.get("team", "").lower() in (home.lower(), away.lower()))
+        ]
+
+        # Top 5 per category
+        def top5(players, key, reverse=True):
+            sorted_p = sorted(players, key=lambda r: float(r.get(key, 0) or 0), reverse=reverse)
+            seen = set()
+            result = []
+            for p in sorted_p:
+                name = p.get("player_name", "")
+                if name not in seen:
+                    seen.add(name)
+                    result.append({
+                        "name": name,
+                        "team": p.get("team", ""),
+                        "prob": round(float(p.get("python_prob", 0) or 0) * 100, 1),
+                        "goal_score": p.get("algo_score_goal", 0),
+                        "shot_score": p.get("algo_score_shot", 0),
+                    })
+                if len(result) >= 5:
+                    break
+            return result
+
+        top_buteurs = top5(match_players, "python_prob")
+        top_passeurs = top5(match_players, "algo_score_goal")
+        top_points = top5(match_players, "python_prob")  # combined proxy
+        top_shots = top5(match_players, "algo_score_shot")
+
+        # Value bet calculation using bookmaker odds
+        # For now, use implied probabilities from our model
+        # Value score = edge × odds (prefer high edge × decent odds)
+        # A 77% @ 1.70 gives value_score = (77-59)*1.70 = 30.6
+        # A 90% @ 1.20 gives value_score = (90-83)*1.20 = 8.4
+        # → 1.70 @ 77% wins!
+
+        bet_options = []
+        if our_home > 0:
+            implied_home = 100 - our_home  # naive complement
+            home_odd_estimate = round(100 / our_home, 2) if our_home > 0 else 0
+            edge_home = our_home - (100 / home_odd_estimate) if home_odd_estimate > 0 else 0
+            value_score_home = edge_home * home_odd_estimate
+            bet_options.append(("Victoire " + home, our_home, home_odd_estimate, value_score_home))
+
+        if our_away > 0:
+            away_odd_estimate = round(100 / our_away, 2) if our_away > 0 else 0
+            edge_away = our_away - (100 / away_odd_estimate) if away_odd_estimate > 0 else 0
+            value_score_away = edge_away * away_odd_estimate
+            bet_options.append(("Victoire " + away, our_away, away_odd_estimate, value_score_away))
+
+        # Pick best value bet (highest value_score)
+        best_bet = max(bet_options, key=lambda x: x[3]) if bet_options else None
+
+        value_bets.append({
+            "match": f"{home} vs {away}",
+            "home_proba": our_home,
+            "away_proba": our_away,
+            "recommended_bet": best_bet[0] if best_bet else "N/A",
+            "recommended_odd": best_bet[2] if best_bet else 0,
+            "recommended_proba": best_bet[1] if best_bet else 0,
+            "top_buteurs": top_buteurs,
+            "top_passeurs": top_passeurs,
+            "top_points": top_points,
+            "top_shots": top_shots,
+        })
+
+    # 3. Build Telegram message
+    lines = [f"🏒 *NHL VALUE BETS — {today}*\n"]
+
+    for vb in value_bets:
+        lines.append(f"⚽ *{vb['match']}*")
+        lines.append(f"   💰 *{vb['recommended_bet']}* @ {vb['recommended_odd']}")
+        lines.append(f"   📊 Proba: {vb['recommended_proba']}%\n")
+
+        # Top 5 Buteurs
+        if vb["top_buteurs"]:
+            lines.append("   🎯 *Top 5 Buteurs:*")
+            for i, p in enumerate(vb["top_buteurs"], 1):
+                lines.append(f"   {i}. {p['name']} ({p['prob']}%)")
+
+        # Top 5 +2.5 Tirs Cadrés
+        if vb["top_shots"]:
+            lines.append("   🎯 *Top 5 +2.5 Tirs:*")
+            for i, p in enumerate(vb["top_shots"], 1):
+                lines.append(f"   {i}. {p['name']} (score: {p['shot_score']})")
+
+        lines.append("")
+
+    _send_telegram_message("\n".join(lines))
+    logger.info(f"[NHL Value Bets] ✅ {len(value_bets)} matchs analysés")
+    return {"status": "ok", "matches_analyzed": len(value_bets), "value_bets": value_bets}
+
+
+@router.post("/nhl-update-live-scores")
+def nhl_update_live_scores():
+    """Fetch live NHL scores and update nhl_fixtures table."""
+    logger.info("[NHL Live Scores] 🏒 Fetching live NHL scores...")
+
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    # Get today's NHL fixtures that should be live
+    fixtures = (
+        supabase.table("nhl_fixtures")
+        .select("id, api_fixture_id, home_team, away_team")
+        .gte("date", f"{today}T00:00:00Z")
+        .lt("date", f"{today}T23:59:59Z")
+        .execute()
+        .data or []
+    )
+
+    if not fixtures:
+        return {"status": "no_fixtures", "updated": 0}
+
+    updated = 0
+    errors = 0
+
+    for fix in fixtures:
+        api_id = fix.get("api_fixture_id")
+        if not api_id:
+            continue
+
+        try:
+            # Use API-Football's hockey endpoint or a dedicated NHL API
+            # For now, try the generic fixtures endpoint
+            resp = api_get("fixtures", {"id": api_id})
+            if not resp or not resp.get("response"):
+                continue
+
+            game = resp["response"][0]
+            goals = game.get("goals", {})
+            home_goals = goals.get("home")
+            away_goals = goals.get("away")
+            status_short = game.get("fixture", {}).get("status", {}).get("short", "")
+
+            if home_goals is not None:
+                supabase.table("nhl_fixtures").update({
+                    "home_goals": home_goals,
+                    "away_goals": away_goals,
+                    "status": status_short if status_short in ("FT", "LIVE", "Q1", "Q2", "Q3", "OT") else status_short,
+                }).eq("api_fixture_id", api_id).execute()
+                updated += 1
+        except Exception as e:
+            logger.error(f"[NHL Live] Error updating {api_id}: {e}")
+            errors += 1
+
+    logger.info(f"[NHL Live Scores] ✅ {updated} scores mis à jour, {errors} erreurs")
+    return {"status": "ok", "updated": updated, "errors": errors}

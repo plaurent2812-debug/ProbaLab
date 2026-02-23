@@ -153,3 +153,43 @@ export const dailyRecap = schedules.task({
         return await res.json();
     },
 });
+
+// =============================================================================
+// NHL TASKS
+// =============================================================================
+
+// ─── Task 8: NHL Value Bets (CRON 16:00 UTC) ──────────────────
+export const nhlDetectValueBets = schedules.task({
+    id: "nhl-detect-value-bets",
+    cron: "0 16 * * *",  // 16:00 UTC = before NHL games start
+    run: async () => {
+        const res = await fetch(`${API_URL}/api/trigger/nhl-value-bets`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+        });
+
+        if (!res.ok) {
+            throw new Error(`NHL value bets failed: ${res.statusText}`);
+        }
+
+        return await res.json();
+    },
+});
+
+// ─── Task 9: NHL Live Scores (CRON every 2 min, 23h-04h UTC) ──
+export const nhlUpdateLiveScores = schedules.task({
+    id: "nhl-update-live-scores",
+    cron: "*/2 23,0,1,2,3,4 * * *",  // Every 2 min during NHL game hours
+    run: async () => {
+        const res = await fetch(`${API_URL}/api/trigger/nhl-update-live-scores`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+        });
+
+        if (!res.ok) {
+            throw new Error(`NHL live scores failed: ${res.statusText}`);
+        }
+
+        return await res.json();
+    },
+});
