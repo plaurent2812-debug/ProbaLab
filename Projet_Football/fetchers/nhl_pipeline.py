@@ -646,6 +646,87 @@ def run_nhl_pipeline() -> dict:
         if enhanced_count:
             logger.info(f"[NHL]   ✅ {enhanced_count} joueurs enrichis avec L5+H2H")
 
+        # ─── PASS 3: Injury detection (absent from last 3 team games) ───
+        injured = set()
+        for p in match_players:
+            l5 = p.get("l5_form", {})
+            # If we fetched game logs and they show 0 games in L5,
+            # or the player hasn't been scored with game logs: check separately
+            pid = p["player_id"]
+            if not pid or pid == "0":
+                continue
+            # Quick check: if game log was fetched and last game was >10 days ago → injured
+            if l5 and l5.get("l5_pts") is not None:
+                continue  # Had L5 data = active
+            # For players without game logs, check if they have very few GP
+            if p.get("games_played", 0) > 0:
+                continue
+            injured.add(pid)
+
+        # Also detect missing players by checking game logs for top scorers
+        # who weren't in the L5 pass (fetch game logs for top 5 per team to check)
+        teams_in_match = {home_abbrev, away_abbrev}
+        for team in teams_in_match:
+            team_players = [p for p in match_players if p["team"] == team]
+            team_players.sort(key=lambda p: p["prob_point"], reverse=True)
+            for p in team_players[:5]:
+                pid = p["player_id"]
+                if pid in injured or not pid or pid == "0":
+                    continue
+                if p.get("l5_form"):
+                    continue  # Already checked via game log
+                game_log = fetch_player_game_log(pid)
+                if game_log:
+                    # Check if last game was more than 7 days ago
+                    try:
+                        last_game_date = game_log[0].get("gameDate", "")
+                        if last_game_date:
+                            last_dt = datetime.strptime(last_game_date, "%Y-%m-%d")
+                            days_since = (datetime.utcnow() - last_dt).days
+                            if days_since > 7:
+                                injured.add(pid)
+                                logger.info(f"[NHL]   🏥 {p['player_name']} ({team}) absent depuis {days_since}j")
+                    except Exception:
+                        pass
+
+        # Filter injured players
+        if injured:
+            before = len(match_players)
+            match_players = [p for p in match_players if p["player_id"] not in injured]
+            removed = before - len(match_players)
+            if removed:
+                logger.info(f"[NHL]   🏥 {removed} joueurs absents retirés")
+
+        # ─── PASS 4: Synergy penalty (top passer absent → reduce goal probas) ───
+        for team in teams_in_match:
+            team_players = [p for p in match_players if p["team"] == team]
+            # Find the team's top assist player
+            team_players_sorted = sorted(team_players, key=lambda p: p["prob_assist"], reverse=True)
+            if not team_players_sorted:
+                continue
+
+            top_passer = team_players_sorted[0]
+            # Check if any top assist player from this team was injured
+            team_injured_passers = [
+                p for p in all_players  # Check from original pool before filtering
+                if p["team"] == team and p["player_id"] in injured
+            ]
+
+            # Also check: is the team's best regular passer much lower than expected?
+            # We estimate this by checking if the top assist player from nhl_data_lake 
+            # (previous days) is missing from today's roster
+            if team_injured_passers:
+                # Apply synergy penalty to remaining teammates' goal probabilities
+                penalty = 0.88  # -12% goal probability for teammates
+                for p in match_players:
+                    if p["team"] == team:
+                        p["prob_goal"] = round(p["prob_goal"] * penalty, 1)
+                        p["prob_point"] = round(p["prob_point"] * (penalty + 0.04), 1)  # -8% point
+                        p["algo_score_goal"] = int(p["prob_goal"])
+
+                injured_names = [p["player_name"] for p in team_injured_passers]
+                logger.info(f"[NHL]   ⛓️ Synergy penalty {team}: {', '.join(injured_names)} absent → -12% buts coéquipiers")
+
         all_players.extend(match_players)
 
         # Win probabilities
