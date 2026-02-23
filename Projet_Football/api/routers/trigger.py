@@ -823,3 +823,38 @@ def nhl_update_live_scores():
 
     logger.info(f"[NHL Live Scores] ✅ {updated} scores mis à jour, {errors} erreurs")
     return {"status": "ok", "updated": updated, "errors": errors}
+
+
+@router.post("/nhl-run-pipeline")
+def nhl_run_pipeline():
+    """Run the full NHL pipeline (data collection + player scoring) and send a Telegram summary."""
+    import time as _time
+    logger.info("[NHL Pipeline] 🏒 Démarrage du pipeline NHL...")
+    start = _time.time()
+
+    try:
+        from fetchers.nhl_pipeline import run_nhl_pipeline
+        result = run_nhl_pipeline()
+    except Exception as e:
+        logger.error(f"[NHL Pipeline] ❌ Erreur: {e}")
+        _send_telegram_message(f"❌ *Pipeline NHL échoué*\n\nErreur: {e}")
+        return {"status": "error", "message": str(e)}
+
+    elapsed = round(_time.time() - start)
+
+    if result.get("status") == "no_games":
+        _send_telegram_message("🏒 *Pipeline NHL terminé*\n\nAucun match NHL aujourd'hui.")
+        return result
+
+    # Build Telegram summary
+    lines = [f"🏒 *Pipeline NHL terminé* ({elapsed}s)\n"]
+    lines.append(f"📊 *{result.get('matches', 0)} matchs analysés*")
+    lines.append(f"👥 *{result.get('players_analyzed', 0)} joueurs scorés*\n")
+
+    for f in result.get("fixtures", [])[:8]:
+        lines.append(f"⚽ {f['match']} → {f['home_pct']}% / {f['away_pct']}%")
+
+    _send_telegram_message("\n".join(lines))
+
+    logger.info(f"[NHL Pipeline] ✅ Terminé en {elapsed}s")
+    return result

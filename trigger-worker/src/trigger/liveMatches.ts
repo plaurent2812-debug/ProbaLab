@@ -158,7 +158,25 @@ export const dailyRecap = schedules.task({
 // NHL TASKS
 // =============================================================================
 
-// ─── Task 8: NHL Value Bets (CRON 16:00 UTC) ──────────────────
+// ─── Task 8: NHL Pipeline (CRON 14:00 UTC = 15h Paris) ────────
+export const nhlRunPipeline = schedules.task({
+    id: "nhl-run-pipeline",
+    cron: "0 14 * * *",  // 14:00 UTC = before value bets at 16:00
+    run: async () => {
+        const res = await fetch(`${API_URL}/api/trigger/nhl-run-pipeline`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+        });
+
+        if (!res.ok) {
+            throw new Error(`NHL pipeline failed: ${res.statusText}`);
+        }
+
+        return await res.json();
+    },
+});
+
+// ─── Task 9: NHL Value Bets (CRON 16:00 UTC) ──────────────────
 export const nhlDetectValueBets = schedules.task({
     id: "nhl-detect-value-bets",
     cron: "0 16 * * *",  // 16:00 UTC = before NHL games start
@@ -176,10 +194,10 @@ export const nhlDetectValueBets = schedules.task({
     },
 });
 
-// ─── Task 9: NHL Live Scores (CRON every 2 min, 23h-04h UTC) ──
+// ─── Task 9: NHL Live Scores (CRON every 2 min, 16h-05h UTC) ──
 export const nhlUpdateLiveScores = schedules.task({
     id: "nhl-update-live-scores",
-    cron: "*/2 23,0,1,2,3,4 * * *",  // Every 2 min during NHL game hours
+    cron: "*/2 16,17,18,19,20,21,22,23,0,1,2,3,4,5 * * *",  // 17h-06h Paris
     run: async () => {
         const res = await fetch(`${API_URL}/api/trigger/nhl-update-live-scores`, {
             method: "POST",
