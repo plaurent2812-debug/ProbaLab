@@ -42,7 +42,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from config import supabase
 
-from api.routers import stripe_webhook, nhl
+from api.routers import stripe_webhook, nhl, trigger
 
 # ── Scheduler ────────────────────────────────────────────────
 def _scheduled_update_scores():
@@ -121,6 +121,7 @@ app = FastAPI(title="ProbaLab API", version="1.0.0", lifespan=lifespan)
 
 app.include_router(stripe_webhook.router)
 app.include_router(nhl.router)
+app.include_router(trigger.router)
 
 origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:4173").split(",")
 
