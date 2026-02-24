@@ -71,6 +71,19 @@ export async function fetchPipelineStatus() {
     return res.json()
 }
 
+export async function stopPipeline() {
+    const headers = await getAuthHeaders()
+    const res = await fetch(`${API_BASE}/admin/stop-pipeline`, {
+        method: 'POST',
+        headers,
+    })
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.detail || `API error: ${res.status}`)
+    }
+    return res.json()
+}
+
 export async function fetchNews() {
     const res = await fetch(`${API_BASE}/news`)
     if (!res.ok) return { news: [] }

@@ -1,8 +1,8 @@
 
 import { useState, useEffect } from 'react'
 import { Protected } from '@/lib/auth'
-import { triggerPipeline, triggerNHLPipeline, fetchPipelineStatus } from '@/lib/api'
-import { Shield, Play, Loader2, Cpu, Terminal, Activity, Server, Database } from 'lucide-react'
+import { triggerPipeline, triggerNHLPipeline, fetchPipelineStatus, stopPipeline } from '@/lib/api'
+import { Shield, Play, Loader2, Cpu, Terminal, Activity, Server, Database, StopCircle } from 'lucide-react'
 
 function AdminDashboard() {
     const [status, setStatus] = useState(null)
@@ -52,6 +52,17 @@ function AdminDashboard() {
         }
     }
 
+    const handleStop = async () => {
+        if (!window.confirm('Voulez-vous vraiment forcer l\'arrêt de l\'analyse en cours ?')) return
+        try {
+            await stopPipeline()
+            setMsg('Arrêt en cours...')
+            setTimeout(refreshStatus, 1500)
+        } catch (err) {
+            setMsg(`Erreur lors de l'arrêt: ${err.message}`)
+        }
+    }
+
     const isRunning = status?.status === 'running'
 
     return (
@@ -75,11 +86,22 @@ function AdminDashboard() {
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-2 px-4 py-2 rounded-full glass border border-white/5">
-                        <div className={`w-2.5 h-2.5 rounded-full ${isRunning ? 'bg-emerald-500 animate-pulse' : 'bg-slate-500'}`} />
-                        <span className="text-sm font-medium text-muted-foreground">
-                            Système: <span className={isRunning ? 'text-emerald-400' : 'text-slate-400'}>{status?.status?.toUpperCase() || 'HORS LIGNE'}</span>
-                        </span>
+                    <div className="flex items-center gap-4">
+                        {isRunning && (
+                            <button
+                                onClick={handleStop}
+                                className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/30 transition-all font-semibold text-sm hover:shadow-[0_0_15px_-3px_rgba(239,68,68,0.4)]"
+                                title="Arrêter de force le pipeline en cours"
+                            >
+                                <StopCircle className="w-4 h-4" /> Stop
+                            </button>
+                        )}
+                        <div className="flex items-center gap-2 px-4 py-2 rounded-full glass border border-white/5">
+                            <div className={`w-2.5 h-2.5 rounded-full ${isRunning ? 'bg-emerald-500 animate-pulse' : 'bg-slate-500'}`} />
+                            <span className="text-sm font-medium text-muted-foreground">
+                                Système: <span className={isRunning ? 'text-emerald-400' : 'text-slate-400'}>{status?.status?.toUpperCase() || 'HORS LIGNE'}</span>
+                            </span>
+                        </div>
                     </div>
                 </div>
 
@@ -175,8 +197,8 @@ function AdminDashboard() {
 
                             {nhlMsg && (
                                 <div className={`mt-4 p-3 rounded-lg text-xs flex items-center gap-2 animate-in fade-in slide-in-from-top-2 ${nhlMsg.startsWith('✅')
-                                        ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-300'
-                                        : 'bg-red-500/10 border border-red-500/20 text-red-300'
+                                    ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-300'
+                                    : 'bg-red-500/10 border border-red-500/20 text-red-300'
                                     }`}>
                                     <Server className="w-3 h-3" />
                                     {nhlMsg}

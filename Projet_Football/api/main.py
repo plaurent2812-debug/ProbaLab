@@ -882,6 +882,9 @@ def _run_pipeline_background(mode: str):
     if mode != "full":
         cmd.append(mode)
 
+    with _pipeline_lock:
+        _pipeline_state["process"] = None
+
     try:
         process = subprocess.Popen(
             cmd,
@@ -893,6 +896,10 @@ def _run_pipeline_background(mode: str):
             universal_newlines=True,
         )
 
+        # Store the process inside lock to allow killing it
+        with _pipeline_lock:
+            _pipeline_state["process"] = process
+
         # Read output in real-time
         for line in process.stdout:
             with _pipeline_lock:
@@ -903,15 +910,20 @@ def _run_pipeline_background(mode: str):
         process.wait()
 
         with _pipeline_lock:
-            _pipeline_state["status"] = "done" if process.returncode == 0 else "error"
+            if _pipeline_state["status"] == "cancelled":
+                _pipeline_state["logs"] += f"\n[Action] Arrêté par l'administrateur."
+            else:
+                _pipeline_state["status"] = "done" if process.returncode == 0 else "error"
             _pipeline_state["return_code"] = process.returncode
             _pipeline_state["finished_at"] = datetime.now().isoformat()
+            _pipeline_state["process"] = None
             
     except Exception as e:
         with _pipeline_lock:
             _pipeline_state["status"] = "error"
             _pipeline_state["logs"] += f"\nInternal Error: {str(e)}"
             _pipeline_state["finished_at"] = datetime.now().isoformat()
+            _pipeline_state["process"] = None
 
 
 @app.post("/api/admin/run-pipeline")
@@ -940,6 +952,31 @@ def admin_run_pipeline(
     thread.start()
 
     return {"message": f"Pipeline '{mode}' started", "started_at": _pipeline_state["started_at"]}
+
+
+@app.post("/api/admin/stop-pipeline")
+def admin_stop_pipeline(authorization: Optional[str] = Header(None)):
+    """Stop the running pipeline (admin only, requires Supabase JWT)."""
+    _require_admin(authorization)
+
+    with _pipeline_lock:
+        if _pipeline_state["status"] != "running":
+            raise HTTPException(status_code=400, detail="No pipeline is currently running")
+
+        process = _pipeline_state.get("process")
+        if process:
+            try:
+                process.terminate()  # Try graceful SIGTERM
+                _pipeline_state["status"] = "cancelled"
+                return {"message": "Démarrage de l'arrêt du pipeline en cours..."}
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Failed to stop process: {e}")
+                
+        # Fallback if status is running but no process found
+        _pipeline_state["status"] = "cancelled"
+        _pipeline_state["finished_at"] = datetime.now().isoformat()
+        
+    return {"message": "Pipeline annulé"}
 
 
 @app.get("/api/admin/pipeline-status")
