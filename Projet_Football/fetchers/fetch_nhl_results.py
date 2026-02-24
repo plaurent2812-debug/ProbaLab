@@ -48,7 +48,8 @@ def extract_actual_stats(boxscore: dict) -> dict:
                 stats[name.lower()] = {
                     "goals": player.get('goals', 0),
                     "assists": player.get('assists', 0),
-                    "points": player.get('points', 0)
+                    "points": player.get('points', 0),
+                    "shots": player.get('shots', 0)
                 }
     except Exception as e:
         logger.error(f"[NHL] Erreur parsing boxscore: {e}")
@@ -101,8 +102,9 @@ def evaluate_nhl_predictions(days_back=3):
         top1_goal = get_top_1("prob_goal")
         top1_assist = get_top_1("prob_assist")
         top1_point = get_top_1("prob_point")
+        top1_shot = get_top_1("prob_shot")
 
-        if not top1_goal and not top1_assist and not top1_point:
+        if not top1_goal and not top1_assist and not top1_point and not top1_shot:
             continue
 
         logger.info(f"[NHL] Évaluation {match_str}...")
@@ -147,6 +149,7 @@ def evaluate_nhl_predictions(days_back=3):
         add_eval(top1_goal, "goal", "Buteur (Top 1)", "goals")
         add_eval(top1_assist, "assist", "Passeur (Top 1)", "assists")
         add_eval(top1_point, "point", "Point (Top 1)", "points")
+        add_eval(top1_shot, "shot", "Tirs cadrés (Top 1)", "shots", expected_val=3)
 
         # Insert into DB
         if evaluations:

@@ -471,6 +471,7 @@ def get_nhl_performance(days: int = 30):
             "accuracy_goal": 0,
             "accuracy_assist": 0,
             "accuracy_point": 0,
+            "accuracy_shot": 0,
             "avg_confidence": 0,
             "daily_stats": []
         }
@@ -479,6 +480,7 @@ def get_nhl_performance(days: int = 30):
             "goal": {"total": 0, "correct": 0},
             "assist": {"total": 0, "correct": 0},
             "point": {"total": 0, "correct": 0},
+            "shot": {"total": 0, "correct": 0},
             "all": {"total": 0, "correct": 0, "sum_conf": 0}
         }
         
@@ -499,6 +501,8 @@ def get_nhl_performance(days: int = 30):
                 stat_type = "assist"
             elif "point" in pari_lower:
                 stat_type = "point"
+            elif "tir" in pari_lower or "shot" in pari_lower:
+                stat_type = "shot"
                 
             if stat_type:
                 stats[stat_type]["total"] += 1
@@ -525,6 +529,7 @@ def get_nhl_performance(days: int = 30):
         metrics["accuracy_goal"] = _pct(stats["goal"]["correct"], stats["goal"]["total"])
         metrics["accuracy_assist"] = _pct(stats["assist"]["correct"], stats["assist"]["total"])
         metrics["accuracy_point"] = _pct(stats["point"]["correct"], stats["point"]["total"])
+        metrics["accuracy_shot"] = _pct(stats["shot"]["correct"], stats["shot"]["total"])
         metrics["avg_confidence"] = round(stats["all"]["sum_conf"] / stats["all"]["total"], 1) if stats["all"]["total"] > 0 else 0
         metrics["daily_stats"] = sorted(daily.values(), key=lambda x: x["date"])
         

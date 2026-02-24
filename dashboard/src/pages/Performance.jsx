@@ -184,6 +184,7 @@ export default function PerformancePage() {
         { label: "Taux Buts (Top 1)", accuracy: data.accuracy_goal, icon: Target, color: "text-emerald-400" },
         { label: "Taux Passes (Top 1)", accuracy: data.accuracy_assist, icon: Target, color: "text-blue-400" },
         { label: "Taux Points (Top 1)", accuracy: data.accuracy_point, icon: Target, color: "text-amber-400" },
+        { label: "Taux Tirs (Top 1)", accuracy: data.accuracy_shot, icon: Target, color: "text-orange-400" },
     ].filter(m => m.accuracy !== "—")
 
     return (
