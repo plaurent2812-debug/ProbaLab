@@ -59,7 +59,39 @@ def _send_telegram_alert(home: str, away: str, analysis: str, bet: str, confiden
             logger.error(f"[Telegram] Erreur envoi à {chat_id}: {e}")
     return sent
 
-router = APIRouter(prefix="/api/trigger", tags=["Trigger"])
+from fastapi import APIRouter, HTTPException, Depends, Header
+
+CRON_SECRET = os.getenv("CRON_SECRET", "super_secret_probalab_2026")
+
+def verify_trigger_auth(authorization: str = Header(None)):
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing Authorization header")
+        
+    token = authorization.replace("Bearer ", "").strip()
+    
+    # 1. Check CRON Secret (for Trigger.dev worker)
+    if token == CRON_SECRET:
+        return True
+        
+    # 2. Check Admin JWT (for Dashboard)
+    try:
+        user_res = supabase.auth.get_user(token)
+        if not user_res or not user_res.user:
+            raise ValueError("Invalid JWT")
+            
+        user_id = user_res.user.id
+        db_user = supabase.table("users").select("role").eq("id", user_id).execute().data
+        if not db_user or db_user[0].get("role") != "admin":
+            raise HTTPException(status_code=403, detail="Forbidden: Admin only")
+            
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=403, detail="Invalid token or unauthorized")
+        
+    return True
+
+router = APIRouter(prefix="/api/trigger", tags=["Trigger"], dependencies=[Depends(verify_trigger_auth)])
 
 class AnalyzeRequest(BaseModel):
     fixture_id: str

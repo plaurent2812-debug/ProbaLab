@@ -1,5 +1,6 @@
 import { task, wait, schedules } from "@trigger.dev/sdk/v3";
 
+const CRON_SECRET = process.env.CRON_SECRET || "super_secret_probalab_2026";
 const API_URL = process.env.API_URL || "https://web-production-ff663.up.railway.app";
 
 // ─── Task 1: Monitor Halftime (48 min) ─────────────────────────
@@ -16,7 +17,10 @@ export const monitorHalftime = task({
         // Wake up and call Python backend
         const res = await fetch(`${API_URL}/api/trigger/analyze-halftime`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${CRON_SECRET}`
+            },
             body: JSON.stringify({ fixture_id: payload.fixture_id }),
         });
 
@@ -40,7 +44,10 @@ export const monitor70thMinute = task({
 
         const res = await fetch(`${API_URL}/api/trigger/analyze-halftime`, { // Assuming same endpoint for now
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${CRON_SECRET}`
+            },
             body: JSON.stringify({ fixture_id: payload.fixture_id }),
         });
 
@@ -57,7 +64,9 @@ export const scheduleDailyMatches = schedules.task({
     id: "schedule-daily-matches",
     cron: "0 8 * * *",
     run: async () => {
-        const res = await fetch(`${API_URL}/api/trigger/daily-matches`);
+        const res = await fetch(`${API_URL}/api/trigger/daily-matches`, {
+            headers: { "Authorization": `Bearer ${CRON_SECRET}` }
+        });
         if (!res.ok) {
             throw new Error(`Failed to fetch daily matches: ${res.statusText}`);
         }
@@ -89,7 +98,10 @@ export const updateLiveScores = schedules.task({
     run: async () => {
         const res = await fetch(`${API_URL}/api/trigger/update-live-scores`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${CRON_SECRET}`
+            },
         });
 
         if (!res.ok) {
@@ -107,7 +119,10 @@ export const runDailyPipeline = schedules.task({
     run: async () => {
         const res = await fetch(`${API_URL}/api/trigger/run-daily-pipeline`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${CRON_SECRET}`
+            },
         });
 
         if (!res.ok) {
@@ -125,7 +140,10 @@ export const detectValueBets = schedules.task({
     run: async () => {
         const res = await fetch(`${API_URL}/api/trigger/detect-value-bets`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${CRON_SECRET}`
+            },
         });
 
         if (!res.ok) {
@@ -143,7 +161,10 @@ export const dailyRecap = schedules.task({
     run: async () => {
         const res = await fetch(`${API_URL}/api/trigger/daily-recap`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${CRON_SECRET}`
+            },
         });
 
         if (!res.ok) {
@@ -165,7 +186,10 @@ export const nhlRunPipeline = schedules.task({
     run: async () => {
         const res = await fetch(`${API_URL}/api/trigger/nhl-run-pipeline`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${CRON_SECRET}`
+            },
         });
 
         if (!res.ok) {
@@ -183,7 +207,10 @@ export const nhlDetectValueBets = schedules.task({
     run: async () => {
         const res = await fetch(`${API_URL}/api/trigger/nhl-value-bets`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${CRON_SECRET}`
+            },
         });
 
         if (!res.ok) {
@@ -201,7 +228,10 @@ export const nhlUpdateLiveScores = schedules.task({
     run: async () => {
         const res = await fetch(`${API_URL}/api/trigger/nhl-update-live-scores`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${CRON_SECRET}`
+            },
         });
 
         if (!res.ok) {
