@@ -865,6 +865,23 @@ def nhl_fetch_odds():
     return result
 
 
+@router.post("/football-momentum")
+def football_momentum():
+    """Scan live football matches for extreme momentum shifts"""
+    import time
+    logger.info("[Football Momentum] 🌪️ Démarrage du scan live...")
+    start = time.time()
+    try:
+        from fetchers.live_momentum import run_momentum_tracker
+        result = run_momentum_tracker()
+    except Exception as e:
+        logger.error(f"[Football Momentum] ❌ Erreur: {e}")
+        return {"status": "error", "message": str(e)}
+        
+    logger.info(f"[Football Momentum] ✅ Terminé en {round(time.time() - start)}s")
+    return result
+
+
     updated = 0
     errors = 0
 

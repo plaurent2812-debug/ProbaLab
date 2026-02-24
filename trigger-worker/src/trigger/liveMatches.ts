@@ -286,4 +286,25 @@ export const nhlFetchOdds = schedules.task({
     },
 });
 
+// ─── Task 12: Football Live Momentum Tracker (CRON Every 5 Mins)
+export const footballMomentumTracker = schedules.task({
+    id: "football-momentum-tracker",
+    cron: "*/5 * * * *",
+    run: async () => {
+        const res = await fetch(`${API_URL}/api/trigger/football-momentum`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${CRON_SECRET}`
+            },
+        });
+
+        if (!res.ok) {
+            throw new Error(`Football momentum tracker failed: ${res.statusText}`);
+        }
+
+        return await res.json();
+    },
+});
+
 
