@@ -59,7 +59,7 @@ function MatchRow({ match }) {
                 <div className="flex-1 min-w-0 flex items-center gap-2">
                     {/* Home team */}
                     <div className="flex-1 flex items-center gap-1.5 min-w-0 justify-end">
-                        <span className={cn("text-sm truncate text-right", homeWon ? "font-bold" : "font-medium text-foreground/80")}>
+                        <span className={cn("text-xs sm:text-sm truncate text-right", homeWon ? "font-bold" : "font-medium text-foreground/80")}>
                             {match.home_team}
                         </span>
                         {match.home_logo ? (
@@ -72,10 +72,10 @@ function MatchRow({ match }) {
                     </div>
 
                     {/* Score / VS */}
-                    <div className="shrink-0 w-16 text-center">
+                    <div className="shrink-0 w-12 sm:w-16 text-center">
                         {hasScore ? (
                             <div className={cn(
-                                "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-sm font-black tabular-nums",
+                                "inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-md text-sm font-black tabular-nums",
                                 isLive ? "bg-red-500/10 text-red-500" : "bg-muted/60 text-foreground"
                             )}>
                                 <span className={homeWon ? "text-primary" : ""}>{match.home_goals ?? 0}</span>
@@ -96,14 +96,14 @@ function MatchRow({ match }) {
                                 {match.away_team?.charAt(0)}
                             </div>
                         )}
-                        <span className={cn("text-sm truncate", awayWon ? "font-bold" : "font-medium text-foreground/80")}>
+                        <span className={cn("text-xs sm:text-sm truncate", awayWon ? "font-bold" : "font-medium text-foreground/80")}>
                             {match.away_team}
                         </span>
                     </div>
                 </div>
 
                 {/* Prediction info */}
-                <div className="shrink-0 flex flex-col items-end gap-1 min-w-[72px]">
+                <div className="shrink-0 flex flex-col items-end gap-1 w-16 sm:w-20 pl-1">
                     {isFinished && pred ? (() => {
                         const hg = match.home_goals ?? 0
                         const ag = match.away_goals ?? 0
@@ -136,7 +136,7 @@ function MatchRow({ match }) {
 
                         return (
                             <Badge className={cn(
-                                "text-[10px] h-5 px-1.5 border-0 gap-1",
+                                "text-[9px] sm:text-[10px] h-5 px-1 sm:px-1.5 border-0 gap-1 whitespace-nowrap overflow-hidden max-w-full block text-ellipsis",
                                 correct
                                     ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
                                     : "bg-red-500/10 text-red-500"
@@ -153,13 +153,13 @@ function MatchRow({ match }) {
                                 </div>
                             )}
                             {!isFinished && pred?.recommended_bet && (
-                                <span className="text-[10px] font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded truncate max-w-[72px]">
-                                    {pred.recommended_bet.split(' ').slice(0, 2).join(' ')}
+                                <span className="text-[9px] sm:text-[10px] font-semibold text-primary bg-primary/10 px-1 sm:px-1.5 py-0.5 rounded truncate max-w-full">
+                                    {pred.recommended_bet}
                                 </span>
                             )}
                             {pred?.confidence_score != null && !isFinished && (
                                 <Badge className={cn(
-                                    "text-[10px] h-4 px-1.5 border-0",
+                                    "text-[9px] sm:text-[10px] h-4 px-1 sm:px-1.5 border-0",
                                     pred.confidence_score >= 8 ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" :
                                         pred.confidence_score >= 6 ? "bg-amber-500/15 text-amber-600 dark:text-amber-400" :
                                             "bg-muted text-muted-foreground"
