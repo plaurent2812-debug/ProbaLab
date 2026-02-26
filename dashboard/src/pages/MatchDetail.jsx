@@ -278,7 +278,7 @@ export default function MatchDetailPage() {
                 const events = (fixture?.events_json || []).filter(e => {
                     if (!e.player) return false
                     if (e.comments === 'Penalty Shootout') return false
-                    if (e.detail === 'Penalty' && e.time >= 120) return false
+                    if (e.time >= 120 && !e.extra_time) return false
                     return true
                 })
                 if (!events.length) return null

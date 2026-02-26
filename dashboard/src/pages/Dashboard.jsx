@@ -28,7 +28,8 @@ function MatchRow({ match }) {
     const events = (match.events_json || []).filter(e => {
         if (!e.player) return false
         if (e.comments === 'Penalty Shootout') return false
-        if (e.detail === 'Penalty' && e.time >= 120) return false
+        // Shootout goals: time=120, no extra_time. Real ET goals have extra_time (e.g. 120+2')
+        if (e.time >= 120 && !e.extra_time) return false
         return true
     })
     const homeEvents = events.filter(e => e.team === match.home_team)
