@@ -341,13 +341,39 @@ def update_live_scores():
             }
             our_status = status_map.get(status_short, status_short)
 
+            update_data = {
+                "home_goals": home_goals,
+                "away_goals": away_goals,
+                "status": our_status,
+            }
+
+            # Fetch match events (goals, assists)
+            try:
+                import time as _time
+                events_resp = api_get("fixtures/events", {"fixture": api_fixture_id})
+                if events_resp and events_resp.get("response"):
+                    raw_events = events_resp["response"]
+                    # Build clean goals list
+                    goals_list = []
+                    for ev in raw_events:
+                        if ev.get("type") == "Goal":
+                            goal_info = {
+                                "team": ev.get("team", {}).get("name", ""),
+                                "player": ev.get("player", {}).get("name", ""),
+                                "assist": ev.get("assist", {}).get("name", "") if ev.get("assist") else "",
+                                "time": ev.get("time", {}).get("elapsed", ""),
+                                "extra_time": ev.get("time", {}).get("extra"),
+                                "detail": ev.get("detail", ""),  # "Normal Goal", "Penalty", "Own Goal"
+                                "half": "1H" if (ev.get("time", {}).get("elapsed", 0) or 0) <= 45 else "2H",
+                            }
+                            goals_list.append(goal_info)
+                    update_data["events_json"] = goals_list
+            except Exception as ev_err:
+                logger.warning(f"[Live Scores] Events fetch error for {api_fixture_id}: {ev_err}")
+
             result = (
                 supabase.table("fixtures")
-                .update({
-                    "home_goals": home_goals,
-                    "away_goals": away_goals,
-                    "status": our_status,
-                })
+                .update(update_data)
                 .eq("api_fixture_id", api_fixture_id)
                 .execute()
             )

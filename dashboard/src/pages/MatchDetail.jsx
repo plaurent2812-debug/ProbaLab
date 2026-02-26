@@ -261,6 +261,67 @@ export default function MatchDetailPage() {
                 </Card>
             )}
 
+            {/* Match Events — Goals Timeline */}
+            {(() => {
+                const events = fixture?.events_json || []
+                if (!events.length) return null
+
+                return (
+                    <Card className="border-border/50">
+                        <CardHeader className="pb-3">
+                            <CardTitle className="text-sm font-bold flex items-center gap-2">
+                                ⚽ Événements du match
+                                <Badge className="ml-auto text-[10px] border-0 bg-muted text-muted-foreground">
+                                    {events.length} but{events.length > 1 ? 's' : ''}
+                                </Badge>
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="space-y-0">
+                                {events.map((goal, idx) => {
+                                    const isHome = goal.team === fixture?.home_team
+                                    const timeStr = goal.extra_time
+                                        ? `${goal.time}+${goal.extra_time}'`
+                                        : `${goal.time}'`
+                                    const typeLabel = goal.detail === "Penalty" ? " (P)"
+                                        : goal.detail === "Own Goal" ? " (CSC)"
+                                            : ""
+
+                                    return (
+                                        <div
+                                            key={idx}
+                                            className={cn(
+                                                "flex items-start gap-3 py-2.5 border-b border-border/20 last:border-0",
+                                                "pl-3 border-l-2",
+                                                isHome ? "border-l-primary" : "border-l-blue-400"
+                                            )}
+                                        >
+                                            <div className="w-10 shrink-0 text-center">
+                                                <span className="text-xs font-bold text-muted-foreground">{timeStr}</span>
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-sm font-bold truncate">
+                                                    ⚽ {goal.player || "Inconnu"}
+                                                    <span className="text-muted-foreground font-normal text-xs">{typeLabel}</span>
+                                                </p>
+                                                {goal.assist && (
+                                                    <p className="text-[10px] text-muted-foreground truncate">
+                                                        🎯 {goal.assist}
+                                                    </p>
+                                                )}
+                                            </div>
+                                            <span className="text-[10px] font-medium text-muted-foreground shrink-0">
+                                                {goal.team}
+                                            </span>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        </CardContent>
+                    </Card>
+                )
+            })()}
+
             {/* Marchés — PREMIUM */}
             <PremiumSection title="Marchés & Statistiques" icon={Target}>
                 <div className="space-y-0">

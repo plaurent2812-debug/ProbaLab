@@ -24,119 +24,144 @@ function MatchRow({ match }) {
     const isHot = pred?.confidence_score >= 7 && !isFinished
     const hasScore = isFinished || isLive
 
+    // Extract goals from events_json
+    const events = match.events_json || []
+    const homeEvents = events.filter(e => e.team === match.home_team)
+    const awayEvents = events.filter(e => e.team === match.away_team)
+    const hasEvents = hasScore && events.length > 0
+
     return (
         <div
-            className="match-card group flex items-center gap-2 px-4 py-3 cursor-pointer hover:bg-accent/40 border-b border-border/30 last:border-0 transition-colors"
+            className="match-card group px-4 py-3 cursor-pointer hover:bg-accent/40 border-b border-border/30 last:border-0 transition-colors"
             onClick={() => navigate(`/football/match/${match.id}`)}
         >
-            {/* Time / Status */}
-            <div className="w-11 shrink-0 text-center">
-                {isLive ? (
-                    <Badge variant="destructive" className="text-[10px] px-1.5 h-5 animate-pulse">LIVE</Badge>
-                ) : isFinished ? (
-                    <Badge className="text-[10px] px-1.5 h-5 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-0">Terminé</Badge>
-                ) : (
-                    <span className="text-xs font-bold tabular-nums text-foreground/80">{time}</span>
-                )}
-            </div>
-
-            {/* Teams + Score — 3-column layout */}
-            <div className="flex-1 min-w-0 flex items-center gap-2">
-                {/* Home team */}
-                <div className="flex-1 flex items-center gap-1.5 min-w-0 justify-end">
-                    <span className={cn("text-sm truncate text-right", homeWon ? "font-bold" : "font-medium text-foreground/80")}>
-                        {match.home_team}
-                    </span>
-                    {match.home_logo ? (
-                        <img src={match.home_logo} alt="" className="w-5 h-5 shrink-0 object-contain" loading="lazy" />
+            <div className="flex items-center gap-2">
+                {/* Time / Status */}
+                <div className="w-11 shrink-0 text-center">
+                    {isLive ? (
+                        <Badge variant="destructive" className="text-[10px] px-1.5 h-5 animate-pulse">LIVE</Badge>
+                    ) : isFinished ? (
+                        <Badge className="text-[10px] px-1.5 h-5 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-0">Terminé</Badge>
                     ) : (
-                        <div className="w-5 h-5 rounded-full bg-primary/10 border border-border/50 shrink-0 flex items-center justify-center text-[8px] font-bold text-primary">
-                            {match.home_team?.charAt(0)}
-                        </div>
+                        <span className="text-xs font-bold tabular-nums text-foreground/80">{time}</span>
                     )}
                 </div>
 
-                {/* Score / VS */}
-                <div className="shrink-0 w-16 text-center">
-                    {hasScore ? (
-                        <div className={cn(
-                            "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-sm font-black tabular-nums",
-                            isLive ? "bg-red-500/10 text-red-500" : "bg-muted/60 text-foreground"
-                        )}>
-                            <span className={homeWon ? "text-primary" : ""}>{match.home_goals ?? 0}</span>
-                            <span className="text-muted-foreground/40 text-xs">-</span>
-                            <span className={awayWon ? "text-primary" : ""}>{match.away_goals ?? 0}</span>
-                        </div>
-                    ) : (
-                        <span className="text-xs font-bold text-muted-foreground/30">VS</span>
-                    )}
-                </div>
-
-                {/* Away team */}
-                <div className="flex-1 flex items-center gap-1.5 min-w-0">
-                    {match.away_logo ? (
-                        <img src={match.away_logo} alt="" className="w-5 h-5 shrink-0 object-contain" loading="lazy" />
-                    ) : (
-                        <div className="w-5 h-5 rounded-full bg-primary/10 border border-border/50 shrink-0 flex items-center justify-center text-[8px] font-bold text-primary">
-                            {match.away_team?.charAt(0)}
-                        </div>
-                    )}
-                    <span className={cn("text-sm truncate", awayWon ? "font-bold" : "font-medium text-foreground/80")}>
-                        {match.away_team}
-                    </span>
-                </div>
-            </div>
-
-            {/* Prediction info */}
-            <div className="shrink-0 flex flex-col items-end gap-1 min-w-[72px]">
-                {isFinished && pred ? (() => {
-                    // Determine predicted outcome from 1X2 probas
-                    const pH = pred.proba_home ?? 0
-                    const pD = pred.proba_draw ?? 0
-                    const pA = pred.proba_away ?? 0
-                    const predicted = pH >= pD && pH >= pA ? "H" : pA >= pH && pA >= pD ? "A" : "D"
-                    const hg = match.home_goals ?? 0
-                    const ag = match.away_goals ?? 0
-                    const actual = hg > ag ? "H" : ag > hg ? "A" : "D"
-                    const correct = predicted === actual
-                    return (
-                        <Badge className={cn(
-                            "text-[10px] h-5 px-1.5 border-0 gap-1",
-                            correct
-                                ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
-                                : "bg-red-500/10 text-red-500"
-                        )}>
-                            {correct ? "✅" : "❌"} {correct ? "Correct" : "Raté"}
-                        </Badge>
-                    )
-                })() : (
-                    <>
-                        {isHot && (
-                            <div className="flex items-center gap-1">
-                                <Flame className="w-3.5 h-3.5 text-orange-500 flame-badge" />
-                                <span className="text-[10px] font-bold text-orange-500">HOT</span>
+                {/* Teams + Score — 3-column layout */}
+                <div className="flex-1 min-w-0 flex items-center gap-2">
+                    {/* Home team */}
+                    <div className="flex-1 flex items-center gap-1.5 min-w-0 justify-end">
+                        <span className={cn("text-sm truncate text-right", homeWon ? "font-bold" : "font-medium text-foreground/80")}>
+                            {match.home_team}
+                        </span>
+                        {match.home_logo ? (
+                            <img src={match.home_logo} alt="" className="w-5 h-5 shrink-0 object-contain" loading="lazy" />
+                        ) : (
+                            <div className="w-5 h-5 rounded-full bg-primary/10 border border-border/50 shrink-0 flex items-center justify-center text-[8px] font-bold text-primary">
+                                {match.home_team?.charAt(0)}
                             </div>
                         )}
-                        {!isFinished && pred?.recommended_bet && (
-                            <span className="text-[10px] font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded truncate max-w-[72px]">
-                                {pred.recommended_bet.split(' ').slice(0, 2).join(' ')}
-                            </span>
-                        )}
-                        {pred?.confidence_score != null && !isFinished && (
-                            <Badge className={cn(
-                                "text-[10px] h-4 px-1.5 border-0",
-                                pred.confidence_score >= 8 ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" :
-                                    pred.confidence_score >= 6 ? "bg-amber-500/15 text-amber-600 dark:text-amber-400" :
-                                        "bg-muted text-muted-foreground"
+                    </div>
+
+                    {/* Score / VS */}
+                    <div className="shrink-0 w-16 text-center">
+                        {hasScore ? (
+                            <div className={cn(
+                                "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-sm font-black tabular-nums",
+                                isLive ? "bg-red-500/10 text-red-500" : "bg-muted/60 text-foreground"
                             )}>
-                                {pred.confidence_score}/10
-                            </Badge>
+                                <span className={homeWon ? "text-primary" : ""}>{match.home_goals ?? 0}</span>
+                                <span className="text-muted-foreground/40 text-xs">-</span>
+                                <span className={awayWon ? "text-primary" : ""}>{match.away_goals ?? 0}</span>
+                            </div>
+                        ) : (
+                            <span className="text-xs font-bold text-muted-foreground/30">VS</span>
                         )}
-                    </>
-                )}
+                    </div>
+
+                    {/* Away team */}
+                    <div className="flex-1 flex items-center gap-1.5 min-w-0">
+                        {match.away_logo ? (
+                            <img src={match.away_logo} alt="" className="w-5 h-5 shrink-0 object-contain" loading="lazy" />
+                        ) : (
+                            <div className="w-5 h-5 rounded-full bg-primary/10 border border-border/50 shrink-0 flex items-center justify-center text-[8px] font-bold text-primary">
+                                {match.away_team?.charAt(0)}
+                            </div>
+                        )}
+                        <span className={cn("text-sm truncate", awayWon ? "font-bold" : "font-medium text-foreground/80")}>
+                            {match.away_team}
+                        </span>
+                    </div>
+                </div>
+
+                {/* Prediction info */}
+                <div className="shrink-0 flex flex-col items-end gap-1 min-w-[72px]">
+                    {isFinished && pred ? (() => {
+                        // Determine predicted outcome from 1X2 probas
+                        const pH = pred.proba_home ?? 0
+                        const pD = pred.proba_draw ?? 0
+                        const pA = pred.proba_away ?? 0
+                        const predicted = pH >= pD && pH >= pA ? "H" : pA >= pH && pA >= pD ? "A" : "D"
+                        const hg = match.home_goals ?? 0
+                        const ag = match.away_goals ?? 0
+                        const actual = hg > ag ? "H" : ag > hg ? "A" : "D"
+                        const correct = predicted === actual
+                        return (
+                            <Badge className={cn(
+                                "text-[10px] h-5 px-1.5 border-0 gap-1",
+                                correct
+                                    ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                                    : "bg-red-500/10 text-red-500"
+                            )}>
+                                {correct ? "✅" : "❌"} {correct ? "Correct" : "Raté"}
+                            </Badge>
+                        )
+                    })() : (
+                        <>
+                            {isHot && (
+                                <div className="flex items-center gap-1">
+                                    <Flame className="w-3.5 h-3.5 text-orange-500 flame-badge" />
+                                    <span className="text-[10px] font-bold text-orange-500">HOT</span>
+                                </div>
+                            )}
+                            {!isFinished && pred?.recommended_bet && (
+                                <span className="text-[10px] font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded truncate max-w-[72px]">
+                                    {pred.recommended_bet.split(' ').slice(0, 2).join(' ')}
+                                </span>
+                            )}
+                            {pred?.confidence_score != null && !isFinished && (
+                                <Badge className={cn(
+                                    "text-[10px] h-4 px-1.5 border-0",
+                                    pred.confidence_score >= 8 ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" :
+                                        pred.confidence_score >= 6 ? "bg-amber-500/15 text-amber-600 dark:text-amber-400" :
+                                            "bg-muted text-muted-foreground"
+                                )}>
+                                    {pred.confidence_score}/10
+                                </Badge>
+                            )}
+                        </>
+                    )}
+                </div>
+
+                <ChevronRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-muted-foreground/60 shrink-0 transition-colors" />
             </div>
 
-            <ChevronRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-muted-foreground/60 shrink-0 transition-colors" />
+            {/* Scorers row */}
+            {hasEvents && (
+                <div className="flex items-start gap-2 mt-1.5 ml-11 mr-8">
+                    <div className="flex-1 text-right">
+                        <span className="text-[10px] text-muted-foreground">
+                            {homeEvents.map(e => `⚽ ${e.player}${e.detail === 'Penalty' ? ' (P)' : e.detail === 'Own Goal' ? ' (CSC)' : ''} ${e.time}'`).join(', ')}
+                        </span>
+                    </div>
+                    <div className="w-16 shrink-0" />
+                    <div className="flex-1">
+                        <span className="text-[10px] text-muted-foreground">
+                            {awayEvents.map(e => `⚽ ${e.player}${e.detail === 'Penalty' ? ' (P)' : e.detail === 'Own Goal' ? ' (CSC)' : ''} ${e.time}'`).join(', ')}
+                        </span>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

@@ -388,6 +388,7 @@ def get_predictions(
             "status": f.get("status"),
             "home_goals": f.get("home_goals"),
             "away_goals": f.get("away_goals"),
+            "events_json": f.get("events_json") or [],
             "league_id": league_id,
             "league_name": league_map.get(str(league_id), "Ligue"),
             "prediction": {
