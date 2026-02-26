@@ -366,6 +366,7 @@ def update_live_scores():
                                 "time": ev.get("time", {}).get("elapsed", ""),
                                 "extra_time": ev.get("time", {}).get("extra"),
                                 "detail": ev.get("detail", ""),  # "Normal Goal", "Penalty", "Own Goal"
+                                "comments": ev.get("comments", ""),
                                 "half": "1H" if (ev.get("time", {}).get("elapsed", 0) or 0) <= 45 else "2H",
                             }
                             goals_list.append(goal_info)
