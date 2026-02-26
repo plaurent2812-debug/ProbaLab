@@ -390,6 +390,7 @@ def get_predictions(
             "away_goals": f.get("away_goals"),
             "events_json": f.get("events_json") or [],
             "elapsed": f.get("elapsed"),
+            "live_stats_json": f.get("live_stats_json") or {},
             "league_id": league_id,
             "league_name": league_map.get(str(league_id), "Ligue"),
             "prediction": {

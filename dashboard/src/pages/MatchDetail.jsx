@@ -204,7 +204,19 @@ export default function MatchDetailPage() {
                             )}
                         </div>
                         <div className="shrink-0 text-center">
-                            <span className="text-sm font-bold text-muted-foreground/40">VS</span>
+                            {["1H", "2H", "HT", "ET", "P", "LIVE"].includes(fixture?.status) ? (
+                                <Badge variant="destructive" className="text-xs px-2 py-1 animate-pulse">
+                                    {fixture.status === "HT" ? "MI-TEMPS"
+                                        : fixture.elapsed ? `${fixture.elapsed}'`
+                                            : "LIVE"}
+                                </Badge>
+                            ) : ["FT", "AET", "PEN"].includes(fixture?.status) ? (
+                                <Badge className="text-xs px-2 py-1 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-0">
+                                    Terminé
+                                </Badge>
+                            ) : (
+                                <span className="text-sm font-bold text-muted-foreground/40">VS</span>
+                            )}
                         </div>
                         <div className="flex-1 text-center">
                             {fixture?.away_logo && (
@@ -317,6 +329,62 @@ export default function MatchDetailPage() {
                                     )
                                 })}
                             </div>
+                        </CardContent>
+                    </Card>
+                )
+            })()}
+
+            {/* Live Match Stats */}
+            {(() => {
+                const ls = fixture?.live_stats_json
+                if (!ls || (!ls.home && !ls.away)) return null
+                const h = ls.home || {}
+                const a = ls.away || {}
+
+                const StatBar = ({ label, home, away, unit = "" }) => {
+                    const hVal = home ?? 0
+                    const aVal = away ?? 0
+                    const total = hVal + aVal || 1
+                    const hPct = (hVal / total) * 100
+                    const aPct = (aVal / total) * 100
+                    const hDisplay = unit ? `${home}${unit}` : home ?? "–"
+                    const aDisplay = unit ? `${away}${unit}` : away ?? "–"
+                    return (
+                        <div className="py-2 border-b border-border/20 last:border-0">
+                            <div className="flex justify-between text-xs font-bold mb-1">
+                                <span>{hDisplay}</span>
+                                <span className="text-muted-foreground text-[10px] font-medium">{label}</span>
+                                <span>{aDisplay}</span>
+                            </div>
+                            <div className="flex gap-0.5 h-1.5 rounded-full overflow-hidden bg-muted/40">
+                                <div className="bg-primary rounded-l-full transition-all" style={{ width: `${hPct}%` }} />
+                                <div className="bg-blue-400 rounded-r-full transition-all" style={{ width: `${aPct}%` }} />
+                            </div>
+                        </div>
+                    )
+                }
+
+                return (
+                    <Card className="border-border/50">
+                        <CardHeader className="pb-3">
+                            <CardTitle className="text-sm font-bold flex items-center gap-2">
+                                📊 Statistiques en direct
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-0">
+                            <StatBar label="Possession" home={h.possession} away={a.possession} />
+                            <StatBar label="Tirs (total)" home={h.shots_total} away={a.shots_total} />
+                            <StatBar label="Tirs cadrés" home={h.shots_on} away={a.shots_on} />
+                            {(h.xg || a.xg) && <StatBar label="xG" home={h.xg} away={a.xg} />}
+                            <StatBar label="Corners" home={h.corners} away={a.corners} />
+                            <StatBar label="Fautes" home={h.fouls} away={a.fouls} />
+                            <StatBar label="Hors-jeu" home={h.offsides} away={a.offsides} />
+                            {(h.yellow > 0 || a.yellow > 0) && (
+                                <StatBar label="🟨 Cartons jaunes" home={h.yellow} away={a.yellow} />
+                            )}
+                            {(h.red > 0 || a.red > 0) && (
+                                <StatBar label="🟥 Cartons rouges" home={h.red} away={a.red} />
+                            )}
                         </CardContent>
                     </Card>
                 )
