@@ -198,29 +198,65 @@ def fetch_goalie_form(teams: list[str]) -> dict:
     return goalie_stats
 
 
-def detect_back_to_back(games: list[dict]) -> set[str]:
-    """Detect teams playing back-to-back (played yesterday)."""
-    tired_teams = set()
-    yesterday = (datetime.utcnow() - timedelta(days=1)).strftime("%Y-%m-%d")
-
-    schedule_data = _fetch_json("/schedule/now")
-    if not schedule_data or "gameWeek" not in schedule_data:
-        return tired_teams
-
-    for day in schedule_data["gameWeek"]:
-        if day["date"] == yesterday:
-            for g in day.get("games", []):
-                if g.get("gameState") in ("FINAL", "OFF"):
-                    tired_teams.add(g.get("homeTeam", {}).get("abbrev", ""))
-                    tired_teams.add(g.get("awayTeam", {}).get("abbrev", ""))
-            break
-
+def detect_fatigue(games: list[dict]) -> dict[str, float]:
+    """Detect advanced schedule fatigue (B2B and 3-in-4) for teams playing today.
+    Returns a dict mapping team_abbrev to a fatigue multiplier (< 1.0 = tired).
+    """
+    fatigue_modifiers = {}
+    
     today_teams = set()
     for g in games:
         today_teams.add(g.get("homeTeam", {}).get("abbrev", ""))
         today_teams.add(g.get("awayTeam", {}).get("abbrev", ""))
 
-    return tired_teams & today_teams
+    if not today_teams:
+        return fatigue_modifiers
+
+    # We need the last 3 days to check for 3-in-4 (Today + 3 previous days)
+    past_dates = [(datetime.utcnow() - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(1, 4)]
+    yesterday_str = past_dates[0]
+
+    schedule_data = _fetch_json("/schedule/now")
+    if not schedule_data or "gameWeek" not in schedule_data:
+        return fatigue_modifiers
+
+    # Count games played in the last 3 days for teams playing today
+    games_played_past_3_days = {team: 0 for team in today_teams}
+    played_yesterday = set()
+
+    for day in schedule_data["gameWeek"]:
+        date_str = day["date"]
+        if date_str in past_dates:
+            for g in day.get("games", []):
+                if g.get("gameState") in ("FINAL", "OFF"):
+                    h = g.get("homeTeam", {}).get("abbrev", "")
+                    a = g.get("awayTeam", {}).get("abbrev", "")
+                    if h in today_teams:
+                        games_played_past_3_days[h] += 1
+                        if date_str == yesterday_str:
+                            played_yesterday.add(h)
+                    if a in today_teams:
+                        games_played_past_3_days[a] += 1
+                        if date_str == yesterday_str:
+                            played_yesterday.add(a)
+
+    for team in today_teams:
+        games_past_3 = games_played_past_3_days[team]
+        is_b2b = team in played_yesterday
+        
+        # Base multiplier is 1.0 (rested)
+        mod = 1.0
+        if games_past_3 >= 2:
+            # Playing 3rd game in 4 nights
+            mod = 0.86
+        elif is_b2b:
+            # Standard Back-to-Back
+            mod = 0.92
+            
+        if mod < 1.0:
+            fatigue_modifiers[team] = mod
+
+    return fatigue_modifiers
 
 
 # ─── Player Game Logs (L5 Form + H2H) ───────────────────────────
@@ -477,8 +513,9 @@ def get_claude_nhl_analysis(home_team: str, away_team: str, top_players: list[di
 # ─── Player scoring ─────────────────────────────────────────────
 
 def _score_player(skater: dict, team: str, opp: str, my_stats: dict, opp_stats: dict,
-                  is_home: bool, goalie_form: dict, tired_teams: set,
-                  ai_factors: dict, l5_form: dict = None, h2h: dict = None) -> dict:
+                  is_home: bool, goalie_form: dict, fatigue_dict: dict,
+                  ai_factors: dict, game_script_mult: float = 1.0,
+                  l5_form: dict = None, h2h: dict = None) -> dict:
     """Score a single player for goal, assist, point, shot probabilities.
 
     Uses: per-game rates, TOI, opponent GAA, goalie form, PP%, PK%,
@@ -537,8 +574,8 @@ def _score_player(skater: dict, team: str, opp: str, my_stats: dict, opp_stats: 
     # Base boost is 1.0. We add the team advantage scaled by how much this player plays on the PP (min 10% exposure)
     pp_boost = 1.0 + (team_pp_advantage * max(0.1, pp_weight) * 2.0)  # Double impact for true PP1 guys
 
-    # Back-to-back fatigue penalty
-    b2b_penalty = 0.92 if team in tired_teams else 1.0
+    # Back-to-back & 3-in-4 fatigue penalty
+    b2b_penalty = fatigue_dict.get(team, 1.0)
 
     # AI offensive factor
     ai_factor = ai_factors.get(team, 1.0)
@@ -550,16 +587,18 @@ def _score_player(skater: dict, team: str, opp: str, my_stats: dict, opp_stats: 
     sh_regress = l5.get("sh_pct_regression", 1.0)
 
     # Apply shot volume to expected shots 
-    exp_shots_base = shots_per_game * b2b_penalty * ai_factor * l5["shot"] * h2h_adj["shot"] * toi_drop
+    exp_shots_base = shots_per_game * b2b_penalty * ai_factor * l5["shot"] * h2h_adj["shot"] * toi_drop * game_script_mult
     exp_shots = exp_shots_base * shot_volume_factor
 
     # Apply shot volume marginally to goals (more shots = more goal chances)
+    # The game script directly applies to goals too, trailing teams score a bit more trying, leading teams score a bit less turtling.
     goal_volume_boost = 1.0 + ((shot_volume_factor - 1.0) * 0.5)
+    script_goal_boost = 1.0 + ((game_script_mult - 1.0) * 0.5)
 
     # ─── Expected Values (Lambda for Poisson) ───
-    exp_goals = gpg * defense_factor * goal_volume_boost * (1 + goalie_adj) * pp_boost * b2b_penalty * ai_factor * l5["goal"] * h2h_adj["goal"] * toi_drop * sh_regress
-    exp_assists = apg * defense_factor * goal_volume_boost * pp_boost * b2b_penalty * ai_factor * l5["assist"] * toi_drop
-    exp_points = ppg * defense_factor * goal_volume_boost * (1 + goalie_adj * 0.5) * pp_boost * b2b_penalty * ai_factor * l5["point"] * h2h_adj["point"] * toi_drop * sh_regress
+    exp_goals = gpg * defense_factor * goal_volume_boost * script_goal_boost * (1 + goalie_adj) * pp_boost * b2b_penalty * ai_factor * l5["goal"] * h2h_adj["goal"] * toi_drop * sh_regress
+    exp_assists = apg * defense_factor * goal_volume_boost * script_goal_boost * pp_boost * b2b_penalty * ai_factor * l5["assist"] * toi_drop
+    exp_points = ppg * defense_factor * goal_volume_boost * script_goal_boost * (1 + goalie_adj * 0.5) * pp_boost * b2b_penalty * ai_factor * l5["point"] * h2h_adj["point"] * toi_drop * sh_regress
 
     
     # ─── Home & TOI adjustments ───
@@ -611,7 +650,7 @@ def _score_player(skater: dict, team: str, opp: str, my_stats: dict, opp_stats: 
         "toi_minutes": round(toi_minutes, 1),
         "games_played": gp,
         "ai_factor": ai_factor,
-        "b2b": team in tired_teams,
+        "b2b": fatigue_dict.get(team, 1.0) < 1.0,
         "pp_boost": round(pp_boost, 3),
         "l5_form": l5,
         "h2h": h2h_adj,
@@ -632,7 +671,7 @@ def _score_player(skater: dict, team: str, opp: str, my_stats: dict, opp_stats: 
 
 # ─── Win probability ────────────────────────────────────────────
 
-def calculate_win_prob(home: str, away: str, standings: dict, tired_teams: set) -> dict:
+def calculate_win_prob(home: str, away: str, standings: dict, fatigue_dict: dict) -> dict:
     """Calculate win probability based on standings, PP/PK, and fatigue."""
     h = standings.get(home, {})
     a = standings.get(away, {})
@@ -649,11 +688,9 @@ def calculate_win_prob(home: str, away: str, standings: dict, tired_teams: set) 
     a_power += (a.get("pp_pct", 0.20) - 0.20) * 0.15
     a_power += (a.get("pk_pct", 0.80) - 0.80) * 0.10
 
-    # Back-to-back fatigue
-    if home in tired_teams:
-        h_power *= 0.95
-    if away in tired_teams:
-        a_power *= 0.95
+    # Advanced fatigue
+    h_power *= fatigue_dict.get(home, 1.0)
+    a_power *= fatigue_dict.get(away, 1.0)
 
     total = h_power + a_power
     if total == 0:
@@ -691,10 +728,16 @@ def run_nhl_pipeline() -> dict:
     standings = fetch_standings()
     logger.info(f"[NHL] Standings chargés pour {len(standings)} équipes")
 
-    # 3. Detect back-to-back teams
-    tired_teams = detect_back_to_back(future_games)
-    if tired_teams:
-        logger.info(f"[NHL] ⚠️ Back-to-back détecté: {', '.join(tired_teams)}")
+    # 3. Detect schedule fatigue (B2B and 3-in-4)
+    fatigue_dict = detect_fatigue(future_games)
+    if fatigue_dict:
+        tired_str = []
+        for t, m in fatigue_dict.items():
+            if m < 0.90:
+                tired_str.append(f"{t} (3-in-4)")
+            else:
+                tired_str.append(f"{t} (B2B)")
+        logger.info(f"[NHL] ⚠️ Fatigue détectée: {', '.join(tired_str)}")
 
     # 4. Fetch goalie form
     all_teams = []
@@ -726,10 +769,15 @@ def run_nhl_pipeline() -> dict:
         away_name = TEAM_NAMES.get(away_abbrev, away_abbrev)
 
         b2b_tag = ""
-        if home_abbrev in tired_teams:
-            b2b_tag += f" ⚠️{home_abbrev} B2B"
-        if away_abbrev in tired_teams:
-            b2b_tag += f" ⚠️{away_abbrev} B2B"
+        h_fatigue = fatigue_dict.get(home_abbrev, 1.0)
+        a_fatigue = fatigue_dict.get(away_abbrev, 1.0)
+        
+        if h_fatigue < 1.0:
+            tag = "3-in-4" if h_fatigue < 0.90 else "B2B"
+            b2b_tag += f" ⚠️{home_abbrev} {tag}"
+        if a_fatigue < 1.0:
+            tag = "3-in-4" if a_fatigue < 0.90 else "B2B"
+            b2b_tag += f" ⚠️{away_abbrev} {tag}"
 
         ai_tag = ""
         h_ai = ai_factors.get(home_abbrev, 1.0)
@@ -746,13 +794,28 @@ def run_nhl_pipeline() -> dict:
         h_stats = standings.get(home_abbrev, {})
         a_stats = standings.get(away_abbrev, {})
 
+        # Calculate Game Script (Trailing/Leading Volume Adjustments)
+        # If Home is massive favorite (h_ai 1.3 vs a_ai 0.8), Away will likely trail and take more shots (1.10). Home will turtle (0.90)
+        ai_diff = h_ai - a_ai
+        home_script_mult = 1.0
+        away_script_mult = 1.0
+        
+        if ai_diff > 0.4:
+            # Home heavy favorite
+            home_script_mult = 0.92
+            away_script_mult = 1.08
+        elif ai_diff < -0.4:
+            # Away heavy favorite
+            home_script_mult = 1.08
+            away_script_mult = 0.92
+
         # Score players — PASS 1: base scoring (no game logs)
         match_players = []
         for skater in home_roster:
             if skater.get("gamesPlayed", 0) < 10:
                 continue
             player = _score_player(skater, home_abbrev, away_abbrev, h_stats, a_stats,
-                                   True, goalie_form, tired_teams, ai_factors)
+                                   True, goalie_form, fatigue_dict, ai_factors, home_script_mult)
             if player["prob_goal"] > 5 or player["prob_shot"] > 15:
                 player["_skater"] = skater  # Keep reference for pass 2
                 match_players.append(player)
@@ -761,7 +824,7 @@ def run_nhl_pipeline() -> dict:
             if skater.get("gamesPlayed", 0) < 10:
                 continue
             player = _score_player(skater, away_abbrev, home_abbrev, a_stats, h_stats,
-                                   False, goalie_form, tired_teams, ai_factors)
+                                   False, goalie_form, fatigue_dict, ai_factors, away_script_mult)
             if player["prob_goal"] > 5 or player["prob_shot"] > 15:
                 player["_skater"] = skater
                 match_players.append(player)
@@ -792,8 +855,9 @@ def run_nhl_pipeline() -> dict:
                 is_home = player["is_home"] == 1
                 my_s = standings.get(team, {})
                 opp_s = standings.get(opp, {})
+                p_script_mult = home_script_mult if is_home else away_script_mult
                 enhanced = _score_player(skater, team, opp, my_s, opp_s,
-                                         is_home, goalie_form, tired_teams, ai_factors,
+                                         is_home, goalie_form, fatigue_dict, ai_factors, p_script_mult,
                                          l5_form=l5, h2h=h2h)
                 # Update in-place
                 idx = match_players.index(player)
@@ -944,7 +1008,7 @@ def run_nhl_pipeline() -> dict:
         analysis_text = get_claude_nhl_analysis(home_name, away_name, match_players, ai_factors)
 
         # Win probabilities for fixtures_data (saved to Supabase)
-        win_prob = calculate_win_prob(home_abbrev, away_abbrev, standings, tired_teams)
+        win_prob = calculate_win_prob(home_abbrev, away_abbrev, standings, fatigue_dict)
         ph = win_prob["home"]
         pa = win_prob["away"]
 
