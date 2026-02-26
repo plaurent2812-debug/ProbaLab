@@ -652,6 +652,9 @@ def _score_player(skater: dict, team: str, opp: str, my_stats: dict, opp_stats: 
         "ai_factor": ai_factor,
         "b2b": fatigue_dict.get(team, 1.0) < 1.0,
         "pp_boost": round(pp_boost, 3),
+        "pp_reliance": round(pp_reliance, 2),
+        "fatigue_penalty": round(b2b_penalty, 2),
+        "sh_pct_regression": round(sh_regress, 2),
         "l5_form": l5,
         "h2h": h2h_adj,
     }
