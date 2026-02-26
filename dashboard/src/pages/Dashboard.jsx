@@ -176,17 +176,21 @@ function MatchRow({ match }) {
 
             {/* Scorers row */}
             {hasEvents && (
-                <div className="flex items-start gap-2 mt-1.5 ml-11 mr-8">
-                    <div className="flex-1 text-right">
-                        <span className="text-[10px] text-muted-foreground">
-                            {homeEvents.map(e => `⚽ ${e.player}${e.detail === 'Penalty' ? ' (P)' : e.detail === 'Own Goal' ? ' (CSC)' : ''} ${e.time}'`).join(', ')}
-                        </span>
+                <div className="flex items-start gap-1 sm:gap-2 mt-1.5 ml-[44px] mr-[64px] sm:ml-11 sm:mr-20">
+                    <div className="flex-1 text-right leading-tight">
+                        {homeEvents.map((e, i) => (
+                            <span key={i} className="inline-block whitespace-nowrap text-[9px] sm:text-[10px] text-muted-foreground mr-1">
+                                ⚽ {e.player}{e.detail === 'Penalty' ? ' (P)' : e.detail === 'Own Goal' ? ' (CSC)' : ''} {e.time}'{i < homeEvents.length - 1 ? ',' : ''}
+                            </span>
+                        ))}
                     </div>
-                    <div className="w-16 shrink-0" />
-                    <div className="flex-1">
-                        <span className="text-[10px] text-muted-foreground">
-                            {awayEvents.map(e => `⚽ ${e.player}${e.detail === 'Penalty' ? ' (P)' : e.detail === 'Own Goal' ? ' (CSC)' : ''} ${e.time}'`).join(', ')}
-                        </span>
+                    <div className="w-12 sm:w-16 shrink-0" />
+                    <div className="flex-1 leading-tight">
+                        {awayEvents.map((e, i) => (
+                            <span key={i} className="inline-block whitespace-nowrap text-[9px] sm:text-[10px] text-muted-foreground mr-1">
+                                ⚽ {e.player}{e.detail === 'Penalty' ? ' (P)' : e.detail === 'Own Goal' ? ' (CSC)' : ''} {e.time}'{i < awayEvents.length - 1 ? ',' : ''}
+                            </span>
+                        ))}
                     </div>
                 </div>
             )}
