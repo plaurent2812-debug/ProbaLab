@@ -97,15 +97,35 @@ function MatchRow({ match }) {
                 {/* Prediction info */}
                 <div className="shrink-0 flex flex-col items-end gap-1 min-w-[72px]">
                     {isFinished && pred ? (() => {
-                        // Determine predicted outcome from 1X2 probas
-                        const pH = pred.proba_home ?? 0
-                        const pD = pred.proba_draw ?? 0
-                        const pA = pred.proba_away ?? 0
-                        const predicted = pH >= pD && pH >= pA ? "H" : pA >= pH && pA >= pD ? "A" : "D"
                         const hg = match.home_goals ?? 0
                         const ag = match.away_goals ?? 0
-                        const actual = hg > ag ? "H" : ag > hg ? "A" : "D"
-                        const correct = predicted === actual
+                        const totalGoals = hg + ag
+                        const bet = (pred.recommended_bet || "").toLowerCase()
+
+                        let correct = false
+                        if (bet.includes("moins de") || bet.includes("under")) {
+                            // Under X.5 buts
+                            const threshold = parseFloat((bet.match(/(\d+[.,]\d+)/) || [])[1]?.replace(",", ".")) || 2.5
+                            correct = totalGoals < threshold
+                        } else if (bet.includes("plus de") || bet.includes("over")) {
+                            const threshold = parseFloat((bet.match(/(\d+[.,]\d+)/) || [])[1]?.replace(",", ".")) || 2.5
+                            correct = totalGoals > threshold
+                        } else if (bet.includes("btts oui") || bet.includes("les deux marquent")) {
+                            correct = hg > 0 && ag > 0
+                        } else if (bet.includes("btts non")) {
+                            correct = hg === 0 || ag === 0
+                        } else if (bet.includes("nul") || bet.includes("draw")) {
+                            correct = hg === ag
+                        } else {
+                            // Fallback: 1X2 from probas
+                            const pH = pred.proba_home ?? 0
+                            const pD = pred.proba_draw ?? 0
+                            const pA = pred.proba_away ?? 0
+                            const predicted = pH >= pD && pH >= pA ? "H" : pA >= pH && pA >= pD ? "A" : "D"
+                            const actual = hg > ag ? "H" : ag > hg ? "A" : "D"
+                            correct = predicted === actual
+                        }
+
                         return (
                             <Badge className={cn(
                                 "text-[10px] h-5 px-1.5 border-0 gap-1",
