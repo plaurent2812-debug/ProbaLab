@@ -24,8 +24,13 @@ function MatchRow({ match }) {
     const isHot = pred?.confidence_score >= 7 && !isFinished
     const hasScore = isFinished || isLive
 
-    // Extract goals from events_json (filter out null player names and penalty shootout)
-    const events = (match.events_json || []).filter(e => e.player && e.comments !== 'Penalty Shootout')
+    // Extract goals from events_json (filter out null players and penalty shootout)
+    const events = (match.events_json || []).filter(e => {
+        if (!e.player) return false
+        if (e.comments === 'Penalty Shootout') return false
+        if (e.detail === 'Penalty' && e.time >= 120) return false
+        return true
+    })
     const homeEvents = events.filter(e => e.team === match.home_team)
     const awayEvents = events.filter(e => e.team === match.away_team)
     const hasEvents = hasScore && events.length > 0

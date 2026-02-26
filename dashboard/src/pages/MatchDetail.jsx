@@ -275,7 +275,12 @@ export default function MatchDetailPage() {
 
             {/* Match Events — Goals Timeline */}
             {(() => {
-                const events = (fixture?.events_json || []).filter(e => e.player && e.comments !== 'Penalty Shootout')
+                const events = (fixture?.events_json || []).filter(e => {
+                    if (!e.player) return false
+                    if (e.comments === 'Penalty Shootout') return false
+                    if (e.detail === 'Penalty' && e.time >= 120) return false
+                    return true
+                })
                 if (!events.length) return null
 
                 return (
