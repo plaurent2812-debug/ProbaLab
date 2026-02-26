@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useNavigate } from "react-router-dom"
 import { format, addDays } from "date-fns"
 import { fr } from "date-fns/locale"
@@ -9,15 +9,27 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 
+const LIVE_STATUSES = ["1P", "2P", "3P", "OT", "SO", "LIVE"]
+
 /* ── NHL Match Row ─────────────────────────────────────────── */
 function NHLMatchRow({ match }) {
     const navigate = useNavigate()
     const time = match.date ? new Date(match.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : "--:--"
     const isFinished = ["FT", "Final", "FINAL", "OFF"].includes(match.status)
-    const isLive = ["1P", "2P", "3P", "OT", "SO", "LIVE"].includes(match.status)
+    const isLive = LIVE_STATUSES.includes(match.status)
     const homeWon = isFinished && match.home_goals > match.away_goals
     const awayWon = isFinished && match.away_goals > match.home_goals
     const isHot = match.confidence_score >= 7 && !isFinished
+
+    // Period label for live badge
+    const periodLabel = {
+        "1P": "1ère",
+        "2P": "2ème",
+        "3P": "3ème",
+        "OT": "Prol.",
+        "SO": "Tirs",
+        "LIVE": "Live",
+    }[match.status] || "Live"
 
     return (
         <div
@@ -25,9 +37,9 @@ function NHLMatchRow({ match }) {
             onClick={() => navigate(`/nhl/match/${match.api_fixture_id || match.id}`)}
         >
             {/* Time */}
-            <div className="w-12 shrink-0 text-center">
+            <div className="w-14 shrink-0 text-center">
                 {isLive ? (
-                    <Badge variant="destructive" className="text-[10px] px-1.5 h-5 animate-pulse">LIVE</Badge>
+                    <Badge variant="destructive" className="text-[10px] px-1.5 h-5 animate-pulse">{periodLabel}</Badge>
                 ) : isFinished ? (
                     <Badge className="text-[10px] px-1.5 h-5 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-0">Terminé</Badge>
                 ) : (
@@ -88,8 +100,8 @@ export default function NHLPage({ date, setDate }) {
     const [matches, setMatches] = useState([])
     const [loading, setLoading] = useState(true)
 
-    useEffect(() => {
-        setLoading(true)
+    const fetchMatches = useCallback((showLoading = true) => {
+        if (showLoading) setLoading(true)
         const start = new Date(date); start.setHours(0, 0, 0, 0)
         const end = new Date(date); end.setHours(23, 59, 59, 999)
 
@@ -101,8 +113,19 @@ export default function NHLPage({ date, setDate }) {
             .order('date', { ascending: true })
             .then(({ data }) => setMatches(data || []))
             .catch(console.error)
-            .finally(() => setLoading(false))
+            .finally(() => { if (showLoading) setLoading(false) })
     }, [date])
+
+    // Initial fetch when date changes
+    useEffect(() => { fetchMatches(true) }, [fetchMatches])
+
+    // Auto-refresh every 30s when any match is live
+    useEffect(() => {
+        const hasLive = matches.some(m => LIVE_STATUSES.includes(m.status))
+        if (!hasLive) return
+        const interval = setInterval(() => fetchMatches(false), 30_000)
+        return () => clearInterval(interval)
+    }, [matches, fetchMatches])
 
     const handleDateChange = (days) => {
         setDate(addDays(new Date(date), days).toISOString().slice(0, 10))

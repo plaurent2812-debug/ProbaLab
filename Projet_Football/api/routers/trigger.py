@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
-from config import supabase, api_get, logger
+from config import supabase, api_get, logger, API_FOOTBALL_KEY
 from brain import ask_claude, extract_json
 
 try:
@@ -829,26 +829,6 @@ def nhl_value_bets():
     return {"status": "ok", "matches_analyzed": len(value_bets), "value_bets": value_bets}
 
 
-@router.post("/nhl-update-live-scores")
-def nhl_update_live_scores():
-    """Fetch live NHL scores and update nhl_fixtures table."""
-    logger.info("[NHL Live Scores] 🏒 Fetching live NHL scores...")
-
-    today = datetime.now().strftime("%Y-%m-%d")
-
-    # Get today's NHL fixtures that should be live
-    fixtures = (
-        supabase.table("nhl_fixtures")
-        .select("id, api_fixture_id, home_team, away_team")
-        .gte("date", f"{today}T00:00:00Z")
-        .lt("date", f"{today}T23:59:59Z")
-        .execute()
-        .data or []
-    )
-
-    if not fixtures:
-        return {"status": "no_fixtures", "updated": 0}
-
 @router.post("/nhl-fetch-odds")
 def nhl_fetch_odds():
     """Fetch NHL odds from API-Sports and update nhl_fixtures"""
@@ -861,7 +841,7 @@ def nhl_fetch_odds():
     except Exception as e:
         logger.error(f"[NHL Odds] ❌ Erreur: {e}")
         return {"status": "error", "message": str(e)}
-        
+
     logger.info(f"[NHL Odds] ✅ Terminé en {round(time.time() - start)}s")
     return result
 
@@ -878,10 +858,62 @@ def football_momentum():
     except Exception as e:
         logger.error(f"[Football Momentum] ❌ Erreur: {e}")
         return {"status": "error", "message": str(e)}
-        
+
     logger.info(f"[Football Momentum] ✅ Terminé en {round(time.time() - start)}s")
     return result
 
+
+@router.post("/nhl-update-live-scores")
+def nhl_update_live_scores():
+    """Fetch live NHL scores from Hockey API and update nhl_fixtures table."""
+    import requests as _requests
+    import time as _time
+
+    logger.info("[NHL Live Scores] 🏒 Fetching live NHL scores...")
+
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    # Get today's NHL fixtures
+    fixtures = (
+        supabase.table("nhl_fixtures")
+        .select("id, api_fixture_id, home_team, away_team, status")
+        .gte("date", f"{today}T00:00:00Z")
+        .lt("date", f"{today}T23:59:59Z")
+        .execute()
+        .data or []
+    )
+
+    if not fixtures:
+        return {"status": "no_fixtures", "updated": 0}
+
+    # Hockey API-Sports config
+    HOCKEY_API_URL = "https://v1.hockey.api-sports.io"
+    HOCKEY_HEADERS = {
+        "x-rapidapi-host": "v1.hockey.api-sports.io",
+        "x-rapidapi-key": API_FOOTBALL_KEY,
+    }
+
+    # Map Hockey API statuses to our frontend statuses
+    STATUS_MAP = {
+        "NS": "NS",       # Not Started
+        "Q1": "1P",       # 1st Period
+        "Q2": "2P",       # 2nd Period
+        "Q3": "3P",       # 3rd Period
+        "OT": "OT",       # Overtime
+        "BT": "FT",       # Break Time (between periods) — treat as live
+        "P": "SO",        # Penalties (Shootout)
+        "FT": "FT",       # Full Time (regular)
+        "AOT": "FT",      # After Overtime
+        "AP": "FT",       # After Penalties
+        "CANC": "CANC",   # Cancelled
+        "POST": "POST",   # Postponed
+        "SUSP": "SUSP",   # Suspended
+        "AWD": "FT",      # Awarded
+        "WO": "FT",       # Walkover
+    }
+
+    # Statuses that mean "game is in progress"
+    LIVE_STATUSES = {"Q1", "Q2", "Q3", "OT", "BT", "P"}
 
     updated = 0
     errors = 0
@@ -891,26 +923,51 @@ def football_momentum():
         if not api_id:
             continue
 
+        # Skip already finished fixtures
+        if fix.get("status") in ("FT", "CANC", "POST"):
+            continue
+
         try:
-            # Use API-Football's hockey endpoint or a dedicated NHL API
-            # For now, try the generic fixtures endpoint
-            resp = api_get("fixtures", {"id": api_id})
-            if not resp or not resp.get("response"):
+            resp = _requests.get(
+                f"{HOCKEY_API_URL}/games",
+                headers=HOCKEY_HEADERS,
+                params={"id": api_id},
+                timeout=15,
+            )
+            _time.sleep(0.5)  # Rate limit
+
+            if resp.status_code != 200:
+                logger.warning(f"[NHL Live] HTTP {resp.status_code} for game {api_id}")
                 continue
 
-            game = resp["response"][0]
-            goals = game.get("goals", {})
-            home_goals = goals.get("home")
-            away_goals = goals.get("away")
-            status_short = game.get("fixture", {}).get("status", {}).get("short", "")
+            data = resp.json()
+            games = data.get("response", [])
+            if not games:
+                continue
 
+            game = games[0]
+            scores = game.get("scores", {})
+            home_goals = scores.get("home")
+            away_goals = scores.get("away")
+            api_status = game.get("status", {}).get("short", "")
+            our_status = STATUS_MAP.get(api_status, api_status)
+
+            # BT (Break Time) means intermission — show as live with last period status
+            if api_status == "BT":
+                # During break, keep period context (show as live, not finished)
+                our_status = "LIVE"
+
+            update_data = {"status": our_status}
             if home_goals is not None:
-                supabase.table("nhl_fixtures").update({
-                    "home_goals": home_goals,
-                    "away_goals": away_goals,
-                    "status": status_short if status_short in ("FT", "LIVE", "Q1", "Q2", "Q3", "OT") else status_short,
-                }).eq("api_fixture_id", api_id).execute()
-                updated += 1
+                update_data["home_goals"] = home_goals
+            if away_goals is not None:
+                update_data["away_goals"] = away_goals
+
+            supabase.table("nhl_fixtures").update(
+                update_data
+            ).eq("api_fixture_id", api_id).execute()
+            updated += 1
+
         except Exception as e:
             logger.error(f"[NHL Live] Error updating {api_id}: {e}")
             errors += 1
