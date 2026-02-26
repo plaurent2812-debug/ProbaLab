@@ -15,6 +15,11 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 
 /* ── Player Row ────────────────────────────────────────────── */
 function PlayerRow({ rank, player }) {
+    // Sharp Analytics Indicators
+    const reliance = player.pp_reliance || 0
+    const fatigue = player.fatigue_penalty || 1.0
+    const regress = player.sh_pct_regression || 1.0
+
     return (
         <div className="flex items-center gap-3 py-2.5 border-b border-border/30 last:border-0">
             <div className={cn(
@@ -28,7 +33,29 @@ function PlayerRow({ rank, player }) {
             </div>
             <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold truncate">{player.player_name}</p>
-                <p className="text-[10px] text-muted-foreground">{player.team}</p>
+                <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                    <p className="text-[10px] text-muted-foreground">{player.team}</p>
+                    {reliance > 0.35 && (
+                        <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 border-amber-500/30 text-amber-600 dark:text-amber-400">
+                            ⚡ PP1
+                        </Badge>
+                    )}
+                    {fatigue < 1.0 && (
+                        <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 border-red-500/30 text-red-500">
+                            {fatigue < 0.90 ? "⚠️ 3-in-4" : "⚠️ B2B"}
+                        </Badge>
+                    )}
+                    {regress > 1.05 && (
+                        <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 border-emerald-500/30 text-emerald-600 dark:text-emerald-400">
+                            🎯 Due
+                        </Badge>
+                    )}
+                    {regress < 0.95 && (
+                        <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 border-red-500/30 text-red-500">
+                            📉 Sur-régime
+                        </Badge>
+                    )}
+                </div>
             </div>
             <Badge className="bg-primary/10 text-primary border-0 font-bold shrink-0">
                 {player.prob}%
