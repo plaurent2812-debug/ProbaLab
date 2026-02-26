@@ -357,7 +357,7 @@ def update_live_scores():
                     # Build clean goals list
                     goals_list = []
                     for ev in raw_events:
-                        if ev.get("type") == "Goal":
+                        if ev.get("type") == "Goal" and ev.get("comments") != "Penalty Shootout":
                             goal_info = {
                                 "team": ev.get("team", {}).get("name", ""),
                                 "player": ev.get("player", {}).get("name", ""),
@@ -440,7 +440,7 @@ def update_live_scores():
                     raw_events = events_resp["response"]
                     goals_list = []
                     for ev in raw_events:
-                        if ev.get("type") == "Goal":
+                        if ev.get("type") == "Goal" and ev.get("comments") != "Penalty Shootout":
                             goals_list.append({
                                 "team": ev.get("team", {}).get("name", ""),
                                 "player": ev.get("player", {}).get("name", ""),
