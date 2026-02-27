@@ -176,6 +176,12 @@ def poisson_grid(
     correct_score = f"{best_h}-{best_a}"
     correct_score_prob = float(grid[best_h, best_a])
 
+    # ── Combined markets (computed directly from grid) ────────────
+    # "DC 1X + Plus de 1.5" = home wins OR draws AND total goals >= 2
+    dc1x_over15 = float(grid[(total_goals >= 2) & (goals[:, None] >= goals[None, :])].sum())
+    # "DC X2 + Plus de 1.5" = away wins OR draws AND total goals >= 2  
+    dcx2_over15 = float(grid[(total_goals >= 2) & (goals[None, :] >= goals[:, None])].sum())
+
     # ── Handicaps asiatiques (vectorized) ─────────────────────
     diff_grid = goals[:, None] - goals[None, :]  # h - a
     ah_home_minus_05 = home_win  # Home wins outright
@@ -197,8 +203,8 @@ def poisson_grid(
         "proba_dc_1x": round((home_win + draw) * 100),
         "proba_dc_x2": round((draw + away_win) * 100),
         "proba_dc_12": round((home_win + away_win) * 100),
-        "correct_score": correct_score,
-        "proba_correct_score": round(correct_score_prob * 100),
+        "proba_dc1x_over15": round(dc1x_over15 * 100),
+        "proba_dcx2_over15": round(dcx2_over15 * 100),
         "xg_home": round(xg_home, 2),
         "xg_away": round(xg_away, 2),
         # Handicaps asiatiques
@@ -1847,43 +1853,37 @@ def analyze_match(fixture: dict[str, Any]) -> dict[str, Any]:
         "ah_away_plus_15": poisson_probs.get("ah_away_plus_15"),
     }
 
-    # B3: Pari recommandé — Fractional Kelly Criterion
-    # Comparer la probabilité du modèle vs la cote implicite du marché
-    bets_with_edge: list[tuple[str, float, float, float]] = []
+    # B3: Pari recommandé — Priorité à la probabilité la plus élevée (seuil min 55%)
+    # Marchés inclus (Over 0.5 exclu car cote quasi nulle)
+    candidate_bets: list[tuple[str, float]] = [
+        ("Plus de 1.5 buts",               poisson_probs["proba_over_15"]),
+        ("Plus de 2.5 buts",               poisson_probs["proba_over_25"]),
+        ("BTTS Oui",                        poisson_probs["proba_btts"]),
+        ("Victoire Domicile",               final_home),
+        ("Victoire Extérieur",              final_away),
+        ("Match Nul",                       final_draw),
+        ("1X + Plus de 1.5 buts",          poisson_probs.get("proba_dc1x_over15", 0)),
+        ("X2 + Plus de 1.5 buts",          poisson_probs.get("proba_dcx2_over15", 0)),
+    ]
 
-    if market:
-        market_probs = {
-            "Victoire Domicile": (final_home, market.get("market_home", 33)),
-            "Match Nul": (final_draw, market.get("market_draw", 33)),
-            "Victoire Extérieur": (final_away, market.get("market_away", 33)),
-            "BTTS Oui": (poisson_probs["proba_btts"], 50),
-            "Plus de 2.5 buts": (poisson_probs["proba_over_25"], 50),
-        }
-        for bet_name, (model_prob, market_prob) in market_probs.items():
-            if market_prob > 0:
-                # Kelly edge = (model_prob / market_prob) - 1
-                # Fractional Kelly (¼) to reduce variance
-                decimal_odds = 100 / max(market_prob, 1)
-                edge = (model_prob / 100 * decimal_odds) - 1
-                kelly_fraction = max(0, edge / (decimal_odds - 1)) * 0.25
-                bets_with_edge.append(
-                    (bet_name, model_prob, edge, kelly_fraction)
-                )
+    # Filter by minimum threshold (55%) and sort by probability descending
+    MIN_PROBA = 55
+    eligible = [(name, prob) for name, prob in candidate_bets if prob >= MIN_PROBA]
+
+    if eligible:
+        # Pick highest probability
+        best_name, best_prob = max(eligible, key=lambda x: x[1])
+        result["recommended_bet"] = best_name
+        result["kelly_edge"] = round((best_prob - 50) / 100, 3)  # Simple edge vs 50%
+        result["kelly_fraction"] = 0
+        result["value_bet"] = best_prob >= 65
     else:
-        # No market data — fallback to z-score method
-        bets_with_edge = [
-            ("Victoire Domicile", final_home, final_home - 33.3, 0),
-            ("Match Nul", final_draw, final_draw - 33.3, 0),
-            ("Victoire Extérieur", final_away, final_away - 33.3, 0),
-            ("BTTS Oui", poisson_probs["proba_btts"], poisson_probs["proba_btts"] - 50, 0),
-            ("Plus de 2.5 buts", poisson_probs["proba_over_25"], poisson_probs["proba_over_25"] - 50, 0),
-        ]
-
-    best_bet = max(bets_with_edge, key=lambda x: x[2])
-    result["recommended_bet"] = best_bet[0]
-    result["kelly_edge"] = round(best_bet[2], 3)
-    result["kelly_fraction"] = round(best_bet[3], 4) if len(best_bet) > 3 else 0
-    result["value_bet"] = best_bet[2] > 0.05  # At least 5% edge
+        # No market clears 55% — fallback to highest proba regardless
+        best_name, best_prob = max(candidate_bets, key=lambda x: x[1])
+        result["recommended_bet"] = best_name
+        result["kelly_edge"] = round((best_prob - 50) / 100, 3)
+        result["kelly_fraction"] = 0
+        result["value_bet"] = False
 
     # Score de confiance redesigné (1–10)
     # Combine : (a) accord inter-modèles, (b) qualité données, (c) spread 1X2

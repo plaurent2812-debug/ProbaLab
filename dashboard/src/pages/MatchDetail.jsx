@@ -509,12 +509,6 @@ export default function MatchDetailPage() {
                     <StatRow label="Plus de 2.5 buts" value={proba_over_25} />
                     <StatRow label="Plus de 3.5 buts" value={proba_over_35} />
                     <StatRow label="But sur penalty" value={proba_penalty} />
-                    {p?.correct_score && (
-                        <div className="flex items-center justify-between py-2.5">
-                            <span className="text-sm">Score exact probable</span>
-                            <span className="text-sm font-bold text-primary">{p.correct_score}</span>
-                        </div>
-                    )}
                 </div>
             </PremiumSection>
 

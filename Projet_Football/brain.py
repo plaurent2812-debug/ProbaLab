@@ -479,12 +479,10 @@ def run_brain() -> None:
                 "proba_dc_1x": 70,
                 "proba_dc_x2": 60,
                 "proba_dc_12": 70,
-                "correct_score": "1-1",
-                "proba_correct_score": 12,
                 "xg_home": 1.3,
                 "xg_away": 1.1,
                 "model_version": "fallback",
-                "recommended_bet": "BTTS Oui",
+                "recommended_bet": "Plus de 1.5 buts",
                 "confidence_score": 3,
                 "context": {},
             }
