@@ -105,47 +105,7 @@ function MatchRow({ match, isStarred, onToggleStar }) {
 
                 {/* Prediction info */}
                 <div className="shrink-0 flex flex-col items-end gap-1 w-16 sm:w-20 pl-1">
-                    {isFinished && pred ? (() => {
-                        const hg = match.home_goals ?? 0
-                        const ag = match.away_goals ?? 0
-                        const totalGoals = hg + ag
-                        const bet = (pred.recommended_bet || "").toLowerCase()
-
-                        let correct = false
-                        if (bet.includes("moins de") || bet.includes("under")) {
-                            // Under X.5 buts
-                            const threshold = parseFloat((bet.match(/(\d+[.,]\d+)/) || [])[1]?.replace(",", ".")) || 2.5
-                            correct = totalGoals < threshold
-                        } else if (bet.includes("plus de") || bet.includes("over")) {
-                            const threshold = parseFloat((bet.match(/(\d+[.,]\d+)/) || [])[1]?.replace(",", ".")) || 2.5
-                            correct = totalGoals > threshold
-                        } else if (bet.includes("btts oui") || bet.includes("les deux marquent")) {
-                            correct = hg > 0 && ag > 0
-                        } else if (bet.includes("btts non")) {
-                            correct = hg === 0 || ag === 0
-                        } else if (bet.includes("nul") || bet.includes("draw")) {
-                            correct = hg === ag
-                        } else {
-                            // Fallback: 1X2 from probas
-                            const pH = pred.proba_home ?? 0
-                            const pD = pred.proba_draw ?? 0
-                            const pA = pred.proba_away ?? 0
-                            const predicted = pH >= pD && pH >= pA ? "H" : pA >= pH && pA >= pD ? "A" : "D"
-                            const actual = hg > ag ? "H" : ag > hg ? "A" : "D"
-                            correct = predicted === actual
-                        }
-
-                        return (
-                            <Badge className={cn(
-                                "text-[9px] sm:text-[10px] h-5 px-1 sm:px-1.5 border-0 gap-1 whitespace-nowrap overflow-hidden max-w-full block text-ellipsis",
-                                correct
-                                    ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
-                                    : "bg-red-500/10 text-red-500"
-                            )}>
-                                {correct ? "✅" : "❌"} {correct ? "Correct" : "Raté"}
-                            </Badge>
-                        )
-                    })() : (
+                    {!isFinished && pred && (
                         <>
                             {isHot && (
                                 <div className="flex items-center gap-1">
@@ -153,12 +113,12 @@ function MatchRow({ match, isStarred, onToggleStar }) {
                                     <span className="text-[10px] font-bold text-orange-500">HOT</span>
                                 </div>
                             )}
-                            {!isFinished && pred?.recommended_bet && (
+                            {pred?.recommended_bet && (
                                 <span className="text-[9px] sm:text-[10px] font-semibold text-primary bg-primary/10 px-1 sm:px-1.5 py-0.5 rounded text-center leading-tight">
                                     {pred.recommended_bet}
                                 </span>
                             )}
-                            {pred?.confidence_score != null && !isFinished && (
+                            {pred?.confidence_score != null && (
                                 <Badge className={cn(
                                     "text-[9px] sm:text-[10px] h-4 px-1 sm:px-1.5 border-0",
                                     pred.confidence_score >= 8 ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" :

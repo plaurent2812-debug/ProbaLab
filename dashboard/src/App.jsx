@@ -20,6 +20,7 @@ const PremiumPage = lazy(() => import("@/pages/Premium"))
 const TeamProfile = lazy(() => import("@/pages/TeamProfile"))
 const ProfilePage = lazy(() => import("@/pages/Profile"))
 const WatchlistPage = lazy(() => import("@/pages/WatchlistPage"))
+import GoalNotifications from "@/components/GoalNotifications"
 
 
 function PageLoader() {
@@ -314,6 +315,7 @@ function AppContent() {
       </main>
 
       <Footer />
+      <GoalNotifications />
     </div>
   )
 }
