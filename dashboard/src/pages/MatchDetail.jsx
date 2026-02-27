@@ -391,6 +391,59 @@ export default function MatchDetailPage() {
                 )
             })()}
 
+            {/* Lineups — H-1 avant le match */}
+            {(() => {
+                const lineups = fixture?.stats_json?.lineups
+                if (!lineups || (!lineups.home && !lineups.away)) return null
+                const h = lineups.home || {}
+                const a = lineups.away || {}
+
+                return (
+                    <Card className="border-border/50">
+                        <CardHeader className="pb-3">
+                            <CardTitle className="text-sm font-bold flex items-center gap-2">
+                                🧤 Compositions officielles
+                                {h.formation && a.formation && (
+                                    <Badge variant="outline" className="ml-auto text-[10px] border-border/40 text-muted-foreground">
+                                        {h.formation} — {a.formation}
+                                    </Badge>
+                                )}
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="grid grid-cols-2 gap-3">
+                                {[
+                                    { side: h, label: fixture?.home_team, color: "text-primary" },
+                                    { side: a, label: fixture?.away_team, color: "text-blue-500" }
+                                ].map(({ side, label, color }, idx) => (
+                                    <div key={idx}>
+                                        <p className={`text-xs font-bold mb-1 truncate ${color}`}>{label}</p>
+                                        {side.coach && (
+                                            <p className="text-[10px] text-muted-foreground mb-2">👔 {side.coach}</p>
+                                        )}
+                                        <div className="space-y-1">
+                                            {(side.starters || []).map((p, i) => (
+                                                <div key={i} className="flex items-center gap-1.5">
+                                                    <span className="text-[10px] w-5 text-right text-muted-foreground font-mono shrink-0">
+                                                        {p.number}
+                                                    </span>
+                                                    <span className="text-xs truncate">{p.name}</span>
+                                                    {p.pos && (
+                                                        <span className="text-[9px] text-muted-foreground shrink-0 ml-auto">
+                                                            {p.pos}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </CardContent>
+                    </Card>
+                )
+            })()}
+
             {/* Live Match Stats */}
             {(() => {
                 const ls = fixture?.live_stats_json

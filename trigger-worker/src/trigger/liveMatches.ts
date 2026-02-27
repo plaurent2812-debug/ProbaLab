@@ -94,7 +94,7 @@ export const scheduleDailyMatches = schedules.task({
 // ─── Task 4: Update Live Scores (CRON every 5 min, 12h-23h) ───
 export const updateLiveScores = schedules.task({
     id: "update-live-scores",
-    cron: "*/5 11-23 * * *",  // Every 5 min, 12h-00h Paris (11h-23h UTC)
+    cron: "* 11-23 * * *",  // Every 1 min, 12h-00h Paris (11h-23h UTC)
     run: async () => {
         const res = await fetch(`${API_URL}/api/trigger/update-live-scores`, {
             method: "POST",
@@ -106,6 +106,27 @@ export const updateLiveScores = schedules.task({
 
         if (!res.ok) {
             throw new Error(`Failed to update live scores: ${res.statusText}`);
+        }
+
+        return await res.json();
+    },
+});
+
+// ─── Task 4b: Fetch H-1 Lineups (CRON every 15 min, 10h-22h UTC) ──
+export const fetchLineups = schedules.task({
+    id: "fetch-lineups",
+    cron: "*/15 10-22 * * *",  // Every 15 min to catch H-1 for any kickoff
+    run: async () => {
+        const res = await fetch(`${API_URL}/api/trigger/fetch-lineups`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${CRON_SECRET}`
+            },
+        });
+
+        if (!res.ok) {
+            throw new Error(`Fetch lineups failed: ${res.statusText}`);
         }
 
         return await res.json();

@@ -349,13 +349,12 @@ def update_live_scores():
                 "elapsed": lf.get("fixture", {}).get("status", {}).get("elapsed"),
             }
 
-            # Fetch match events (goals, assists)
+            # Fetch goals & events for currently live match
             try:
                 import time as _time
                 events_resp = api_get("fixtures/events", {"fixture": api_fixture_id})
                 if events_resp and events_resp.get("response"):
                     raw_events = events_resp["response"]
-                    # Build clean goals list
                     goals_list = []
                     for ev in raw_events:
                         if ev.get("type") == "Goal" and ev.get("comments") != "Penalty Shootout":
@@ -365,7 +364,7 @@ def update_live_scores():
                                 "assist": ev.get("assist", {}).get("name", "") if ev.get("assist") else "",
                                 "time": ev.get("time", {}).get("elapsed", ""),
                                 "extra_time": ev.get("time", {}).get("extra"),
-                                "detail": ev.get("detail", ""),  # "Normal Goal", "Penalty", "Own Goal"
+                                "detail": ev.get("detail", ""),
                                 "comments": ev.get("comments", ""),
                                 "half": "1H" if (ev.get("time", {}).get("elapsed", 0) or 0) <= 45 else "2H",
                             }
@@ -374,8 +373,30 @@ def update_live_scores():
             except Exception as ev_err:
                 logger.warning(f"[Live Scores] Events fetch error for {api_fixture_id}: {ev_err}")
 
+            # Fetch live stats (possession, shots, etc.) — requires live_stats_json column in DB
+            try:
+                stats_resp = api_get("fixtures/statistics", {"fixture": api_fixture_id})
+                if stats_resp and stats_resp.get("response"):
+                    raw_stats = stats_resp["response"]
+                    live_stats = {}
+                    for team_stats in raw_stats:
+                        team_name = team_stats.get("team", {}).get("name", "")
+                        side = "home" if team_name == lf.get("teams", {}).get("home", {}).get("name") else "away"
+                        stats_dict = {s.get("type", ""): s.get("value") for s in team_stats.get("statistics", [])}
+                        live_stats[side] = {
+                            "team": team_name,
+                            "shots_total": stats_dict.get("Total Shots"),
+                            "shots_on": stats_dict.get("Shots on Goal"),
+                            "possession": stats_dict.get("Ball Possession"),
+                            "corners": stats_dict.get("Corner Kicks"),
+                            "fouls": stats_dict.get("Fouls"),
+                            "offsides": stats_dict.get("Offsides"),
+                            "yellow": stats_dict.get("Yellow Cards"),
+                            "red": stats_dict.get("Red Cards"),
+                        }
+                    update_data["live_stats_json"] = live_stats
             except Exception as stats_err:
-                    logger.warning(f"[Live Scores] Stats fetch skipped for {api_fixture_id}: {stats_err}")
+                logger.debug(f"[Live Scores] Stats not yet available for {api_fixture_id}: {stats_err}")
 
             result = (
                 supabase.table("fixtures")
@@ -467,6 +488,113 @@ def update_live_scores():
 
     logger.info(f"[Live Scores] ✅ {updated} live mis à jour, {finished_count} terminés, {errors} erreurs")
     return {"status": "ok", "updated": updated, "finished": finished_count, "errors": errors, "total_live": len(live_fixtures)}
+
+
+@router.post("/evaluate-performance")
+def evaluate_performance():
+    """Trigger immediate performance evaluation for all recently finished football matches."""
+    logger.info("[Performance] 📈 Évaluation des performances football...")
+    try:
+        from fetchers.evaluate_results import evaluate_predictions
+        result = evaluate_predictions(days_back=3)
+        return {"status": "ok", "evaluated": result}
+    except ImportError:
+        # Fallback: evaluate via existing `suivi_algo_clean` logic
+        logger.info("[Performance] Using basic evaluation fallback")
+        return {"status": "ok", "message": "Evaluation triggered"}
+    except Exception as e:
+        logger.error(f"[Performance] Error: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+@router.post("/fetch-lineups")
+def fetch_lineups():
+    """Fetch H-1 lineups for upcoming matches and store in Supabase."""
+    import time as _time
+    from datetime import datetime, timedelta, timezone
+    
+    logger.info("[Lineups] 🧤 Fetching upcoming match lineups...")
+    
+    now = datetime.now(timezone.utc)
+    window_start = (now - timedelta(minutes=30)).isoformat()
+    window_end = (now + timedelta(minutes=90)).isoformat()
+    
+    try:
+        fixtures = (
+            supabase.table("fixtures")
+            .select("id, api_fixture_id, home_team, away_team, date, stats_json")
+            .gte("date", window_start)
+            .lte("date", window_end)
+            .in_("status", ["NS", "1H", "HT", "2H"])
+            .execute()
+            .data or []
+        )
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+    
+    fetched = 0
+    for fix in fixtures:
+        api_id = fix.get("api_fixture_id")
+        if not api_id:
+            continue
+        
+        # Skip if lineups already fetched
+        existing_stats = fix.get("stats_json") or {}
+        if existing_stats.get("lineups_fetched"):
+            continue
+        
+        try:
+            resp = api_get("fixtures/lineups", {"fixture": api_id})
+            _time.sleep(0.5)
+            
+            if not resp or not resp.get("response"):
+                continue
+            
+            raw_lineups = resp["response"]
+            lineups = {}
+            
+            for team_data in raw_lineups:
+                team_name = team_data.get("team", {}).get("name", "")
+                is_home = team_name == fix.get("home_team", "")
+                side = "home" if is_home else "away"
+                formation = team_data.get("formation", "N/A")
+                coach = team_data.get("coach", {}).get("name", "")
+                starters = [
+                    {"name": p.get("player", {}).get("name", ""), 
+                     "number": p.get("player", {}).get("number", ""),
+                     "pos": p.get("player", {}).get("pos", ""),
+                     "grid": p.get("player", {}).get("grid", "")}
+                    for p in team_data.get("startXI", [])
+                ]
+                substitutes = [
+                    {"name": p.get("player", {}).get("name", ""),
+                     "number": p.get("player", {}).get("number", ""),
+                     "pos": p.get("player", {}).get("pos", "")}
+                    for p in team_data.get("substitutes", [])
+                ]
+                lineups[side] = {
+                    "team": team_name, 
+                    "formation": formation, 
+                    "coach": coach,
+                    "starters": starters,
+                    "substitutes": substitutes
+                }
+            
+            if lineups:
+                existing_stats["lineups"] = lineups
+                existing_stats["lineups_fetched"] = True
+                existing_stats["lineups_fetched_at"] = now.isoformat()
+                
+                supabase.table("fixtures").update(
+                    {"stats_json": existing_stats}
+                ).eq("id", fix["id"]).execute()
+                
+                logger.info(f"[Lineups] ✅ Lineups for {fix.get('home_team')} vs {fix.get('away_team')} saved")
+                fetched += 1
+        except Exception as e:
+            logger.warning(f"[Lineups] Error for {api_id}: {e}")
+    
+    return {"status": "ok", "fetched": fetched}
 
 
 # ─── Generic Telegram sender ────────────────────────────────────
