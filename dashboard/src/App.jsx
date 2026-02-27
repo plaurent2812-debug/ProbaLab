@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, NavLink, useNavigate, useLocation } from "react-router-dom"
 import { lazy, Suspense, useState, useEffect } from "react"
-import { Zap, Trophy, Shield, Menu, X, LogOut, User, ChevronRight } from "lucide-react"
+import { Zap, Trophy, Shield, Menu, X, LogOut, User, ChevronRight, Star } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { AuthProvider, useAuth } from "@/lib/auth"
 import { ThemeProvider } from "@/components/theme-provider"
@@ -19,6 +19,7 @@ const LoginPage = lazy(() => import("@/pages/Login"))
 const PremiumPage = lazy(() => import("@/pages/Premium"))
 const TeamProfile = lazy(() => import("@/pages/TeamProfile"))
 const ProfilePage = lazy(() => import("@/pages/Profile"))
+const WatchlistPage = lazy(() => import("@/pages/WatchlistPage"))
 
 
 function PageLoader() {
@@ -39,6 +40,7 @@ function Header({ mobileOpen, setMobileOpen }) {
     { to: "/", label: "Accueil", exact: true },
     { to: "/football", label: "⚽ Football" },
     { to: "/nhl", label: "🏒 NHL" },
+    { to: "/watchlist", label: "⭐ Favoris" },
   ]
 
   return (
@@ -305,6 +307,7 @@ function AppContent() {
               <Route path="/equipe/:name" element={<TeamProfile />} />
               <Route path="/admin" element={<AdminGuard><AdminPage /></AdminGuard>} />
               <Route path="/profile" element={<Protected><ProfilePage /></Protected>} />
+              <Route path="/watchlist" element={<WatchlistPage />} />
             </Routes>
           </div>
         </Suspense>

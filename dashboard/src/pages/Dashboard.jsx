@@ -4,16 +4,17 @@ import { format, addDays } from "date-fns"
 import { fr } from "date-fns/locale"
 import {
     ChevronLeft, ChevronRight, Flame, Clock,
-    Trophy, Calendar, Filter, X, Activity, Target
+    Trophy, Calendar, Filter, X, Activity, Target, Star
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { fetchPredictions } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
+import { useWatchlist } from "@/lib/useWatchlist"
 
 /* ── Match Row ─────────────────────────────────────────────── */
-function MatchRow({ match }) {
+function MatchRow({ match, isStarred, onToggleStar }) {
     const navigate = useNavigate()
     const pred = match.prediction
     const isFinished = ["FT", "AET", "PEN"].includes(match.status)
@@ -171,6 +172,16 @@ function MatchRow({ match }) {
                     )}
                 </div>
 
+                <button
+                    className="shrink-0 p-1 rounded-full hover:bg-amber-500/10 transition-colors"
+                    onClick={(e) => { e.stopPropagation(); onToggleStar(match.id) }}
+                    title={isStarred ? "Retirer des favoris" : "Ajouter aux favoris"}
+                >
+                    <Star className={cn(
+                        "w-4 h-4 transition-colors",
+                        isStarred ? "fill-amber-400 text-amber-400" : "text-muted-foreground/40 hover:text-amber-400"
+                    )} />
+                </button>
                 <ChevronRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-muted-foreground/60 shrink-0 transition-colors" />
             </div>
 
@@ -199,7 +210,7 @@ function MatchRow({ match }) {
 }
 
 /* ── League Section ────────────────────────────────────────── */
-function LeagueSection({ leagueName, leagueId, matches }) {
+function LeagueSection({ leagueName, leagueId, matches, isStarred, onToggleStar }) {
     if (!matches?.length) return null
     return (
         <div id={`league-${leagueId}`} className="mb-4">
@@ -210,7 +221,7 @@ function LeagueSection({ leagueName, leagueId, matches }) {
                 <span className="text-sm font-bold text-foreground">{leagueName}</span>
                 <span className="text-xs text-muted-foreground ml-auto">{matches.length} match{matches.length > 1 ? 's' : ''}</span>
             </div>
-            {matches.map(m => <MatchRow key={m.id} match={m} />)}
+            {matches.map(m => <MatchRow key={m.id} match={m} isStarred={isStarred(m.id)} onToggleStar={onToggleStar} />)}
         </div>
     )
 }
@@ -261,6 +272,7 @@ export default function FootballPage({ date, setDate, selectedLeague, setSelecte
     const [loading, setLoading] = useState(true)
     const [minConfidence, setMinConfidence] = useState(0)
     const [marketFilter, setMarketFilter] = useState('all') // all, 1x2, btts, over
+    const { isStarred, toggleMatch } = useWatchlist()
 
     useEffect(() => {
         setLoading(true)
@@ -425,6 +437,8 @@ export default function FootballPage({ date, setDate, selectedLeague, setSelecte
                                 leagueName={league.name}
                                 leagueId={league.id}
                                 matches={league.matches}
+                                isStarred={isStarred}
+                                onToggleStar={toggleMatch}
                             />
                         ))
                     ) : (
