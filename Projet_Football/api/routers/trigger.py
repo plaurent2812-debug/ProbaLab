@@ -393,6 +393,7 @@ def update_live_scores():
                             "offsides": stats_dict.get("Offsides"),
                             "yellow": stats_dict.get("Yellow Cards"),
                             "red": stats_dict.get("Red Cards"),
+                            "xg": stats_dict.get("expected_goals"),
                         }
                     update_data["live_stats_json"] = live_stats
             except Exception as stats_err:
