@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom"
 import {
     Zap, ArrowRight, ChevronRight, Flame, Clock,
     TrendingUp, BarChart3, BrainCircuit, Target,
-    Activity, Newspaper, ExternalLink, Trophy, BellRing
+    Activity, Newspaper, ExternalLink, Trophy, BellRing, ShieldAlert
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { fetchPredictions, fetchPerformance, fetchNews } from "@/lib/api"
@@ -42,22 +42,29 @@ function FeaturedMatchCard({ match }) {
     const time = match.date?.slice(11, 16) || "—"
     const isHot = pred?.confidence_score >= 7
 
+    const sportLabel = match.sport === 'nhl' ? '🏒 NHL' : '⚽ FOOTBALL'
+    const link = match.sport === 'nhl' ? `/nhl/match/${match.id}` : `/football/match/${match.id}`
+    const sj = pred?.stats_json || {}
+    const edge = pred?.kelly_edge || sj.kelly_edge
+
     return (
         <div
-            onClick={() => navigate(`/football/match/${match.id}`)}
-            className="match-card group relative rounded-xl border border-border/50 bg-card p-4 cursor-pointer hover:border-primary/40 glow-card"
+            onClick={() => navigate(link)}
+            className="match-card group relative rounded-xl border border-border/50 bg-card p-4 cursor-pointer hover:border-amber-500/50 hover:shadow-lg hover:shadow-amber-500/10 transition-all duration-300 w-full h-full flex flex-col"
         >
             {/* Hot badge */}
             {isHot && (
-                <div className="absolute -top-2 -right-2 w-7 h-7 rounded-full bg-orange-500 flex items-center justify-center shadow-lg shadow-orange-500/30">
+                <div className="absolute -top-2 -right-2 w-7 h-7 rounded-full bg-orange-500 flex items-center justify-center shadow-lg shadow-orange-500/30 z-10">
                     <Flame className="w-3.5 h-3.5 text-white flame-badge" />
                 </div>
             )}
 
             {/* League & time */}
             <div className="flex items-center justify-between mb-3">
-                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider truncate max-w-[120px]">
-                    {match.league_name || "Football"}
+                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                    <span className="text-[11px]">{sportLabel}</span>
+                    <span className="opacity-50">•</span>
+                    <span className="truncate max-w-[90px]">{match.league_name || (match.sport === 'nhl' ? 'National HC' : 'Football')}</span>
                 </span>
                 <div className="flex items-center gap-1 text-muted-foreground shrink-0">
                     <Clock className="w-3 h-3" />
@@ -66,30 +73,30 @@ function FeaturedMatchCard({ match }) {
             </div>
 
             {/* Teams */}
-            <div className="flex items-center justify-between gap-2 mb-3">
+            <div className="flex items-center justify-between gap-2 mb-4 flex-1">
                 <p className="font-bold text-sm leading-tight flex-1 text-center">{match.home_team}</p>
-                <span className="text-xs font-bold text-muted-foreground/40 shrink-0">VS</span>
+                <span className="text-[10px] font-black text-muted-foreground/30 shrink-0 bg-muted/50 px-1.5 py-0.5 rounded">VS</span>
                 <p className="font-bold text-sm leading-tight flex-1 text-center">{match.away_team}</p>
             </div>
 
-            {/* Probas */}
+            {/* Probas & Edge */}
             {pred && (
-                <div className="flex items-center justify-between pt-3 border-t border-border/40">
-                    <div className="flex gap-3">
-                        {[
-                            { label: "Dom", val: pred.proba_home },
-                            { label: "Nul", val: pred.proba_draw },
-                            { label: "Ext", val: pred.proba_away },
-                        ].map(({ label, val }) => (
-                            <div key={label} className="text-center">
-                                <span className="text-[10px] text-muted-foreground block">{label}</span>
-                                <span className="text-sm font-bold tabular-nums">{val ?? "—"}%</span>
-                            </div>
-                        ))}
+                <div className="flex items-center justify-between pt-3 border-t border-border/40 mt-auto">
+                    <div className="flex items-center gap-2">
+                        {pred.recommended_bet && (
+                            <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded truncate max-w-[120px]">
+                                {pred.recommended_bet}
+                            </span>
+                        )}
+                        {edge >= 4 && (
+                            <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                                Edge +{edge}%
+                            </span>
+                        )}
                     </div>
                     {pred.confidence_score != null && (
                         <Badge className={cn(
-                            "text-[10px] font-bold border-0",
+                            "text-[10px] font-bold border-0 shrink-0",
                             pred.confidence_score >= 8 ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" :
                                 pred.confidence_score >= 6 ? "bg-amber-500/15 text-amber-600 dark:text-amber-400" :
                                     "bg-muted text-muted-foreground"
@@ -178,15 +185,41 @@ export default function HomePage() {
         const today = new Date().toISOString().slice(0, 10)
         const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10)
 
-        Promise.all([fetchPredictions(today), fetchPredictions(tomorrow)])
+        // 1. Fetch Football Matches (API)
+        const fetchFB = Promise.all([fetchPredictions(today), fetchPredictions(tomorrow)])
             .then(([r1, r2]) => {
-                const all = [...(r1.matches || []), ...(r2.matches || [])]
+                const arr = [...(r1.matches || []), ...(r2.matches || [])]
+                return arr.map(m => ({ ...m, sport: 'football' }))
+            })
+
+        // 2. Fetch NHL Matches (Supabase directly for today/tomorrow)
+        const start = new Date(today); start.setHours(0, 0, 0, 0)
+        const end = new Date(tomorrow); end.setHours(23, 59, 59, 999)
+        const fetchNHL = supabase
+            .from('nhl_fixtures')
+            .select('*')
+            .gte('date', start.toISOString())
+            .lte('date', end.toISOString())
+            .then(({ data }) => (data || []).map(m => ({ ...m, sport: 'nhl' })))
+
+        // Gather both and filter for VIP Spots
+        Promise.all([fetchFB, fetchNHL])
+            .then(([fbMatches, nhlMatches]) => {
+                const all = [...fbMatches, ...nhlMatches]
                 setTotalCount(all.length)
-                const upcoming = all
-                    .filter(m => m.prediction && m.status !== "FT")
+
+                const vipSpots = all.filter(m => {
+                    if (m.status === "FT" || !m.prediction) return false;
+                    const c = m.prediction.confidence_score || 0;
+                    const sj = m.prediction.stats_json || {};
+                    const edge = m.prediction.kelly_edge || sj.kelly_edge || 0;
+
+                    // VIP Criteria: Confidence >= 8 OR Edge >= 4%
+                    return c >= 8 || edge >= 4;
+                })
                     .sort((a, b) => (b.prediction?.confidence_score || 0) - (a.prediction?.confidence_score || 0))
-                    .slice(0, 4)
-                setTopMatches(upcoming)
+
+                setTopMatches(vipSpots)
             })
             .catch(console.error)
             .finally(() => setLoading(false))
@@ -286,39 +319,37 @@ export default function HomePage() {
                 </section>
             )}
 
-            {/* ── Matchs à la une ───────────────────────────── */}
+            {/* ── Alerte Syndicat : VIP Spots ───────────────────────────── */}
             <section>
                 <div className="flex items-center justify-between mb-4">
                     <div>
                         <h2 className="text-lg font-bold tracking-tight flex items-center gap-2">
-                            <Flame className="w-5 h-5 text-orange-500" />
-                            Matchs à la une
+                            <ShieldAlert className="w-5 h-5 text-amber-500" />
+                            Alerte Syndicat : Spots Premium
                         </h2>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                            Top matchs avec le meilleur score de confiance — J+0 et J+1
+                            Les meilleures opportunités multi-sports du jour (Confiance 8+ ou Edge fort)
                         </p>
                     </div>
-                    <button
-                        onClick={() => navigate("/football")}
-                        className="flex items-center gap-1 text-xs font-semibold text-primary hover:underline underline-offset-4"
-                    >
-                        Tous les matchs <ChevronRight className="w-3.5 h-3.5" />
-                    </button>
                 </div>
 
                 {loading ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                        {[1, 2, 3, 4].map(i => (
-                            <div key={i} className="h-40 rounded-xl bg-muted/50 animate-pulse" />
+                    <div className="flex gap-4 overflow-x-auto pb-6 snap-x scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
+                        {[1, 2, 3].map(i => (
+                            <div key={i} className="min-w-[280px] sm:min-w-[320px] h-40 rounded-xl bg-muted/50 animate-pulse shrink-0 snap-center" />
                         ))}
                     </div>
                 ) : topMatches.length > 0 ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                        {topMatches.map(m => <FeaturedMatchCard key={m.id} match={m} />)}
+                    <div className="flex gap-4 overflow-x-auto pb-6 pt-2 snap-x scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
+                        {topMatches.map((m, idx) => (
+                            <div key={idx} className="min-w-[280px] sm:min-w-[320px] shrink-0 snap-center">
+                                <FeaturedMatchCard match={m} />
+                            </div>
+                        ))}
                     </div>
                 ) : (
                     <div className="text-center py-12 rounded-xl border border-dashed border-border/50 bg-card/30">
-                        <p className="text-sm text-muted-foreground">Aucun match à venir pour le moment</p>
+                        <p className="text-sm text-muted-foreground">Aucun Spot VIP détecté pour le moment.</p>
                     </div>
                 )}
             </section>

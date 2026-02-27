@@ -2,11 +2,11 @@ import { useState, useEffect } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import {
     ArrowLeft, Flame, Lock, Trophy, Target, Zap,
-    TrendingUp, Users, BrainCircuit, ChevronRight
+    TrendingUp, Users, BrainCircuit, ChevronRight, ChevronLeft
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/lib/auth"
-import { fetchPredictionDetail } from "@/lib/api"
+import { fetchPredictionDetail, fetchPredictions } from "@/lib/api"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -110,6 +110,7 @@ export default function MatchDetailPage() {
     const [data, setData] = useState(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
+    const [adjacent, setAdjacent] = useState({ prev: null, next: null })
 
     useEffect(() => {
         fetchPredictionDetail(id)
@@ -127,6 +128,21 @@ export default function MatchDetailPage() {
             .catch(e => setError(e.message))
             .finally(() => setLoading(false))
     }, [id])
+
+    useEffect(() => {
+        if (!data?.fixture?.date) return
+        const d = data.fixture.date.slice(0, 10)
+        fetchPredictions(d).then(res => {
+            const matches = res.matches || []
+            const idx = matches.findIndex(m => String(m.id) === String(id))
+            if (idx > -1) {
+                setAdjacent({
+                    prev: idx > 0 ? matches[idx - 1].id : null,
+                    next: idx < matches.length - 1 ? matches[idx + 1].id : null
+                })
+            }
+        }).catch(console.error)
+    }, [data?.fixture?.date, id])
 
     if (loading) return (
         <div className="flex items-center justify-center py-32">
@@ -167,14 +183,36 @@ export default function MatchDetailPage() {
     return (
         <div className="max-w-2xl mx-auto space-y-4 animate-fade-in-up pb-12">
 
-            {/* Back button */}
-            <button
-                onClick={() => navigate('/football')}
-                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-                <ArrowLeft className="w-4 h-4" />
-                Retour aux matchs
-            </button>
+            {/* Back button & Navigation */}
+            <div className="flex items-center justify-between mb-2">
+                <button
+                    onClick={() => navigate('/football')}
+                    className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                    <ArrowLeft className="w-4 h-4" />
+                    Retour aux matchs
+                </button>
+                <div className="flex items-center gap-2">
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 rounded-full bg-card"
+                        disabled={!adjacent.prev}
+                        onClick={() => adjacent.prev && navigate(`/football/match/${adjacent.prev}`)}
+                    >
+                        <ChevronLeft className="w-4 h-4" />
+                    </Button>
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 rounded-full bg-card"
+                        disabled={!adjacent.next}
+                        onClick={() => adjacent.next && navigate(`/football/match/${adjacent.next}`)}
+                    >
+                        <ChevronRight className="w-4 h-4" />
+                    </Button>
+                </div>
+            </div>
 
             {/* Match header */}
             <Card className="border-border/50 overflow-hidden">

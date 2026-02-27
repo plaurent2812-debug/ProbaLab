@@ -2,7 +2,7 @@ import { useState, useEffect } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import {
     ArrowLeft, Lock, Trophy, BrainCircuit,
-    Target, Users, Zap, Star
+    Target, Users, Zap, Star, ChevronLeft, ChevronRight
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/lib/auth"
@@ -120,6 +120,7 @@ export default function NHLMatchDetailPage() {
     const [topPlayers, setTopPlayers] = useState(null)
     const [loading, setLoading] = useState(true)
     const [activeTab, setActiveTab] = useState("point")
+    const [adjacent, setAdjacent] = useState({ prev: null, next: null })
 
     useEffect(() => {
         // Fetch fixture from Supabase
@@ -139,6 +140,34 @@ export default function NHLMatchDetailPage() {
             .catch(console.error)
             .finally(() => setLoading(false))
     }, [id])
+
+    useEffect(() => {
+        if (!fixture?.date) return
+        const d = new Date(fixture.date)
+        const start = new Date(d); start.setHours(0, 0, 0, 0)
+        const end = new Date(d); end.setHours(23, 59, 59, 999)
+
+        supabase
+            .from('nhl_fixtures')
+            .select('id, api_fixture_id')
+            .gte('date', start.toISOString())
+            .lte('date', end.toISOString())
+            .order('date', { ascending: true })
+            .then(({ data }) => {
+                const matches = data || []
+                // Find index by checking both id and api_fixture_id
+                const idx = matches.findIndex(m =>
+                    String(m.id) === String(id) || String(m.api_fixture_id) === String(id)
+                )
+                if (idx > -1) {
+                    setAdjacent({
+                        prev: idx > 0 ? matches[idx - 1].id : null,
+                        next: idx < matches.length - 1 ? matches[idx + 1].id : null
+                    })
+                }
+            })
+            .catch(console.error)
+    }, [fixture?.date, id])
 
     if (loading) return (
         <div className="flex items-center justify-center py-32">
@@ -192,14 +221,36 @@ export default function NHLMatchDetailPage() {
     return (
         <div className="max-w-2xl mx-auto space-y-4 animate-fade-in-up pb-12">
 
-            {/* Back */}
-            <button
-                onClick={() => navigate('/nhl')}
-                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-                <ArrowLeft className="w-4 h-4" />
-                Retour aux matchs NHL
-            </button>
+            {/* Back & Navigation */}
+            <div className="flex items-center justify-between mb-2">
+                <button
+                    onClick={() => navigate('/nhl')}
+                    className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                    <ArrowLeft className="w-4 h-4" />
+                    Retour aux matchs NHL
+                </button>
+                <div className="flex items-center gap-2">
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 rounded-full bg-card"
+                        disabled={!adjacent.prev}
+                        onClick={() => adjacent.prev && navigate(`/nhl/match/${adjacent.prev}`)}
+                    >
+                        <ChevronLeft className="w-4 h-4" />
+                    </Button>
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 rounded-full bg-card"
+                        disabled={!adjacent.next}
+                        onClick={() => adjacent.next && navigate(`/nhl/match/${adjacent.next}`)}
+                    >
+                        <ChevronRight className="w-4 h-4" />
+                    </Button>
+                </div>
+            </div>
 
             {/* Match header */}
             <Card className="border-border/50 overflow-hidden">
