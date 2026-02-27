@@ -193,7 +193,11 @@ def fetch_goalie_form(teams: list[str]) -> dict:
         elif form < 0:
             reason = f"⚠️ Friable ({sv_str} SV%)"
 
-        goalie_stats[team] = {"form": form, "reason": reason}
+        goalie_stats[team] = {
+            "form": form,
+            "reason": reason,
+            "sv_pct": round(sv_pct, 4)
+        }
 
     return goalie_stats
 
@@ -668,6 +672,7 @@ def _score_player(skater: dict, team: str, opp: str, my_stats: dict, opp_stats: 
         "sh_pct_regression": round(sh_regress, 2),
         "l5_form": l5,
         "h2h": h2h_adj,
+        "opp_sv_pct": round(goalie_form.get(opp, {}).get("sv_pct", 0.903), 3),
     }
 
     # ─── Machine Learning Predictions ───

@@ -25,8 +25,21 @@ def build_features(player: Dict[str, Any]) -> Dict[str, Any]:
     # Facteurs contextuels
     home_factor = 1.05 if is_home else 0.95
     opp_factor = _clamp(opp_shots / 30.0, 0.8, 1.2)
+    
+    # Facteur défensif de base (GAA)
     def_factor = 1.0 + 0.08 * (opp_gaa - 3.0)
-    def_factor = _clamp(def_factor, 0.7, 1.4)
+    
+    # Facteur gardien (Save % vs Moyenne Ligue)
+    # Moyenne ligue SV% ~ 0.903
+    opp_sv_pct = float(player.get("opp_sv_pct") or 0.903)
+    opp_sv_pct = _clamp(opp_sv_pct, 0.850, 0.950)
+    
+    # Chaque écart de .010 par rapport à la moyenne impacte de ~5%
+    goalie_factor = 1.0 + (0.903 - opp_sv_pct) * 5.0 
+    goalie_factor = _clamp(goalie_factor, 0.8, 1.25)
+    
+    def_factor = def_factor * goalie_factor
+    def_factor = _clamp(def_factor, 0.65, 1.5)
 
     # Features avancées (si disponibles)
     shooting_pct = float(player.get("shooting_pct") or 0)
