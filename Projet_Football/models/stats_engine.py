@@ -191,11 +191,19 @@ def poisson_grid(
     # AH -1.0: full win at diff>=2, half win at diff==1 (push = refund)
     ah_home_minus_10_effective = ah_home_minus_10 + ah_home_push_10 * 0.5
 
+    # ── Enjeux supplémentaires (Clean Sheet, BTTS + Over) ────────
+    proba_cs_home = float(grid[:, 0].sum())  # Away scores 0
+    proba_cs_away = float(grid[0, :].sum())  # Home scores 0
+    proba_btts_over25 = float(grid[1:, 1:][total_goals[1:, 1:] > 2].sum())
+
     return {
         "proba_home": round(home_win * 100),
         "proba_draw": round(draw * 100),
         "proba_away": round(away_win * 100),
         "proba_btts": round(btts * 100),
+        "proba_btts_over25": round(proba_btts_over25 * 100),
+        "proba_cs_home": round(proba_cs_home * 100),
+        "proba_cs_away": round(proba_cs_away * 100),
         "proba_over_05": round(over_05 * 100),
         "proba_over_15": round(over_15 * 100),
         "proba_over_25": round(over_25 * 100),
