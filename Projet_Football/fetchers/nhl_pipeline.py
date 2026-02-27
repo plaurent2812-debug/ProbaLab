@@ -256,6 +256,17 @@ def detect_fatigue(games: list[dict]) -> dict[str, float]:
         if mod < 1.0:
             fatigue_modifiers[team] = mod
 
+    # Ajustement contextuel : si les deux équipes sont fatiguées, l'impact est réduit
+    for g in games:
+        h = g.get("homeTeam", {}).get("abbrev", "")
+        a = g.get("awayTeam", {}).get("abbrev", "")
+        if h in fatigue_modifiers and a in fatigue_modifiers:
+            # Les deux jouent en B2B/3-in-4, on réduit l'impact de moitié
+            h_mod = fatigue_modifiers[h]
+            a_mod = fatigue_modifiers[a]
+            fatigue_modifiers[h] = h_mod + (1.0 - h_mod) * 0.5
+            fatigue_modifiers[a] = a_mod + (1.0 - a_mod) * 0.5
+
     return fatigue_modifiers
 
 

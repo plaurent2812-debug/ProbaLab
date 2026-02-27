@@ -32,16 +32,37 @@ def build_features(player: Dict[str, Any]) -> Dict[str, Any]:
     shooting_pct = float(player.get("shooting_pct") or 0)
     if shooting_pct <= 0 and spg > 0:
         shooting_pct = gpg / (spg + 0.1)
+        
+    # Régression du shooting% vers la moyenne (10.8%)
+    league_avg_shooting = 0.108
+    # Estimation du nombre de tirs pris cette saison
+    goals_this_season = float(player.get("goals_this_season") or (gpg * 82) / 2) # Approximation si manquant
+    shots_taken = goals_this_season / max(shooting_pct, 0.01) if shooting_pct > 0 else 0
+    
+    # Formule de régression bayésienne (poids = 150 tirs)
+    weight = 150.0
+    if shots_taken > 0:
+        shooting_pct = ((shooting_pct * shots_taken) + (league_avg_shooting * weight)) / (shots_taken + weight)
+    else:
+        shooting_pct = league_avg_shooting
+        
     shooting_pct = _clamp(shooting_pct, 0, 0.5)
 
     toi_avg = float(player.get("toi_avg") or 18.0)
     pp_toi = float(player.get("pp_toi_avg") or 0)
     team_pp = float(player.get("team_pp_pct") or 0.20)
 
-    # Back-to-back / fatigue
+    # Back-to-back / fatigue contextualisée
     is_b2b = bool(player.get("is_back_to_back", False))
+    opp_is_b2b = bool(player.get("opp_is_back_to_back", False))
     days_rest = int(player.get("days_rest") or 2)
-    fatigue_factor = 0.92 if is_b2b else (1.0 + min(0.03, (days_rest - 1) * 0.01))
+    
+    if is_b2b and opp_is_b2b:
+        fatigue_factor = 0.96
+    elif is_b2b:
+        fatigue_factor = 0.92
+    else:
+        fatigue_factor = 1.0 + min(0.03, (days_rest - 1) * 0.01)
 
     # Forme récente (L5)
     gpg_l5 = float(player.get("gpg_l5") or gpg)
