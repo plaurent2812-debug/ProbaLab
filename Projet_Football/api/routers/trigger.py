@@ -374,33 +374,8 @@ def update_live_scores():
             except Exception as ev_err:
                 logger.warning(f"[Live Scores] Events fetch error for {api_fixture_id}: {ev_err}")
 
-            # Fetch live match statistics (shots, xG, possession)
-            try:
-                stats_resp = api_get("fixtures/statistics", {"fixture": api_fixture_id})
-                if stats_resp and stats_resp.get("response"):
-                    raw_stats = stats_resp["response"]
-                    live_stats = {}
-                    for team_stats in raw_stats:
-                        team_name = team_stats.get("team", {}).get("name", "")
-                        side = "home" if team_name == lf.get("teams", {}).get("home", {}).get("name") else "away"
-                        stats_dict = {}
-                        for s in team_stats.get("statistics", []):
-                            stats_dict[s.get("type", "")] = s.get("value")
-                        live_stats[side] = {
-                            "team": team_name,
-                            "shots_total": stats_dict.get("Total Shots"),
-                            "shots_on": stats_dict.get("Shots on Goal"),
-                            "possession": stats_dict.get("Ball Possession"),
-                            "corners": stats_dict.get("Corner Kicks"),
-                            "fouls": stats_dict.get("Fouls"),
-                            "offsides": stats_dict.get("Offsides"),
-                            "yellow": stats_dict.get("Yellow Cards"),
-                            "red": stats_dict.get("Red Cards"),
-                            "xg": stats_dict.get("expected_goals"),
-                        }
-                    update_data["live_stats_json"] = live_stats
             except Exception as stats_err:
-                logger.warning(f"[Live Scores] Stats fetch error for {api_fixture_id}: {stats_err}")
+                    logger.warning(f"[Live Scores] Stats fetch skipped for {api_fixture_id}: {stats_err}")
 
             result = (
                 supabase.table("fixtures")
