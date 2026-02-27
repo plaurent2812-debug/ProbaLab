@@ -297,8 +297,8 @@ def calculate_team_strengths(league_id: int) -> dict | None:
         "strengths": strengths,
         "league_avg_home": league_avg_home_goals,
         "league_avg_away": league_avg_away_goals,
+        "avg_matches_played": (total_home_played + total_away_played) / len(standings),
     }
-
 
 def calculate_xg(
     home_team_id: int,
@@ -1712,10 +1712,20 @@ def analyze_match(fixture: dict[str, Any]) -> dict[str, Any]:
     context["market"] = market
 
     # ── 7. Combinaison finale ────────────────────────────────────
-    # Pondération : 55% Poisson ajusté + 25% ELO + 20% Marché (si dispo)
+    # Pondération dynamique :
     w_poisson = WEIGHT_POISSON
     w_elo = WEIGHT_ELO
     w_market = WEIGHT_MARKET
+
+    # Ajustement selon l'avancée de la saison
+    # En début de saison (< 8 matchs par équipe en moyenne), l'ELO capture mieux
+    # les forces historiques que le Poisson qui se base sur peu de données.
+    avg_played = league_data["avg_matches_played"] if league_data else 10
+    if avg_played < 8:
+        # Transférer 10 points de % de Poisson vers ELO
+        w_poisson = max(0.10, w_poisson - 0.10)
+        w_elo += 0.10
+        context["weights_adjusted"] = "early_season"
 
     if market:
         final_home = (
