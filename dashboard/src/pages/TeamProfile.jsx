@@ -212,20 +212,7 @@ export default function TeamProfile() {
                     </div>
 
                     {/* Current Streak */}
-                    {summary.streak.count > 0 && (
-                        <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-card border border-border/40 w-fit">
-                            <span className="text-sm text-muted-foreground font-medium">Série en cours :</span>
-                            <span className={cn(
-                                "text-sm font-bold",
-                                summary.streak.type === "V" ? "text-emerald-400" :
-                                    summary.streak.type === "D" ? "text-red-400" : "text-amber-400"
-                            )}>
-                                {summary.streak.count} {summary.streak.type === "V" ? "Victoire" : summary.streak.type === "D" ? "Défaite" : "Nul"}{summary.streak.count > 1 ? "s" : ""}
-                                {summary.streak.type === "V" && <TrendingUp className="w-4 h-4 inline ml-1.5" />}
-                                {summary.streak.type === "D" && <TrendingDown className="w-4 h-4 inline ml-1.5" />}
-                            </span>
-                        </div>
-                    )}
+
 
                     {/* Tab Content */}
                     {activeTab === "historique" && (
