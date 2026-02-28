@@ -11,9 +11,9 @@ from pydantic import BaseModel
 from config import supabase
 
 # Imports NHL Modules
-from Projet_Football.nhl.feature_engineering import feature_engineer
-from Projet_Football.nhl.calibration import probability_calibrator
-from Projet_Football.nhl.schemas import (
+from nhl.feature_engineering import feature_engineer
+from nhl.calibration import probability_calibrator
+from nhl.schemas import (
     BrainRequest, BrainResponse, BrainPrediction,
     GameWinProbRequest, CalibrateProbaRequest,
     IngestDataLakeRequest, IngestSuiviAlgoRequest,
@@ -22,13 +22,13 @@ from Projet_Football.nhl.schemas import (
 
 # ML Models Import with Fallback
 try:
-    from Projet_Football.nhl.ml_models import (
-        goal_predictor, shot_predictor, point_predictor,
+    from nhl.ml_models import (
+        ModelBacktester, goal_predictor, point_predictor,
         assist_predictor, load_all_models, ModelBacktester
     )
     ENHANCED_ML_AVAILABLE = True
 except ImportError:
-    from Projet_Football.nhl.ml_models import goal_predictor, ModelBacktester
+    from nhl.ml_models import goal_predictor, ModelBacktester
     shot_predictor = None
     point_predictor = None
     assist_predictor = None

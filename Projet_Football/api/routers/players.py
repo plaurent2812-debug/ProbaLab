@@ -3,9 +3,7 @@ from typing import Optional
 from datetime import datetime, timezone, timedelta
 import logging
 
-from config import supabase
-from fetchers.api import api_get
-from constants import LATEST_SEASON
+from config import supabase, api_get, SEASON
 
 logger = logging.getLogger("probalab.players")
 router = APIRouter()
@@ -128,7 +126,7 @@ def get_player_profile(player_id: int):
 
         # 2. Not in cache or too old -> Fetch from API-Football
         logger.info(f"Fetching fresh data for player {player_id}")
-        raw_resp = api_get("players", {"id": player_id, "season": LATEST_SEASON})
+        raw_resp = api_get("players", {"id": player_id, "season": SEASON})
         
         if not raw_resp or "response" not in raw_resp or not raw_resp["response"]:
             if db_player:
