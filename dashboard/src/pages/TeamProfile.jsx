@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react"
 import { useParams, useNavigate } from "react-router-dom"
-import { fetchTeamHistory } from "@/lib/api"
+import { fetchTeamHistory, fetchTeamRoster } from "@/lib/api"
 import {
     ArrowLeft, Calendar, Trophy, TrendingUp, TrendingDown, Minus,
-    Activity, MapPin, Shield
+    Activity, MapPin, Shield, Users
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -56,14 +56,22 @@ export default function TeamProfile() {
     const { hasAccess } = useAuth()
     const { name } = useParams() // Team name from URL
     const navigate = useNavigate()
+    const [activeTab, setActiveTab] = useState("historique")
     const [data, setData] = useState(null)
+    const [roster, setRoster] = useState([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
 
     useEffect(() => {
         setLoading(true)
-        fetchTeamHistory(name)
-            .then(setData)
+        Promise.all([
+            fetchTeamHistory(name),
+            fetchTeamRoster(name).catch(() => ({ roster: [] }))
+        ])
+            .then(([historyData, rosterData]) => {
+                setData(historyData)
+                setRoster(rosterData.roster || [])
+            })
             .catch(err => setError(err.message))
             .finally(() => setLoading(false))
     }, [name])
@@ -111,9 +119,42 @@ export default function TeamProfile() {
                 <div>
                     <h1 className="text-3xl font-black tracking-tight">{data.team_name}</h1>
                     <p className="text-sm text-muted-foreground">
-                        Historique des 20 derniers matchs
+                        Saison {import.meta.env.VITE_API_SEASON || "2024-2025"}
                     </p>
                 </div>
+            </div>
+
+            {/* Navigation Tabs */}
+            <div className="flex items-center gap-2 border-b border-border/40 pb-px">
+                <button
+                    onClick={() => setActiveTab("historique")}
+                    className={cn(
+                        "px-4 py-2 text-sm font-bold border-b-2 transition-colors",
+                        activeTab === "historique"
+                            ? "border-primary text-foreground"
+                            : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
+                    )}
+                >
+                    <Calendar className="w-4 h-4 inline-block mr-2" />
+                    Historique
+                </button>
+                <button
+                    onClick={() => setActiveTab("effectif")}
+                    className={cn(
+                        "px-4 py-2 text-sm font-bold border-b-2 transition-colors flex items-center gap-2",
+                        activeTab === "effectif"
+                            ? "border-primary text-foreground"
+                            : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
+                    )}
+                >
+                    <Users className="w-4 h-4 inline-block" />
+                    Effectif
+                    {roster.length > 0 && (
+                        <span className="text-[10px] bg-secondary text-secondary-foreground px-1.5 py-0.5 rounded-full">
+                            {roster.length}
+                        </span>
+                    )}
+                </button>
             </div>
 
             {/* Summary Stats & History - Protected */}
@@ -186,39 +227,84 @@ export default function TeamProfile() {
                         </div>
                     )}
 
-                    {/* Match History List */}
-                    <div className="rounded-xl border border-border/40 overflow-hidden bg-card/30">
-                        <div className="grid grid-cols-[auto_1fr_auto_auto] gap-4 p-3 bg-muted/30 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-b border-border/40">
-                            <span className="pl-2">Résultat</span>
-                            <span>Adversaire</span>
-                            <span className="text-center">Score</span>
-                            <span className="pr-2">Date</span>
-                        </div>
-                        <div className="divide-y divide-border/30">
-                            {matches.map((m, i) => (
-                                <div key={i} className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-4 p-3 hover:bg-card/50 transition-colors">
-                                    <div className="pl-2">
-                                        <ResultBadge result={m.result} />
-                                    </div>
-                                    <div className="min-w-0">
-                                        <div className="flex items-center gap-2">
-                                            <span className="font-bold text-sm truncate">{m.opponent}</span>
-                                            <span className="text-[10px] px-1.5 py-0.5 rounded-sm bg-secondary text-muted-foreground font-medium">
-                                                {m.home_away === 'D' ? 'DOM' : 'EXT'}
-                                            </span>
+                    {/* Tab Content */}
+                    {activeTab === "historique" && (
+                        <div className="rounded-xl border border-border/40 overflow-hidden bg-card/30">
+                            <div className="grid grid-cols-[auto_1fr_auto_auto] gap-4 p-3 bg-muted/30 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-b border-border/40">
+                                <span className="pl-2">Résultat</span>
+                                <span>Adversaire</span>
+                                <span className="text-center">Score</span>
+                                <span className="pr-2">Date</span>
+                            </div>
+                            <div className="divide-y divide-border/30">
+                                {matches.map((m, i) => (
+                                    <div
+                                        key={i}
+                                        className={cn(
+                                            "grid grid-cols-[auto_1fr_auto_auto] items-center gap-4 p-3 transition-colors",
+                                            m.fixture_id ? "cursor-pointer hover:bg-accent/40" : "hover:bg-card/50"
+                                        )}
+                                        onClick={() => m.fixture_id && navigate(`/football/match/${m.fixture_id}`)}
+                                    >
+                                        <div className="pl-2">
+                                            <ResultBadge result={m.result} />
+                                        </div>
+                                        <div className="min-w-0">
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-bold text-sm truncate">{m.opponent}</span>
+                                                <span className="text-[10px] px-1.5 py-0.5 rounded-sm bg-secondary text-muted-foreground font-medium">
+                                                    {m.home_away === 'D' ? 'DOM' : 'EXT'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div className="font-mono font-bold text-sm tabular-nums text-center px-2">
+                                            {m.score}
+                                        </div>
+                                        <div className="pr-2 text-xs text-muted-foreground tabular-nums flex items-center gap-1.5">
+                                            <Calendar className="w-3 h-3" />
+                                            {m.date}
                                         </div>
                                     </div>
-                                    <div className="font-mono font-bold text-sm tabular-nums text-center px-2">
-                                        {m.score}
-                                    </div>
-                                    <div className="pr-2 text-xs text-muted-foreground tabular-nums flex items-center gap-1.5">
-                                        <Calendar className="w-3 h-3" />
-                                        {m.date}
-                                    </div>
-                                </div>
-                            ))}
+                                ))}
+                            </div>
                         </div>
-                    </div>
+                    )}
+
+                    {activeTab === "effectif" && (
+                        <div className="space-y-4">
+                            {!roster.length ? (
+                                <div className="text-center py-12 border border-dashed rounded-xl border-border/60 bg-card/20 text-muted-foreground text-sm font-medium">
+                                    Aucun effectif disponible pour le moment.
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                    {roster.map((player) => (
+                                        <div
+                                            key={player.id}
+                                            onClick={() => navigate(`/football/player/${player.id}`)}
+                                            className="flex items-center gap-3 p-3 rounded-lg border border-border/40 bg-card hover:border-primary/50 hover:shadow-md hover:-translate-y-0.5 cursor-pointer transition-all"
+                                        >
+                                            {player.photo ? (
+                                                <img src={player.photo} alt={player.name} className="w-10 h-10 rounded-full object-cover border border-border bg-muted shrink-0" />
+                                            ) : (
+                                                <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center text-secondary-foreground font-bold shrink-0 text-sm">
+                                                    {player.name.charAt(0)}
+                                                </div>
+                                            )}
+                                            <div className="min-w-0 flex-1">
+                                                <div className="font-bold text-sm truncate">{player.name}</div>
+                                                <div className="text-[11px] text-muted-foreground flex items-center gap-2 mt-0.5">
+                                                    <span className="font-medium text-foreground">{player.position || "Joueur"}</span>
+                                                    {player.age && <span>• {player.age} ans</span>}
+                                                    {player.number && <span>• N°{player.number}</span>}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </>
             ) : (
                 <LoginBlur>

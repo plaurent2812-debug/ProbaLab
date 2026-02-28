@@ -754,8 +754,8 @@ def get_performance(days: int = Query(30, description="Rolling window in days"))
 
 
 @app.get("/api/team/{team_name}/history")
-def get_team_history(team_name: str, limit: int = Query(20, ge=1, le=50)):
-    """Get the last N finished matches for a given team."""
+def get_team_history(team_name: str, limit: int = Query(60, ge=1, le=100)):
+    """Get the finished matches for a given team in the current season."""
     # Query home matches
     home_matches = (
         supabase.table("fixtures")
@@ -814,6 +814,7 @@ def get_team_history(team_name: str, limit: int = Query(20, ge=1, le=50)):
             current_streak["count"] += 1
 
         results.append({
+            "fixture_id": m.get("id"),
             "date": m.get("date", "")[:10],
             "opponent": opponent,
             "score": score,
@@ -833,6 +834,48 @@ def get_team_history(team_name: str, limit: int = Query(20, ge=1, le=50)):
             "streak": current_streak,
         },
     }
+
+@app.get("/api/team/{team_name}/roster")
+def get_team_roster(team_name: str):
+    """Get the current roster for a given team via player squads."""
+    # First, need to lookup the team api_id to use api-football squads endpoint
+    team_data = (
+        supabase.table("teams")
+        .select("api_id")
+        .eq("name", team_name)
+        .limit(1)
+        .execute()
+        .data
+    )
+    
+    if not team_data or not team_data[0].get("api_id"):
+        # Attempt fallback to fixtures if team not in teams table
+        fix_data = (
+            supabase.table("fixtures")
+            .select("home_team_id")
+            .eq("home_team", team_name)
+            .limit(1)
+            .execute()
+            .data
+        )
+        if not fix_data or not fix_data[0].get("home_team_id"):
+            raise HTTPException(status_code=404, detail="Team API ID not found")
+        team_api_id = fix_data[0]["home_team_id"]
+    else:
+        team_api_id = team_data[0]["api_id"]
+
+    try:
+        from config import api_get
+        # The players/squads endpoint returns the current squad of a team
+        resp = api_get("players/squads", {"team": team_api_id})
+        if not resp or not resp.get("response"):
+            return {"team_name": team_name, "roster": []}
+            
+        roster_data = resp["response"][0].get("players", [])
+        return {"team_name": team_name, "roster": roster_data}
+    except Exception as e:
+        logger.error(f"Error fetching roster for {team_name}: {e}")
+        raise HTTPException(status_code=500, detail="Error fetching roster")
 
 # ─── Admin Auth Helper ──────────────────────────────────────────
 

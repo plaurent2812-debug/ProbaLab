@@ -34,8 +34,14 @@ export async function fetchNHLPerformance(days = 30) {
     return res.json()
 }
 
-export async function fetchTeamHistory(teamName, limit = 20) {
+export async function fetchTeamHistory(teamName, limit = 60) {
     const res = await fetch(`${API_BASE}/team/${encodeURIComponent(teamName)}/history?limit=${limit}`)
+    if (!res.ok) throw new Error(`API error: ${res.status}`)
+    return res.json()
+}
+
+export async function fetchTeamRoster(teamName) {
+    const res = await fetch(`${API_BASE}/team/${encodeURIComponent(teamName)}/roster`)
     if (!res.ok) throw new Error(`API error: ${res.status}`)
     return res.json()
 }
