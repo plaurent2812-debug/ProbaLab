@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 
 const STRIPE_PAYMENT_LINK = import.meta.env.VITE_STRIPE_PAYMENT_LINK || "#"
+const TELEGRAM_VIP_LINK = import.meta.env.VITE_TELEGRAM_VIP_LINK || "#"
 
 const features = [
     { label: "Voir les matchs Football & NHL", free: true, premium: true },
@@ -22,6 +23,7 @@ const features = [
     { label: "Top 5 Passeurs NHL", free: false, premium: true },
     { label: "Top 5 Tirs (SOG) NHL", free: false, premium: true },
     { label: "Analyse IA complète de chaque match", free: false, premium: true },
+    { label: "Pronostics VIP Quotidiens (Telegram)", free: false, premium: true },
 ]
 
 const faqs = [
@@ -69,11 +71,39 @@ export default function PremiumPage() {
 
             {/* Already premium */}
             {(isPremium || isAdmin) && (
-                <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                    <Check className="w-5 h-5 text-emerald-500 shrink-0" />
-                    <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
-                        Vous avez déjà accès à toutes les fonctionnalités Premium !
-                    </p>
+                <div className="space-y-4">
+                    <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                        <Check className="w-5 h-5 text-emerald-500 shrink-0" />
+                        <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
+                            Vous avez déjà accès à toutes les fonctionnalités Premium !
+                        </p>
+                    </div>
+
+                    {/* Telegram VIP Box */}
+                    <Card className="border-amber-500/30 bg-amber-500/5 shadow-lg shadow-amber-500/10 overflow-hidden">
+                        <CardContent className="p-6">
+                            <div className="flex flex-col md:flex-row items-center gap-6">
+                                <div className="p-4 rounded-2xl bg-amber-500/10 text-amber-500">
+                                    <Zap className="w-8 h-8 fill-current" />
+                                </div>
+                                <div className="flex-1 text-center md:text-left space-y-2">
+                                    <h3 className="text-xl font-black tracking-tight">Le Canal Telegram VIP est prêt !</h3>
+                                    <p className="text-sm text-muted-foreground">
+                                        Rejoignez notre canal privé pour recevoir chaque matin vos 2 tickets de paris (Safe & Fun) directement sur votre téléphone.
+                                    </p>
+                                </div>
+                                <Button
+                                    className="bg-[#229ED9] hover:bg-[#229ED9]/90 text-white font-bold px-6 py-6 h-auto"
+                                    onClick={() => window.open(TELEGRAM_VIP_LINK, '_blank')}
+                                >
+                                    <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M11.944 0C5.344 0 0 5.344 0 11.944c0 6.6 5.344 11.944 11.944 11.944 6.6 0 11.944-5.344 11.944-11.944C23.888 5.344 18.544 0 11.944 0zM18.384 8.243c-.183 1.941-1.025 6.944-1.45 9.208-.18.96-.54 1.282-.88 1.314-.741.071-1.303-.489-2.022-.96-1.125-.736-1.759-1.196-2.854-1.916-1.264-.834-.445-1.291.277-2.04.189-.196 3.473-3.184 3.536-3.454.008-.035.015-.164-.061-.233-.076-.068-.19-.046-.271-.027-.116.027-1.968 1.251-5.548 3.674-.524.36-.998.536-1.421.527-.468-.011-1.368-.266-2.037-.483-.821-.266-1.472-.407-1.415-.86.03-.236.353-.478.966-.726 3.778-1.644 6.297-2.729 7.555-3.256 3.596-1.498 4.342-1.758 4.829-1.767.108-.002.348.026.505.153.131.107.167.251.182.353.015.102.033.23.018.358z" />
+                                    </svg>
+                                    Rejoindre le VIP
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
                 </div>
             )}
 

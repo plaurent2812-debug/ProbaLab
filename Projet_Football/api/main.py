@@ -71,6 +71,25 @@ def _startup_update_scores():
     except Exception as e:
         print(f"[scheduler] Erreur rattrapage: {e}")
 
+def _scheduled_telegram_tickets():
+    """Called by APScheduler every day at 10h00 Paris timezone to send tickets to Telegram."""
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+        from ticket_generator import generate_daily_tickets, format_telegram_message
+        from telegram_bot import send_telegram_message
+        from datetime import date
+        print(f"[scheduler] Création et envoi des tickets Telegram — {date.today()}")
+        
+        safe, fun = generate_daily_tickets()
+        if safe or fun:
+            message = format_telegram_message(safe, fun)
+            send_telegram_message(message)
+            print("[scheduler] ✅ Tickets envoyés sur Telegram.")
+        else:
+            print("[scheduler] ℹ️ Aucun ticket généré (pas de matchs ou probas faibles).")
+    except Exception as e:
+        print(f"[scheduler] Erreur Telegram: {e}")
+
 
 @asynccontextmanager
 async def lifespan(app_instance):
@@ -93,6 +112,21 @@ async def lifespan(app_instance):
                 replace_existing=True,
                 misfire_grace_time=300,  # 5 min de tolérance
             )
+            
+            # Envoi des tickets Telegram chaque matin à 10h00 heure Paris
+            scheduler.add_job(
+                _scheduled_telegram_tickets,
+                trigger=CronTrigger(
+                    hour="10",
+                    minute="0",
+                    timezone=paris_tz,
+                ),
+                id="telegram_tickets",
+                name="Envoi tickets Paris Telegram",
+                replace_existing=True,
+                misfire_grace_time=600,
+            )
+            
             # Rattrapage immédiat 10s après le démarrage
             from datetime import datetime as _dt, timedelta as _td
             scheduler.add_job(
