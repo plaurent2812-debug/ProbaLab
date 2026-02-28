@@ -2,7 +2,7 @@ import os
 from datetime import datetime
 from config import supabase, logger
 
-def calculate_implied_odds(probability: int) -> float:
+def calculate_implied_odds(probability: float) -> float:
     """Calculates the implied odds for a given probability with an assumed bookmaker margin.
     
     Returns:
@@ -13,15 +13,15 @@ def calculate_implied_odds(probability: int) -> float:
     
     # Typical bookmaker margin is roughly 5% to 8%, so we take 0.95 
     real_prob = probability / 100.0
-    # Avoid extremely high odds or division by zero
-    if real_prob < 0.05:
-        real_prob = 0.05
+    # Avoid division by zero
+    if real_prob < 0.01:
+        real_prob = 0.01
         
     estimated_odds = (1 / real_prob) * 0.95
     return round(estimated_odds, 2)
 
 def generate_daily_tickets():
-    """Fetches today's fixtures and generates Safe and Fun tickets."""
+    """Fetches today's fixtures and generates Safe and Fun tickets according to specific rules."""
     today = datetime.now().strftime("%Y-%m-%d")
     
     # 1. Fetch today's fixtures
@@ -42,14 +42,16 @@ def generate_daily_tickets():
         logger.info("Aucun match trouvé pour aujourd'hui.")
         return None, None
         
-    todays_fixture_ids = [f["id"] for f in fixtures_resp.data]
+    fixtures = fixtures_resp.data
+    todays_fixture_ids = [f["id"] for f in fixtures]
+    api_to_fix_id = {f["api_fixture_id"]: f["id"] for f in fixtures}
+    fixture_map = {f["id"]: f for f in fixtures}
     
     # 2. Fetch predictions
     preds_resp = (
         supabase.table("predictions")
         .select("*")
         .in_("fixture_id", todays_fixture_ids)
-        .order("confidence_score", desc=True)
         .execute()
     )
     
@@ -58,175 +60,242 @@ def generate_daily_tickets():
         return None, None
         
     predictions = preds_resp.data
-    fixture_map = {f["id"]: f for f in fixtures_resp.data}
-    
-    return build_safe_ticket(predictions, fixture_map), build_fun_ticket(predictions, fixture_map)
-    
 
-def get_best_market(pred: dict) -> dict:
-    """Picks a safe and high-probability market, prioritizing Double Chance for safety."""
-    markets = []
+    # 3. Fetch real odds
+    api_fids = [f["api_fixture_id"] for f in fixtures]
+    odds_resp = (
+        supabase.table("fixture_odds")
+        .select("*")
+        .in_("fixture_api_id", api_fids)
+        .execute()
+    )
     
-    ph = pred.get("proba_home") or 0
-    pd = pred.get("proba_draw") or 0
-    pa = pred.get("proba_away") or 0
-    p15 = pred.get("proba_over_15") or 0
+    odds_map = {}
+    if odds_resp and odds_resp.data:
+        for o in odds_resp.data:
+            fix_id = api_to_fix_id.get(o["fixture_api_id"])
+            if fix_id:
+                odds_map[fix_id] = o
 
-    # 1. Double Chance (Much safer than Win only)
-    # 1X = Home or Draw
-    p1x = ph + pd
-    if p1x > 65:
-        # Combined with Over 1.5 if both are strong
-        if p15 > 70:
-            # P(1X & +1.5) estimate
-            p_comb = min(p1x, p15) * 0.90
-            markets.append({"name": "Victoire ou Nul & +1.5 buts", "proba": p_comb, "priority": 2})
-        markets.append({"name": "Victoire ou Nul", "proba": p1x, "priority": 1})
+    return build_safe_ticket(predictions, fixture_map, odds_map), build_fun_ticket(predictions, fixture_map, odds_map)
 
-    # X2 = Away or Draw
-    px2 = pa + pd
-    if px2 > 65:
-        if p15 > 70:
-            p_comb = min(px2, p15) * 0.90
-            markets.append({"name": "Nul ou Victoire Ext. & +1.5 buts", "proba": p_comb, "priority": 2})
-        markets.append({"name": "Nul ou Victoire Ext.", "proba": px2, "priority": 1})
 
-    # 2. Resultat Sec (Only if very high confidence, > 75%)
-    if ph > 75: markets.append({"name": "Victoire Domicile", "proba": ph})
-    if pa > 75: markets.append({"name": "Victoire Extérieur", "proba": pa})
-    
-    # 3. Recommended Bet Override (If it's explicitly recommended) - higher priority
-    rec = pred.get("recommended_bet")
-    if rec:
-         # Try to map existing recommendations
-         if "Victoire" in rec and (ph > 60 or pa > 60):
-              markets.append({"name": rec, "proba": max(ph, pa), "priority": 1})
-         
-    # 4. Goals Probabilities
-    if (pred.get("proba_btts") or 0) > 70: 
-        markets.append({"name": "Les deux marquent", "proba": pred["proba_btts"]})
-    if p15 > 80: 
-        markets.append({"name": "Plus de 1.5 buts", "proba": p15})
-    
-    # Sort by probability, but prioritize items with "priority" field or combined markets
-    # Note: We prioritize proba for safety in the "SAFE" ticket. 
-    # But for the "FUN" ticket, we'll pick from the list differently.
-    
-    if not markets:
-        # Fallback to the absolute safest
-        return {"name": "Double Chance (1X)", "proba": p1x if p1x > px2 else px2}
+def get_market_odds(real_odds: dict, m_name: str, fallback_proba: float) -> float:
+    """Helper to get real odds from DB or fallback to estimate."""
+    if not real_odds:
+        return calculate_implied_odds(fallback_proba)
         
-    return sorted(markets, key=lambda x: (x.get("priority", 0), x["proba"]), reverse=True)[0]
+    mapping = {
+        "1": "home_win_odds",
+        "2": "away_win_odds",
+        "N": "draw_odds",
+        "1N": "dc_1x_odds",
+        "N2": "dc_x2_odds",
+        "+1.5": "over_15_odds",
+        "+2.5": "over_25_odds",
+        "BTTS": "btts_yes_odds"
+    }
+    
+    val = real_odds.get(mapping.get(m_name, ""))
+    return val if val else calculate_implied_odds(fallback_proba)
 
 
-def build_safe_ticket(predictions: list, fixture_map: dict) -> dict:
-    """Builds a ticket targeting cumulative odds of ~2.0 by combining ~1.40 odds."""
-    # Filter highly confident predictions
-    confident_preds = [p for p in predictions if (p.get("confidence_score") or 0) >= 4]
+def build_safe_ticket(predictions: list, fixture_map: dict, odds_map: dict) -> dict:
+    """
+    Rule Safe: 
+    - 2 matches precisely.
+    - Market: Double Chance (1N or N2) + Plus de 1.5 buts.
+    - Select 2 with highest combined probability.
+    """
+    candidates = []
     
-    ticket_matches = []
-    total_odds = 1.0
-    
-    for pred in confident_preds:
+    for pred in predictions:
         fix = fixture_map.get(pred["fixture_id"])
         if not fix: continue
         
-        market = get_best_market(pred)
-        odds = calculate_implied_odds(market["proba"])
+        real_odds = (odds_map or {}).get(pred["fixture_id"])
         
-        # User Rule: No odds below 1.30
-        if odds < 1.30:
-            continue
-            
-        ticket_matches.append({
-            "match": f"{fix['home_team']} - {fix['away_team']}",
-            "time": fix['date'][11:16],
-            "pick": market["name"],
-            "proba": market["proba"],
-            "odds": odds
-        })
+        ph = pred.get("proba_home") or 0
+        pd = pred.get("proba_draw") or 0
+        pa = pred.get("proba_away") or 0
         
-        total_odds *= odds
-        # Aim for ~2.0 by combining usually 2 matches of ~1.40
-        if total_odds >= 1.90:
-            break
+        # Fallback to stats_json if top-level columns are None
+        stats = pred.get("stats_json") or {}
+        p15 = pred.get("proba_over_15")
+        if p15 is None: p15 = stats.get("proba_over_15", 0)
+        
+        # Decide which side is more likely
+        if ph >= pa:
+            pick_name = "Victoire Domicile ou Nul"
+            m_code = "1N"
+            p_dc = ph + pd
+        else:
+            pick_name = "Nul ou Victoire Extérieur"
+            m_code = "N2"
+            p_dc = pa + pd
             
-    if len(ticket_matches) < 2:
+        # Check combo proba (rough estimate P(A & B) = P(A)*P(B)*1.1 because of positive correlation)
+        # Note: If P(1N) is high and P(+1.5) is high, the combo is very safe.
+        p_combo = (p_dc / 100.0) * (p15 / 100.0) * 1.10 * 100.0
+        p_combo = min(p_combo, max(p_dc, p15)) # Ceiling
+        
+        # Estimate combo odds
+        o_dc = get_market_odds(real_odds, m_code, p_dc)
+        o_15 = get_market_odds(real_odds, "+1.5", p15)
+        # Bookmaker combo odds are usually slightly less than product
+        o_combo = o_dc * o_15 * 0.85 
+        
+        if p_combo > 50 and o_combo >= 1.30:
+            candidates.append({
+                "match": f"{fix['home_team']} - {fix['away_team']}",
+                "time": fix['date'][11:16],
+                "pick": f"{pick_name} & +1.5 buts",
+                "proba": p_combo,
+                "odds": round(o_combo, 2)
+            })
+            
+    # Sort by probability descending
+    candidates.sort(key=lambda x: x["proba"], reverse=True)
+    
+    # Pick top 2
+    if len(candidates) < 2:
         return None
         
+    matches = candidates[:2]
+    total_odds = matches[0]["odds"] * matches[1]["odds"]
+    
     return {
         "type": "SAFE",
-        "matches": ticket_matches,
+        "matches": matches,
         "total_odds": round(total_odds, 2)
     }
 
 
-def build_fun_ticket(predictions: list, fixture_map: dict) -> dict:
-    """Builds a ticket targeting cumulative odds of ~20.0 with no odds below 1.30."""
-    fun_preds = predictions 
-        
-    ticket_matches = []
-    total_odds = 1.0
+def build_fun_ticket(predictions: list, fixture_map: dict, odds_map: dict) -> dict:
+    """
+    Rule Fun:
+    - 5 to 8 matches.
+    - Market: Winner (Home or Away) + Goals.
+    - Goals rule: +2.5 if proba > 70%, else +1.5 if proba > 75%, else skip match.
+    - Never +0.5.
+    - Select most probable winners among matches meeting goal criteria.
+    """
+    candidates = []
     
-    for pred in fun_preds:
+    for pred in predictions:
         fix = fixture_map.get(pred["fixture_id"])
         if not fix: continue
         
-        market = get_best_market(pred)
-        odds = calculate_implied_odds(market["proba"])
+        real_odds = (odds_map or {}).get(pred["fixture_id"])
         
-        # User Rule: No odds below 1.30
-        if odds < 1.30:
+        ph = pred.get("proba_home") or 0
+        pa = pred.get("proba_away") or 0
+        
+        # Fallback to stats_json if top-level columns are None
+        stats = pred.get("stats_json") or {}
+        p15 = pred.get("proba_over_15")
+        if p15 is None: p15 = stats.get("proba_over_15", 0)
+        p25 = pred.get("proba_over_25")
+        if p25 is None: 
+            # If 2.5 is missing, try to estimate from 1.5 and 3.5
+            p35 = stats.get("proba_over_35", 0)
+            if p35 > 0:
+                p25 = (p15 + p35) / 2
+            else:
+                p25 = p15 * 0.7 # Conservative estimate
+        
+        # Goals criteria
+        goal_pick = None
+        p_goal = 0
+        if p25 > 70:
+            goal_pick = "+2.5 buts"
+            m_goal = "+2.5"
+            p_goal = p25
+        elif p15 > 75:
+            goal_pick = "+1.5 buts"
+            m_goal = "+1.5"
+            p_goal = p15
+        else:
+            # Match doesn't meet goal criteria for FUN ticket
             continue
             
-        # Don't add duplicate matches
-        if any(m["match"] == f"{fix['home_team']} - {fix['away_team']}" for m in ticket_matches):
-            continue
+        # Winner selection
+        if ph >= pa:
+            winner_name = f"Victoire {fix['home_team']}"
+            m_win = "1"
+            p_win = ph
+        else:
+            winner_name = f"Victoire {fix['away_team']}"
+            m_win = "2"
+            p_win = pa
             
-        ticket_matches.append({
+        # Combo proba
+        p_combo = (p_win / 100.0) * (p_goal / 100.0) * 1.15 * 100.0
+        p_combo = min(p_combo, p_win) # Winner is usually the limiting factor
+        
+        # Odds
+        o_win = get_market_odds(real_odds, m_win, p_win)
+        o_goal = get_market_odds(real_odds, m_goal, p_goal)
+        o_combo = o_win * o_goal * 0.90
+        
+        candidates.append({
             "match": f"{fix['home_team']} - {fix['away_team']}",
             "time": fix['date'][11:16],
-            "pick": market["name"],
-            "proba": market["proba"],
-            "odds": odds
+            "pick": f"{winner_name} & {goal_pick}",
+            "proba": p_combo,
+            "odds": round(o_combo, 2)
         })
+
+    # Filter out very low odds if any
+    candidates = [c for c in candidates if c["odds"] >= 1.30]
+    
+    # Sort by proba
+    candidates.sort(key=lambda x: x["proba"], reverse=True)
+    
+    # Select 5 to 8
+    target_count = min(max(5, len(candidates)), 8)
+    if len(candidates) < 5:
+        # If we don't have enough, maybe we take what we have or nothing
+        if len(candidates) < 3: return None
+        target_count = len(candidates)
         
-        total_odds *= odds
-        if total_odds >= 20.0:
-            break
-            
-    if len(ticket_matches) < 4:
-        return None
+    matches = candidates[:target_count]
+    total_odds = 1.0
+    for m in matches:
+        total_odds *= m["odds"]
         
     return {
         "type": "FUN",
-        "matches": ticket_matches,
+        "matches": matches,
         "total_odds": round(total_odds, 2)
     }
+
 
 def format_telegram_message(safe_ticket: dict, fun_ticket: dict) -> str:
     """Formats the tickets into HTML for Telegram"""
     
     msg = "🏆 <b>LES PRONOS VIP DU JOUR</b> 🏆\n"
-    msg += f"<i>Généré par l'IA ProbaLab - {datetime.now().strftime('%d/%m/%Y')}</i>\n\n"
+    msg += f"<i>Généré par ProbaLab IA - {datetime.now().strftime('%d/%m/%Y')}</i>\n\n"
     
     if safe_ticket:
-        msg += "🛡 <b>TICKET SAFE (Objectif Doubler)</b>\n"
+        msg += "🛡 <b>TICKET SAFE (2 Matchs)</b>\n"
         for m in safe_ticket["matches"]:
             msg += f"• <code>{m['time']}</code> | {m['match']}\n"
-            msg += f"  👉 <b>{m['pick']}</b> <i>(Cote estimée: {m['odds']})</i>\n"
+            msg += f"  👉 <b>{m['pick']}</b> <i>(Cote: {m['odds']})</i>\n"
         msg += f"\n📊 <b>Cote Totale ~ {safe_ticket['total_odds']}</b>\n\n"
     else:
-        msg += "🛡 <i>Pas de Ticket Safe au programme aujourd'hui. L'IA juge les matchs trop risqués.</i>\n\n"
+        msg += "🛡 <i>Pas de Ticket Safe disponible avec nos critères de sécurité aujourd'hui.</i>\n\n"
         
     if fun_ticket:
         msg += "🔥 <b>TICKET FUN (Grosse Cote)</b>\n"
         for m in fun_ticket["matches"]:
             msg += f"• <code>{m['time']}</code> | {m['match']}\n"
-            msg += f"  👉 <b>{m['pick']}</b> <i>(Cote estimée: {m['odds']})</i>\n"
+            msg += f"  👉 <b>{m['pick']}</b> <i>(Cote: {m['odds']})</i>\n"
         msg += f"\n🚀 <b>Cote Totale ~ {fun_ticket['total_odds']}</b>\n\n"
+    else:
+        msg += "🔥 <i>Pas de Ticket Fun disponible aujourd'hui.</i>\n\n"
         
-    msg += "<i>⚠️ Jouez uniquement ce que vous pouvez vous permettre de perdre. Les cotes sont des estimations mathématiques.</i>"
+    msg += "<i>⚠️ Jouez uniquement ce que vous pouvez vous permettre de perdre. Les cotes sont des estimations basées sur les données.</i>"
     return msg
 
 if __name__ == "__main__":
