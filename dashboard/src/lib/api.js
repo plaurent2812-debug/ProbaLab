@@ -9,11 +9,25 @@ async function getAuthHeaders() {
     return { Authorization: `Bearer ${session.access_token}` }
 }
 
+const cache = {}
+const CACHE_TTL = 60 * 1000 // 60 seconds
+
 export async function fetchPredictions(date) {
     const params = date ? `?date=${date}` : ''
-    const res = await fetch(`${API_BASE}/predictions${params}`)
+    const url = `${API_BASE}/predictions${params}`
+
+    // Check cache
+    if (cache[url] && Date.now() - cache[url].timestamp < CACHE_TTL) {
+        return cache[url].data
+    }
+
+    const res = await fetch(url)
     if (!res.ok) throw new Error(`API error: ${res.status}`)
-    return res.json()
+    const data = await res.json()
+
+    // Save to cache
+    cache[url] = { data, timestamp: Date.now() }
+    return data
 }
 
 export async function fetchPredictionDetail(fixtureId) {
@@ -23,15 +37,29 @@ export async function fetchPredictionDetail(fixtureId) {
 }
 
 export async function fetchPerformance(days = 30) {
-    const res = await fetch(`${API_BASE}/performance?days=${days}`)
+    const url = `${API_BASE}/performance?days=${days}`
+    if (cache[url] && Date.now() - cache[url].timestamp < CACHE_TTL) {
+        return cache[url].data
+    }
+
+    const res = await fetch(url)
     if (!res.ok) throw new Error(`API error: ${res.status}`)
-    return res.json()
+    const data = await res.json()
+    cache[url] = { data, timestamp: Date.now() }
+    return data
 }
 
 export async function fetchNHLPerformance(days = 30) {
-    const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/nhl/performance?days=${days}`)
+    const url = `${import.meta.env.VITE_API_URL || ''}/nhl/performance?days=${days}`
+    if (cache[url] && Date.now() - cache[url].timestamp < CACHE_TTL) {
+        return cache[url].data
+    }
+
+    const res = await fetch(url)
     if (!res.ok) throw new Error(`API error: ${res.status}`)
-    return res.json()
+    const data = await res.json()
+    cache[url] = { data, timestamp: Date.now() }
+    return data
 }
 
 export async function fetchTeamHistory(teamName, limit = 60) {

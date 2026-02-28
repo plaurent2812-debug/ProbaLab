@@ -336,6 +336,24 @@ def _ensure_dict(data: Union[dict, str, None]) -> dict:
     return {}
 
 
+# ─── Leagues Cache ──────────────────────────────────────────────
+_league_cache: dict = {"map": {}, "fetched_at": 0}
+_LEAGUE_CACHE_TTL = 3600  # 1 hour
+
+def _get_league_map() -> dict:
+    global _league_cache
+    now = time.time()
+    if now - _league_cache["fetched_at"] > _LEAGUE_CACHE_TTL or not _league_cache["map"]:
+        try:
+            leagues = supabase.table("leagues").select("api_id, name").execute().data or []
+            _league_cache["map"] = {str(l["api_id"]): l["name"] for l in leagues}
+            _league_cache["fetched_at"] = now
+        except Exception as e:
+            print(f"Error fetching leagues: {e}")
+            if not _league_cache["map"]:
+                return {}
+    return _league_cache["map"]
+
 @app.get("/api/predictions")
 def get_predictions(
     date: Optional[str] = Query(None, description="ISO date YYYY-MM-DD"),
@@ -372,29 +390,26 @@ def get_predictions(
         or []
     )
 
-    # Get league names
-    leagues = (
-        supabase.table("leagues")
-        .select("api_id, name")
-        .execute()
-        .data
-        or []
-    )
-    league_map = {str(l["api_id"]): l["name"] for l in leagues}
+    # Get league names (with simple TTL cache)
+    league_map = _get_league_map()
 
-    # Get team logos
+    # Get team logos (only for teams present in the fixtures)
     team_names_set = set()
     for f in fixtures:
-        team_names_set.add(f.get("home_team", ""))
-        team_names_set.add(f.get("away_team", ""))
-    teams_data = (
-        supabase.table("teams")
-        .select("name, logo_url")
-        .execute()
-        .data
-        or []
-    )
-    logo_map = {t["name"]: t.get("logo_url") for t in teams_data if t.get("logo_url")}
+        if f.get("home_team"): team_names_set.add(f["home_team"])
+        if f.get("away_team"): team_names_set.add(f["away_team"])
+        
+    logo_map = {}
+    if team_names_set:
+        teams_data = (
+            supabase.table("teams")
+            .select("name, logo_url")
+            .in_("name", list(team_names_set))
+            .execute()
+            .data
+            or []
+        )
+        logo_map = {t["name"]: t.get("logo_url") for t in teams_data if t.get("logo_url")}
 
     pred_by_fixture = {p["fixture_id"]: p for p in predictions}
 
