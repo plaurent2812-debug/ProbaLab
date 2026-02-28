@@ -119,7 +119,7 @@ export default function TeamProfile() {
                 <div>
                     <h1 className="text-3xl font-black tracking-tight">{data.team_name}</h1>
                     <p className="text-sm text-muted-foreground">
-                        Saison {import.meta.env.VITE_API_SEASON || "2024-2025"}
+                        Saison {import.meta.env.VITE_API_SEASON || "2025-2026"}
                     </p>
                 </div>
             </div>
