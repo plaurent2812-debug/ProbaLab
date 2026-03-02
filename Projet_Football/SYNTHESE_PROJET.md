@@ -7,7 +7,7 @@
 
 Système complet de **prédiction de matchs de football** combinant :
 - **Modèle statistique** (Poisson, ELO, forme, repos, enjeu, H2H, arbitre, météo, blessures)
-- **Intelligence artificielle** (Claude / Anthropic pour l'analyse narrative)
+- **Intelligence artificielle** (Gemini / Google GenAI pour l'analyse narrative)
 - **Machine Learning** (XGBoost entraîné sur 5 444 matchs historiques)
 - **Google Sheet** comme interface utilisateur (affichage, value betting, performance)
 - **Supabase** comme base de données centrale
@@ -24,7 +24,7 @@ Ligue 1, Ligue 2, Premier League, La Liga, Serie A, Bundesliga, Champions League
 Projet_Football/
 │
 ├── config.py                    # Config partagée (Supabase, API-Football, clés)
-├── .env                         # Variables d'environnement (SUPABASE_URL, SUPABASE_KEY, API_FOOTBALL_KEY, ANTHROPIC_API_KEY)
+├── .env                         # Variables d'environnement (SUPABASE_URL, SUPABASE_KEY, API_FOOTBALL_KEY, GEMINI_API_KEY)
 │
 ├── ── PIPELINE PRINCIPAL ──
 ├── fetch_matches.py             # Import des prochains matchs depuis API-Football
@@ -33,7 +33,7 @@ Projet_Football/
 ├── fetch_players.py             # Import des joueurs et stats
 ├── stats_engine.py              # ⭐ Moteur statistique principal (Poisson, ELO, forme, etc.)
 ├── scorer_engine.py             # Prédiction du buteur le plus probable
-├── brain.py                     # ⭐ Orchestrateur : stats → Claude → prédictions finales
+├── brain.py                     # ⭐ Orchestrateur : stats → Gemini → prédictions finales
 ├── run_pipeline.py              # Lance le pipeline complet (fetch + analyse)
 │
 ├── ── MACHINE LEARNING ──
@@ -224,10 +224,10 @@ Les modèles sont automatiquement stockés dans Supabase et chargés par `stats_
 ## 9. ENVIRONNEMENT TECHNIQUE
 
 - **Python** : 3.10.12 (pyenv)
-- **Packages** : supabase-py, requests, scipy, numpy, scikit-learn, xgboost, anthropic, python-dotenv
+- **Packages** : supabase-py, requests, scipy, numpy, scikit-learn, xgboost, google-genai, python-dotenv
 - **Node/clasp** : pour le déploiement Google Apps Script
 - **Supabase** : PostgreSQL hébergé
 - **API-Football** : v3 (plan avec rate limiting 300 req/min)
-- **Anthropic** : Claude Sonnet 4 (`claude-sonnet-4-20250514`)
+- **Google GenAI** : Gemini 2.5 Pro (`gemini-2.5-pro`)
 - **Workspace** : `/Users/pierrelaurent/Desktop/Projet_Football`
 - **Pas de git** initialisé sur le projet

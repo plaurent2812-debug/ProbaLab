@@ -194,7 +194,7 @@ class TestFormatInjuries:
 
 
 class TestBuildPrompt:
-    """Tests de la construction du prompt Claude."""
+    """Tests de la construction du prompt Gemini."""
 
     def test_returns_two_strings(self):
         sys_p, usr_p = build_prompt(_sample_fixture(), _sample_stats(), None)

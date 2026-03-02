@@ -14,19 +14,20 @@ import json
 import re
 import time
 
-from anthropic import Anthropic
-from config import ANTHROPIC_KEY, logger, supabase
+from google import genai
+from google.genai import types
+from config import GEMINI_API_KEY, logger, supabase
 from constants import WEIGHT_AI, WEIGHT_STATS
 from models.scorer_engine import predict_scorers
 from models.stats_engine import analyze_match, update_elo_from_results
 
-# ── Client Anthropic ─────────────────────────────────────────────
-if not ANTHROPIC_KEY:
-    logger.critical("ERREUR: ANTHROPIC_API_KEY manquante.")
+# ── Client Gemini ─────────────────────────────────────────────
+if not GEMINI_API_KEY:
+    logger.critical("ERREUR: GEMINI_API_KEY manquante.")
     exit()
 
-client = Anthropic(api_key=ANTHROPIC_KEY)
-MODEL_NAME = "claude-sonnet-4-20250514"
+client = genai.Client(api_key=GEMINI_API_KEY)
+MODEL_NAME = "gemini-2.5-pro"
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -35,7 +36,7 @@ MODEL_NAME = "claude-sonnet-4-20250514"
 
 
 def extract_json(text: str) -> dict | None:
-    """Extract a JSON object from a Claude response string.
+    """Extract a JSON object from a Gemini response string.
 
     Attempts three strategies in order:
       1. Direct ``json.loads`` on the whole text.
@@ -43,7 +44,7 @@ def extract_json(text: str) -> dict | None:
       3. Regex extraction of the first ``{…}`` block.
 
     Args:
-        text: Raw text returned by the Claude API.
+        text: Raw text returned by the Gemini API.
 
     Returns:
         Parsed JSON as a dict, or ``None`` if no valid JSON is found.
@@ -68,12 +69,12 @@ def extract_json(text: str) -> dict | None:
 
 
 # ═══════════════════════════════════════════════════════════════════
-#  PROMPT CLAUDE ENRICHI
+#  PROMPT GEMINI ENRICHI
 # ═══════════════════════════════════════════════════════════════════
 
 
 def _format_injuries(side: str, details: list[dict]) -> str:
-    """Format a team's injury list as a readable block for the Claude prompt.
+    """Format a team's injury list as a readable block for the Gemini prompt.
 
     Args:
         side: Label for the team side (e.g. ``"Domicile"`` or ``"Extérieur"``).
@@ -112,7 +113,7 @@ def build_prompt(fixture: dict, stats: dict, scorers: dict | None) -> tuple[str,
     Assembles a detailed data block from match statistics, context (ELO,
     form, rest days, injuries, H2H, referee, market odds, weather) and
     top-scorer information, then wraps it in a system prompt instructing
-    Claude to return a structured JSON analysis.
+    Gemini to return a structured JSON analysis.
 
     Args:
         fixture: Fixture dict with keys ``home_team``, ``away_team``,
@@ -122,7 +123,7 @@ def build_prompt(fixture: dict, stats: dict, scorers: dict | None) -> tuple[str,
         scorers: Output of :func:`predict_scorers` (may be ``None``).
 
     Returns:
-        A ``(system_prompt, user_prompt)`` tuple ready to send to Claude.
+        A ``(system_prompt, user_prompt)`` tuple ready to send to Gemini.
     """
     ctx = stats.get("context", {})
 
@@ -238,32 +239,35 @@ Reste réaliste et cohérent avec les données."""
 
 
 # ═══════════════════════════════════════════════════════════════════
-#  APPEL CLAUDE
+#  APPEL GEMINI
 # ═══════════════════════════════════════════════════════════════════
 
 
-def ask_claude(system_prompt: str, user_prompt: str) -> str | None:
-    """Send an enriched prompt to the Claude API and return the raw response.
+def ask_gemini(system_prompt: str, user_prompt: str) -> str | None:
+    """Send an enriched prompt to the Gemini API and return the raw response.
 
     Args:
-        system_prompt: System-level instruction defining Claude's role.
+        system_prompt: System-level instruction defining Gemini's role.
         user_prompt: User-level message containing the statistical data
             and analysis request.
 
     Returns:
-        The text content of Claude's reply, or ``None`` on API error.
+        The text content of Gemini's reply, or ``None`` on API error.
     """
     try:
-        message = client.messages.create(
+        response = client.models.generate_content(
             model=MODEL_NAME,
-            max_tokens=1500,
-            temperature=0.2,
-            system=system_prompt,
-            messages=[{"role": "user", "content": user_prompt}],
+            contents=user_prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                temperature=0.2,
+                max_output_tokens=1500,
+                response_mime_type="application/json",
+            ),
         )
-        return message.content[0].text  # type: ignore[union-attr]
+        return response.text
     except Exception as e:
-        logger.error("Erreur Anthropic : %s", e)
+        logger.error("Erreur Gemini : %s", e)
         return None
 
 

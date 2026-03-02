@@ -7,7 +7,7 @@ Workflow :
   1. Récupère les matchs terminés (FT) qui ont une prédiction
   2. Croise prédictions vs résultats réels
   3. Détermine si chaque type de pari était correct
-  4. Génère une analyse post-match (rule-based, pas de Claude)
+  4. Génère une analyse post-match (rule-based, pas de Gemini)
   5. Sauvegarde dans prediction_results
   6. Affiche un résumé global de performance
   7. Évalue les tickets SAFE / FUN / JACKPOT de l'onglet Pronos

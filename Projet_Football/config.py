@@ -48,7 +48,7 @@ load_dotenv()
 SUPABASE_URL: Optional[str] = os.getenv("SUPABASE_URL")
 SUPABASE_KEY: Optional[str] = os.getenv("SUPABASE_KEY")
 API_FOOTBALL_KEY: Optional[str] = os.getenv("API_FOOTBALL_KEY")
-ANTHROPIC_KEY: Optional[str] = os.getenv("ANTHROPIC_API_KEY")
+GEMINI_API_KEY: Optional[str] = os.getenv("GEMINI_API_KEY")
 
 # ── Client Supabase ──────────────────────────────────────────────
 supabase: Client = create_client(SUPABASE_URL or "", SUPABASE_KEY or "")

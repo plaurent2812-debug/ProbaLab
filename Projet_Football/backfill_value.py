@@ -5,7 +5,7 @@ backfill_value.py — Met à jour les prédictions existantes avec :
   - proba_over_05 (calculé via Poisson)
   - proba_penalty (calculé via le moteur statistique)
 
-Ne consomme PAS de crédits Claude.
+Ne consomme PAS de crédits Gemini.
 """
 import time
 

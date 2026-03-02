@@ -8,7 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 from config import supabase, api_get, logger, API_FOOTBALL_KEY
-from brain import ask_claude, extract_json
+from brain import ask_gemini, extract_json
 
 try:
     import httpx
@@ -274,7 +274,7 @@ ANOMALIES DÉTECTÉES:
 Analyse ces anomalies et recommande le meilleur pari en direct. Retourne le JSON.
     """
 
-    ai_text = ask_claude(SYSTEM_PROMPT, user_prompt)
+    ai_text = ask_gemini(SYSTEM_PROMPT, user_prompt)
     ai_result = extract_json(ai_text) if ai_text else None
 
     if not ai_result:

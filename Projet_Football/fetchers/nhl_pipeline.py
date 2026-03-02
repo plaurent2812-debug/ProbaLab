@@ -9,7 +9,7 @@ Fetches data from NHL public API (api-web.nhle.com/v1):
 - Back-to-back detection
 
 Calcule les scores de probabilité pour chaque joueur (but, passe, point, tir)
-avec ajustements: PP%, PK%, fatigue B2B, IA game context (Claude).
+avec ajustements: PP%, PK%, fatigue B2B, IA game context (Gemini).
 Push dans nhl_data_lake + nhl_fixtures dans Supabase.
 """
 
@@ -414,10 +414,10 @@ def calculate_h2h_factor(game_log: list[dict], opponent: str) -> dict:
     }
 
 
-# ─── AI Game Context (Claude) ───────────────────────────────────
+# ─── AI Game Context (Gemini) ───────────────────────────────────
 
 def get_ai_game_context(games: list[dict], standings: dict) -> dict:
-    """Use Claude to analyze game context and get offensive factors per team.
+    """Use Gemini to analyze game context and get offensive factors per team.
 
     Returns dict like {"EDM": 1.4, "TOR": 1.0, ...}
     - 0.7 = Defensive game
@@ -426,9 +426,9 @@ def get_ai_game_context(games: list[dict], standings: dict) -> dict:
     - 1.5+ = Offensive festival
     """
     try:
-        from brain import ask_claude
+        from brain import ask_gemini
     except ImportError:
-        logger.warning("[NHL] brain.ask_claude not available — skipping AI context")
+        logger.warning("[NHL] brain.ask_gemini not available — skipping AI context")
         return {}
 
     games_desc = []
@@ -456,7 +456,7 @@ def get_ai_game_context(games: list[dict], standings: dict) -> dict:
     user_prompt = f"Analyse ces matchs NHL ce soir:\n" + "\n".join(games_desc)
 
     try:
-        response = ask_claude(system_prompt, user_prompt)
+        response = ask_gemini(system_prompt, user_prompt)
         if response:
             import json
             cleaned = response.strip()
@@ -469,10 +469,10 @@ def get_ai_game_context(games: list[dict], standings: dict) -> dict:
     return {}
 
 
-def get_claude_nhl_analysis(home_team: str, away_team: str, top_players: list[dict], ai_factors: dict) -> str:
-    """Use Claude to generate a detailed, player-centric NHL match analysis."""
+def get_gemini_nhl_analysis(home_team: str, away_team: str, top_players: list[dict], ai_factors: dict) -> str:
+    """Use Gemini to generate a detailed, player-centric NHL match analysis."""
     try:
-        from brain import ask_claude
+        from brain import ask_gemini
     except ImportError:
         return f"{home_team} vs {away_team} : Analyse indisponible."
 
@@ -518,7 +518,7 @@ def get_claude_nhl_analysis(home_team: str, away_team: str, top_players: list[di
     )
 
     try:
-        response = ask_claude(system_prompt, user_prompt)
+        response = ask_gemini(system_prompt, user_prompt)
         return response if response else f"Analyse automatique pour {home_team} vs {away_team}."
     except Exception as e:
         logger.warning(f"[NHL] AI analysis failed: {e}")
@@ -801,7 +801,7 @@ def run_nhl_pipeline() -> dict:
         all_teams.append(g.get("awayTeam", {}).get("abbrev", ""))
     goalie_form = fetch_goalie_form(all_teams)
 
-    # 5. 🧠 AI Game Context (Claude)
+    # 5. 🧠 AI Game Context (Gemini)
     logger.info("[NHL] 🧠 Analyse IA du contexte des matchs...")
     ai_factors = get_ai_game_context(future_games, standings)
     if ai_factors:
@@ -1060,7 +1060,7 @@ def run_nhl_pipeline() -> dict:
 
         # ─── PASS 6: AI Detailed Analysis ───
         logger.info(f"[NHL]   🧠 Génération analyse détaillée pour {home_abbrev} vs {away_abbrev}...")
-        analysis_text = get_claude_nhl_analysis(home_name, away_name, match_players, ai_factors)
+        analysis_text = get_gemini_nhl_analysis(home_name, away_name, match_players, ai_factors)
 
         # Win probabilities for fixtures_data (saved to Supabase)
         win_prob = calculate_win_prob(home_abbrev, away_abbrev, standings, fatigue_dict)

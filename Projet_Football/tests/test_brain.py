@@ -10,7 +10,7 @@ from brain import blend_predictions, extract_json
 
 
 class TestExtractJson:
-    """Tests de l'extraction JSON depuis la réponse Claude."""
+    """Tests de l'extraction JSON depuis la réponse Gemini."""
 
     def test_pure_json(self):
         text = '{"proba_home": 55, "proba_draw": 25, "proba_away": 20}'
