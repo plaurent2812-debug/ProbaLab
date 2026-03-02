@@ -30,18 +30,18 @@ function MiniMatchCard({ match, isStarred, onToggleStar, sport = "football" }) {
 
     return (
         <div
-            className="flex items-center gap-3 py-2.5 px-3 hover:bg-accent/40 cursor-pointer border-b border-border/20 last:border-0 transition-colors group"
+            className="flex items-center gap-1.5 sm:gap-3 py-2 px-1 sm:px-3 hover:bg-accent/40 cursor-pointer border-b border-border/20 last:border-0 transition-colors group"
             onClick={() => navigate(sport === "nhl"
                 ? `/nhl/match/${match.api_fixture_id || match.id}`
                 : `/football/match/${match.id}`
             )}
         >
             {/* Status */}
-            <div className="w-14 shrink-0 text-center">
+            <div className="w-10 sm:w-14 shrink-0 text-center">
                 {isLive ? (
-                    <Badge variant="destructive" className="text-[10px] px-1.5 h-5 animate-pulse">LIVE</Badge>
+                    <Badge variant="destructive" className="text-[10px] px-1 h-5 animate-pulse">LIVE</Badge>
                 ) : isFinished ? (
-                    <Badge className="text-[10px] px-1.5 h-5 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-0">FT</Badge>
+                    <Badge className="text-[10px] px-1 h-5 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-0">FT</Badge>
                 ) : (
                     <span className="text-xs font-bold tabular-nums text-foreground/80">{time}</span>
                 )}
@@ -52,19 +52,23 @@ function MiniMatchCard({ match, isStarred, onToggleStar, sport = "football" }) {
 
             {/* Teams */}
             <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-medium truncate">{match.home_team}</span>
-                    {(isFinished || isLive) ? (
-                        <span className={cn(
-                            "text-sm font-black tabular-nums px-1.5 py-0.5 rounded shrink-0",
-                            isLive ? "text-red-500 bg-red-500/10" : "text-foreground bg-muted/60"
-                        )}>
-                            {homeGoals ?? "—"} – {awayGoals ?? "—"}
-                        </span>
-                    ) : (
-                        <span className="text-xs text-muted-foreground shrink-0">vs</span>
-                    )}
-                    <span className="text-sm font-medium truncate text-right">{match.away_team}</span>
+                <div className="flex items-center justify-center gap-1.5 sm:gap-2">
+                    <span className="flex-1 text-xs sm:text-sm font-medium truncate text-right">{match.home_team}</span>
+                    <div className="shrink-0 w-10 sm:w-14 text-center">
+                        {(isFinished || isLive) ? (
+                            <div className={cn(
+                                "inline-flex items-center gap-1 px-1 sm:px-1.5 py-0.5 rounded-md text-xs font-black tabular-nums",
+                                isLive ? "bg-red-500/10 text-red-500" : "text-foreground bg-muted/60"
+                            )}>
+                                <span>{homeGoals ?? "-"}</span>
+                                <span className="text-muted-foreground/40 text-[10px]">-</span>
+                                <span>{awayGoals ?? "-"}</span>
+                            </div>
+                        ) : (
+                            <span className="text-[10px] sm:text-xs font-bold text-muted-foreground/40">VS</span>
+                        )}
+                    </div>
+                    <span className="flex-1 text-xs sm:text-sm font-medium truncate text-left">{match.away_team}</span>
                 </div>
                 {pred?.recommended_bet && !isFinished && (
                     <p className="text-[10px] text-primary/70 mt-0.5">💡 {pred.recommended_bet}</p>

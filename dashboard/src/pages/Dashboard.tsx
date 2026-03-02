@@ -40,61 +40,61 @@ function MatchRow({ match, isStarred, onToggleStar }) {
 
     return (
         <div
-            className="match-card group px-4 py-3 cursor-pointer hover:bg-accent/40 border-b border-border/30 last:border-0 transition-colors"
+            className="match-card group px-2 sm:px-4 py-3 cursor-pointer hover:bg-accent/40 border-b border-border/30 last:border-0 transition-colors"
             onClick={() => navigate(`/football/match/${match.id}`)}
         >
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2">
                 {/* Time / Status */}
-                <div className="w-11 shrink-0 text-center">
+                <div className="w-10 sm:w-11 shrink-0 text-center">
                     {isLive ? (
-                        <Badge variant="destructive" className="text-[10px] px-1.5 h-5 animate-pulse">
+                        <Badge variant="destructive" className="text-[10px] px-1 h-5 animate-pulse">
                             {match.elapsed ? `${match.elapsed}'` : "LIVE"}
                         </Badge>
                     ) : isFinished ? (
-                        <Badge className="text-[10px] px-1.5 h-5 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-0">Terminé</Badge>
+                        <Badge className="text-[10px] px-1 sm:px-1.5 h-5 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-0">Terminé</Badge>
                     ) : (
                         <span className="text-xs font-bold tabular-nums text-foreground/80">{time}</span>
                     )}
                 </div>
 
                 {/* Teams + Score — 3-column layout */}
-                <div className="flex-1 min-w-0 flex items-center gap-2">
+                <div className="flex-1 min-w-0 flex items-center gap-1.5 sm:gap-2">
                     {/* Home team */}
                     <div className="flex-1 flex items-center gap-1.5 min-w-0 justify-end">
                         <span className={cn("text-xs sm:text-sm truncate text-right", homeWon ? "font-bold" : "font-medium text-foreground/80")}>
                             {match.home_team}
                         </span>
                         {match.home_logo ? (
-                            <img src={match.home_logo} alt="" className="w-5 h-5 shrink-0 object-contain" loading="lazy" />
+                            <img src={match.home_logo} alt="" className="w-4 h-4 sm:w-5 sm:h-5 shrink-0 object-contain" loading="lazy" />
                         ) : (
-                            <div className="w-5 h-5 rounded-full bg-primary/10 border border-border/50 shrink-0 flex items-center justify-center text-[8px] font-bold text-primary">
+                            <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-primary/10 border border-border/50 shrink-0 flex items-center justify-center text-[8px] font-bold text-primary">
                                 {match.home_team?.charAt(0)}
                             </div>
                         )}
                     </div>
 
                     {/* Score / VS */}
-                    <div className="shrink-0 w-12 sm:w-16 text-center">
+                    <div className="shrink-0 w-10 sm:w-14 text-center">
                         {hasScore ? (
                             <div className={cn(
-                                "inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-md text-sm font-black tabular-nums",
+                                "inline-flex items-center gap-1 px-1 sm:px-2 py-0.5 rounded-md text-xs sm:text-sm font-black tabular-nums",
                                 isLive ? "bg-red-500/10 text-red-500" : "bg-muted/60 text-foreground"
                             )}>
                                 <span className={homeWon ? "text-primary" : ""}>{match.home_goals ?? 0}</span>
-                                <span className="text-muted-foreground/40 text-xs">-</span>
+                                <span className="text-muted-foreground/40 text-[10px] sm:text-xs">-</span>
                                 <span className={awayWon ? "text-primary" : ""}>{match.away_goals ?? 0}</span>
                             </div>
                         ) : (
-                            <span className="text-xs font-bold text-muted-foreground/30">VS</span>
+                            <span className="text-[10px] sm:text-xs font-bold text-muted-foreground/30">VS</span>
                         )}
                     </div>
 
                     {/* Away team */}
                     <div className="flex-1 flex items-center gap-1.5 min-w-0">
                         {match.away_logo ? (
-                            <img src={match.away_logo} alt="" className="w-5 h-5 shrink-0 object-contain" loading="lazy" />
+                            <img src={match.away_logo} alt="" className="w-4 h-4 sm:w-5 sm:h-5 shrink-0 object-contain" loading="lazy" />
                         ) : (
-                            <div className="w-5 h-5 rounded-full bg-primary/10 border border-border/50 shrink-0 flex items-center justify-center text-[8px] font-bold text-primary">
+                            <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-primary/10 border border-border/50 shrink-0 flex items-center justify-center text-[8px] font-bold text-primary">
                                 {match.away_team?.charAt(0)}
                             </div>
                         )}
@@ -105,33 +105,31 @@ function MatchRow({ match, isStarred, onToggleStar }) {
                 </div>
 
                 {/* Prediction info */}
-                <div className="shrink-0 flex flex-col items-end gap-1 w-16 sm:w-20 pl-1">
-                    {!isFinished && pred && (
-                        <>
-                            {isHot && (
-                                <div className="flex items-center gap-1">
-                                    <Flame className="w-3.5 h-3.5 text-orange-500 flame-badge" />
-                                    <span className="text-[10px] font-bold text-orange-500">HOT</span>
-                                </div>
-                            )}
-                            {pred?.recommended_bet && (
-                                <span className="text-[9px] sm:text-[10px] font-semibold text-primary bg-primary/10 px-1 sm:px-1.5 py-0.5 rounded text-center leading-tight">
-                                    {pred.recommended_bet}
-                                </span>
-                            )}
-                            {pred?.confidence_score != null && (
-                                <Badge className={cn(
-                                    "text-[9px] sm:text-[10px] h-4 px-1 sm:px-1.5 border-0",
-                                    pred.confidence_score >= 8 ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" :
-                                        pred.confidence_score >= 6 ? "bg-amber-500/15 text-amber-600 dark:text-amber-400" :
-                                            "bg-muted text-muted-foreground"
-                                )}>
-                                    {pred.confidence_score}/10
-                                </Badge>
-                            )}
-                        </>
-                    )}
-                </div>
+                {(!isFinished && pred) && (
+                    <div className="shrink-0 flex flex-col items-end gap-1 w-12 sm:w-20 pl-0.5 sm:pl-1">
+                        {isHot && (
+                            <div className="flex items-center gap-0.5 sm:gap-1">
+                                <Flame className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-orange-500 flame-badge" />
+                                <span className="text-[9px] sm:text-[10px] font-bold text-orange-500">HOT</span>
+                            </div>
+                        )}
+                        {pred?.recommended_bet && (
+                            <span className="text-[8px] sm:text-[10px] font-semibold text-primary bg-primary/10 px-1 sm:px-1.5 py-0.5 rounded text-center leading-tight truncate max-w-full">
+                                {pred.recommended_bet}
+                            </span>
+                        )}
+                        {pred?.confidence_score != null && (
+                            <Badge className={cn(
+                                "text-[8px] sm:text-[10px] h-3.5 sm:h-4 px-1 sm:px-1.5 border-0",
+                                pred.confidence_score >= 8 ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" :
+                                    pred.confidence_score >= 6 ? "bg-amber-500/15 text-amber-600 dark:text-amber-400" :
+                                        "bg-muted text-muted-foreground"
+                            )}>
+                                {pred.confidence_score}/10
+                            </Badge>
+                        )}
+                    </div>
+                )}
 
                 <button
                     className="shrink-0 p-1 rounded-full hover:bg-amber-500/10 transition-colors"
@@ -143,7 +141,7 @@ function MatchRow({ match, isStarred, onToggleStar }) {
                         isStarred ? "fill-amber-400 text-amber-400" : "text-muted-foreground/40 hover:text-amber-400"
                     )} />
                 </button>
-                <ChevronRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-muted-foreground/60 shrink-0 transition-colors" />
+                <ChevronRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-muted-foreground/60 shrink-0 transition-colors hidden sm:block" />
             </div>
 
             {/* Scorers row */}
