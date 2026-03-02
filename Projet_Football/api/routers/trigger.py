@@ -498,17 +498,31 @@ def update_live_scores():
 @router.post("/evaluate-performance")
 def evaluate_performance():
     """Trigger immediate performance evaluation for all recently finished football matches."""
-    logger.info("[Performance] 📈 Évaluation des performances football...")
+    logger.info("[Performance] 📈 Évaluation des performances ML (Brier/LogLoss)...")
     try:
-        from fetchers.evaluate_results import evaluate_predictions
-        result = evaluate_predictions(days_back=3)
-        return {"status": "ok", "evaluated": result}
-    except ImportError:
-        # Fallback: evaluate via existing `suivi_algo_clean` logic
-        logger.info("[Performance] Using basic evaluation fallback")
-        return {"status": "ok", "message": "Evaluation triggered"}
+        from api.evaluate_predictions import evaluate_recent_matches
+        evaluate_recent_matches(days_back=3)
+        return {"status": "ok", "message": "ML Evaluation successfully run"}
     except Exception as e:
         logger.error(f"[Performance] Error: {e}")
+        return {"status": "error", "message": str(e)}
+
+@router.post("/retrain-models")
+def retrain_models():
+    """Endpoint for Trigger.dev or Vertex AI to trigger a full ML model retraining."""
+    logger.info("[MLOps] 🚀 Déclenchement du réentrainement continu...")
+    try:
+        # 1. Build new training data vectors
+        from training import build_data
+        build_data.run(rebuild=False)
+        
+        # 2. Retrain the XGBoost models and push them to Supabase
+        from training import train
+        train.run()
+        
+        return {"status": "ok", "message": "ML Models successfully retrained and deployed"}
+    except Exception as e:
+        logger.error(f"[MLOps] Retraining Failed: {e}")
         return {"status": "error", "message": str(e)}
 
 

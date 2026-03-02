@@ -585,23 +585,47 @@ def _advanced_features_from_mem(
         else:
             result[f"{prefix}_over25_rate_last10"] = 0.5
 
+    # ── NEW Phase 2 (Feature Engineering) ─────────────────────────
+        
         # xG per shot efficiency (shots on target from stats_json)
         shots_total = 0
         goals_total = 0
+        xg_total = 0
         for r in recent_10:
             is_home = r["home_team"] == team
             gf = r["home_goals"] if is_home else r["away_goals"]
             if gf is not None:
                 goals_total += gf
+            
             # Use stats_json if available for shots
             sj = r.get("stats_json")
             if sj and isinstance(sj, dict):
                 side = "home" if is_home else "away"
                 shots_total += sj.get(f"{side}_shots_on_target", 0) or 0
+                xg_total += sj.get(f"{side}_xg", 0) or 0
+                
         if shots_total > 0:
-            result[f"{prefix}_xg_per_shot"] = round(goals_total / shots_total, 3)
+            result[f"{prefix}_xg_per_shot"] = round(xg_total / shots_total, 3) if xg_total > 0 else round(goals_total / shots_total, 3)
         else:
             result[f"{prefix}_xg_per_shot"] = 0.3  # neutral avg
+            
+        # xG Momentum (Difference between xG on last 3 vs last 6 games)
+        if len(recent_10) >= 6:
+            xg_values = []
+            for r in recent_10:
+                is_home = r["home_team"] == team
+                side = "home" if is_home else "away"
+                sj = r.get("stats_json")
+                if sj and isinstance(sj, dict) and side+"_xg" in sj:
+                    xg_values.append(sj[side+"_xg"])
+                else:
+                    xg_values.append(1.0) # Fallback xG
+                    
+            xg_3 = sum(xg_values[:3]) / 3
+            xg_6 = sum(xg_values[:6]) / 6
+            result[f"{prefix}_xg_momentum"] = round(xg_3 - xg_6, 3)
+        else:
+            result[f"{prefix}_xg_momentum"] = 0.0
 
     # ── League-level features ────────────────────────────────
     # League average BTTS + Over 2.5 rates (from all finished matches)
@@ -755,9 +779,17 @@ def build_features_fast(fixture: dict, data: dict, league_cache: dict) -> dict |
     # 12. Interaction features (Phase A2)
     elo_diff = features.get("elo_diff", 0)
     features["elo_diff_squared"] = round(elo_diff ** 2 / 1000, 3)  # Scaled
-    features["form_diff"] = round(
-        features.get("home_form", 0.5) - features.get("away_form", 0.5), 3
-    )
+    # 13. Météo et conditions (Phase 2)
+    weather = fixture.get("weather_json")
+    if weather and isinstance(weather, dict):
+        features["temp_celsius"] = round(weather.get("temp", 15.0), 1)
+        weather_desc = weather.get("description", "").lower()
+        features["is_raining"] = "rain" in weather_desc or "pluie" in weather_desc
+        features["is_snowing"] = "snow" in weather_desc or "neige" in weather_desc
+    else:
+        features["temp_celsius"] = 15.0 # default neutral temp
+        features["is_raining"] = False
+        features["is_snowing"] = False
 
     # ── TARGETS ───────────────────────────────────────────────
     total: int = hg + ag
