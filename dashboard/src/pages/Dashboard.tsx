@@ -11,6 +11,7 @@ import { fetchPredictions } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
 import { useWatchlist } from "@/lib/useWatchlist"
 
 /* ── Match Row ─────────────────────────────────────────────── */
@@ -386,9 +387,18 @@ export default function FootballPage({ date, setDate, selectedLeague, setSelecte
                 {/* Content */}
                 <Card className="border-border/50 overflow-hidden">
                     {loading ? (
-                        <div className="flex flex-col items-center justify-center py-20 gap-3">
-                            <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-                            <p className="text-xs text-muted-foreground animate-pulse">Chargement des matchs...</p>
+                        <div className="flex flex-col w-full animate-in fade-in duration-500">
+                            {[1, 2, 3, 4, 5].map((i) => (
+                                <div key={i} className="flex items-center gap-4 px-4 py-3 border-b border-border/30">
+                                    <Skeleton className="h-5 w-11" />
+                                    <div className="flex-1 flex items-center justify-between gap-4">
+                                        <Skeleton className="h-4 w-1/3" />
+                                        <Skeleton className="h-5 w-12" />
+                                        <Skeleton className="h-4 w-1/3" />
+                                    </div>
+                                    <Skeleton className="h-4 w-16" />
+                                </div>
+                            ))}
                         </div>
                     ) : displayedLeagues.length > 0 ? (
                         displayedLeagues.map(league => (
@@ -403,14 +413,26 @@ export default function FootballPage({ date, setDate, selectedLeague, setSelecte
                         ))
                     ) : (
                         <div className="flex flex-col items-center justify-center py-24 text-center">
-                            <Calendar className="w-10 h-10 text-muted-foreground/30 mb-4" />
-                            <h3 className="font-bold text-base">Aucun match trouvé</h3>
-                            <p className="text-sm text-muted-foreground mt-1 max-w-[220px]">
-                                Essayez une autre date ou supprimez le filtre.
+                            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-5">
+                                <Calendar className="w-8 h-8 text-primary" />
+                            </div>
+                            <h3 className="font-bold text-lg">Aucun match programmé</h3>
+                            <p className="text-sm text-muted-foreground mt-2 max-w-[260px] leading-relaxed">
+                                Il n'y a pas de rencontres prévues pour cette date, ou vos filtres sont trop stricts.
                             </p>
-                            <Button variant="outline" size="sm" className="mt-4" onClick={() => setSelectedLeague(null)}>
-                                Voir tous les matchs
-                            </Button>
+                            <div className="flex flex-wrap items-center justify-center gap-3 mt-6">
+                                <Button variant="outline" onClick={() => {
+                                    setSelectedLeague(null)
+                                    setMinConfidence(0)
+                                    setMarketFilter('all')
+                                    setDate(new Date().toISOString().slice(0, 10))
+                                }}>
+                                    Revenir à aujourd'hui
+                                </Button>
+                                <Button onClick={() => navigate("/performance")}>
+                                    Voir les performances passées
+                                </Button>
+                            </div>
                         </div>
                     )}
                 </Card>

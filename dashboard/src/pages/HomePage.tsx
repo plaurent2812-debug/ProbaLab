@@ -291,33 +291,31 @@ export default function HomePage() {
             </section>
 
             {/* ── Stats du modèle ───────────────────────────── */}
-            {isAdmin && (
-                <section>
-                    <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-lg font-bold tracking-tight">Performance du modèle</h2>
-                        <button
-                            onClick={() => navigate("/performance")}
-                            className="flex items-center gap-1 text-xs font-semibold text-primary hover:underline underline-offset-4"
-                        >
-                            Voir tout <ChevronRight className="w-3.5 h-3.5" />
-                        </button>
-                    </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        {[
-                            { label: "Matchs analysés (48h)", value: totalCount || "—", sub: "Football + NHL" },
-                            { label: "Précision 1X2", value: perf ? `${perf.accuracy_1x2}%` : "—", sub: "30 derniers jours", color: "text-emerald-600 dark:text-emerald-400" },
-                            { label: "Précision BTTS", value: perf ? `${perf.accuracy_btts}%` : "—", sub: "30 derniers jours", color: "text-blue-600 dark:text-blue-400" },
-                            { label: "Précision Over 2.5", value: perf ? `${perf.accuracy_over_25}%` : "—", sub: "30 derniers jours", color: "text-purple-600 dark:text-purple-400" },
-                        ].map((s, i) => (
-                            <Card key={i} className="border-border/50 bg-card glow-card">
-                                <CardContent className="p-0">
-                                    <StatCard {...s} />
-                                </CardContent>
-                            </Card>
-                        ))}
-                    </div>
-                </section>
-            )}
+            <section>
+                <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-lg font-bold tracking-tight">Performance du modèle</h2>
+                    <button
+                        onClick={() => navigate("/performance")}
+                        className="flex items-center gap-1 text-xs font-semibold text-primary hover:underline underline-offset-4"
+                    >
+                        Voir tout <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {[
+                        { label: "Matchs analysés (48h)", value: totalCount || "—", sub: "Football + NHL" },
+                        { label: "Précision 1X2", value: perf ? `${perf.accuracy_1x2}%` : "—", sub: "30 derniers jours", color: "text-emerald-600 dark:text-emerald-400" },
+                        { label: "Précision BTTS", value: perf ? `${perf.accuracy_btts}%` : "—", sub: "30 derniers jours", color: "text-blue-600 dark:text-blue-400" },
+                        { label: "Précision Over 2.5", value: perf ? `${perf.accuracy_over_25}%` : "—", sub: "30 derniers jours", color: "text-purple-600 dark:text-purple-400" },
+                    ].map((s, i) => (
+                        <Card key={i} className="border-border/50 bg-card glow-card">
+                            <CardContent className="p-0">
+                                <StatCard {...s} />
+                            </CardContent>
+                        </Card>
+                    ))}
+                </div>
+            </section>
 
             {/* ── Alerte Syndicat : VIP Spots ───────────────────────────── */}
             <section>

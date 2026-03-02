@@ -8,6 +8,7 @@ import { supabase } from "@/lib/auth"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
 import { useWatchlist } from "@/lib/useWatchlist"
 
 const LIVE_STATUSES = ["1P", "2P", "3P", "OT", "SO", "LIVE"]
@@ -224,17 +225,46 @@ export default function NHLPage({ date, setDate }) {
             {/* Matches */}
             <Card className="border-border/50 overflow-hidden">
                 {loading ? (
-                    <div className="flex flex-col items-center justify-center py-20 gap-3">
-                        <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-                        <p className="text-xs text-muted-foreground animate-pulse">Chargement des matchs NHL...</p>
+                    <div className="flex flex-col w-full animate-in fade-in duration-500">
+                        {[1, 2, 3, 4, 5].map((i) => (
+                            <div key={i} className="flex items-center gap-3 px-4 py-3 border-b border-border/30">
+                                <Skeleton className="h-5 w-14 shrink-0" />
+                                <div className="flex-1 space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <Skeleton className="h-5 w-5 rounded shrink-0" />
+                                            <Skeleton className="h-4 w-32" />
+                                        </div>
+                                        <Skeleton className="h-4 w-4 shrink-0" />
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <Skeleton className="h-5 w-5 rounded shrink-0" />
+                                            <Skeleton className="h-4 w-32" />
+                                        </div>
+                                        <Skeleton className="h-4 w-4 shrink-0" />
+                                    </div>
+                                </div>
+                                <Skeleton className="h-4 w-16 hidden sm:block shrink-0 ml-4" />
+                            </div>
+                        ))}
                     </div>
                 ) : matches.length > 0 ? (
                     matches.map(m => <NHLMatchRow key={m.id} match={m} isStarred={isStarred(m.id)} onToggleStar={toggleMatch} />)
                 ) : (
                     <div className="flex flex-col items-center justify-center py-24 text-center">
-                        <Calendar className="w-10 h-10 text-muted-foreground/30 mb-4" />
-                        <h3 className="font-bold text-base">Aucun match NHL</h3>
-                        <p className="text-sm text-muted-foreground mt-1">Essayez une autre date.</p>
+                        <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-5">
+                            <Calendar className="w-8 h-8 text-primary" />
+                        </div>
+                        <h3 className="font-bold text-lg">Aucun match NHL</h3>
+                        <p className="text-sm text-muted-foreground mt-2 max-w-[260px] leading-relaxed">
+                            Aucune rencontre de hockey n'est programmée pour cette date spécifique.
+                        </p>
+                        <div className="flex flex-wrap items-center justify-center gap-3 mt-6">
+                            <Button variant="outline" onClick={() => setDate(new Date().toISOString().slice(0, 10))}>
+                                Revenir à aujourd'hui
+                            </Button>
+                        </div>
                     </div>
                 )}
             </Card>

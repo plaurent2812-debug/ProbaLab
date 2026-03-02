@@ -10,6 +10,8 @@ import { fetchPredictionDetail, fetchPredictions } from "@/lib/api"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Info } from "lucide-react"
 
 /* ── Probability bar ───────────────────────────────────────── */
 function ProbBar({ label, value, color = "bg-primary" }) {
@@ -31,13 +33,29 @@ function ProbBar({ label, value, color = "bg-primary" }) {
 }
 
 /* ── Stat row ──────────────────────────────────────────────── */
-function StatRow({ label, value, icon: Icon }) {
+function StatRow({ label, value, icon: Icon, tooltip }) {
     const display = value != null ? `${value}%` : "—%"
     return (
         <div className="flex items-center justify-between py-2.5 border-b border-border/30 last:border-0">
             <div className="flex items-center gap-2">
                 {Icon && <Icon className="w-3.5 h-3.5 text-muted-foreground" />}
-                <span className="text-sm text-foreground">{label}</span>
+                {tooltip ? (
+                    <TooltipProvider delayDuration={150}>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <span className="text-sm text-foreground flex items-center gap-1.5 cursor-help underline decoration-dashed underline-offset-4 decoration-border">
+                                    {label}
+                                    <Info className="w-3.5 h-3.5 text-muted-foreground" />
+                                </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p className="w-[200px] text-xs leading-relaxed">{tooltip}</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+                ) : (
+                    <span className="text-sm text-foreground">{label}</span>
+                )}
             </div>
             <span className={cn(
                 "text-sm font-bold tabular-nums",
@@ -527,12 +545,36 @@ export default function MatchDetailPage() {
             {/* Marchés — PREMIUM */}
             <PremiumSection title="Marchés & Statistiques" icon={Target}>
                 <div className="space-y-0">
-                    <StatRow label="Les deux équipes marquent (BTTS)" value={proba_btts} />
-                    <StatRow label="Plus de 0.5 buts" value={proba_over_05} />
-                    <StatRow label="Plus de 1.5 buts" value={proba_over_15} />
-                    <StatRow label="Plus de 2.5 buts" value={proba_over_25} />
-                    <StatRow label="Plus de 3.5 buts" value={proba_over_35} />
-                    <StatRow label="But sur penalty" value={proba_penalty} />
+                    <StatRow
+                        label="Les deux équipes marquent (BTTS)"
+                        value={proba_btts}
+                        tooltip="Probabilité que l'équipe à domicile ET l'équipe à l'extérieur marquent au moins un but (Both Teams To Score)."
+                    />
+                    <StatRow
+                        label="Plus de 0.5 buts"
+                        value={proba_over_05}
+                        tooltip="Probabilité d'avoir au moins 1 but au total dans le match."
+                    />
+                    <StatRow
+                        label="Plus de 1.5 buts"
+                        value={proba_over_15}
+                        tooltip="Probabilité d'avoir au moins 2 buts au total dans le match."
+                    />
+                    <StatRow
+                        label="Plus de 2.5 buts"
+                        value={proba_over_25}
+                        tooltip="Probabilité d'avoir au moins 3 buts au total dans le match. Souvent appelé 'Over 2.5'."
+                    />
+                    <StatRow
+                        label="Plus de 3.5 buts"
+                        value={proba_over_35}
+                        tooltip="Probabilité d'avoir au moins 4 buts au total dans le match."
+                    />
+                    <StatRow
+                        label="But sur penalty"
+                        value={proba_penalty}
+                        tooltip="Probabilité qu'au moins un but soit marqué sur penalty pendant le temps réglementaire."
+                    />
                 </div>
             </PremiumSection>
 

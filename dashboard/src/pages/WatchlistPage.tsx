@@ -102,9 +102,14 @@ function SportSection({ title, emoji, starredList, favTeamMatches, loading, togg
                         <div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin mx-auto" />
                     </div>
                 ) : !hasContent ? (
-                    <div className="py-8 text-center text-muted-foreground px-4">
-                        <Star className="w-7 h-7 mx-auto mb-2 opacity-20" />
-                        <p className="text-sm">Aucun match {title.toLowerCase()} étoilé aujourd'hui</p>
+                    <div className="flex flex-col items-center justify-center py-16 text-center px-4">
+                        <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                            <Star className="w-6 h-6 text-primary" />
+                        </div>
+                        <h4 className="font-bold text-base mb-1">Aucun Favori {title}</h4>
+                        <p className="text-xs text-muted-foreground leading-relaxed max-w-[240px]">
+                            Cliquez sur l'étoile d'un match pour l'ajouter ici et suivre facilement vos prédictions préférées.
+                        </p>
                     </div>
                 ) : (
                     <>
