@@ -15,9 +15,9 @@ const standardRetry = {
 // ─── Task 1: Monitor Halftime (48 min) ─────────────────────────
 export const monitorHalftime = task({
     id: "monitor-halftime",
-    
+
     retry: standardRetry,
-run: async (payload: { fixture_id: string; start_date: string }) => {
+    run: async (payload: { fixture_id: string; start_date: string }) => {
         const startTime = new Date(payload.start_date);
 
         // Wait until 48 minutes after kickoff (halftime buffer)
@@ -47,9 +47,9 @@ run: async (payload: { fixture_id: string; start_date: string }) => {
 // ─── Task 2: Monitor 70th Minute ────────────────────────────────
 export const monitor70thMinute = task({
     id: "monitor-70th-minute",
-    
+
     retry: standardRetry,
-run: async (payload: { fixture_id: string; start_date: string }) => {
+    run: async (payload: { fixture_id: string; start_date: string }) => {
         const startTime = new Date(payload.start_date);
         const seventyMinTime = new Date(startTime.getTime() + 70 * 60 * 1000);
 
@@ -72,13 +72,23 @@ run: async (payload: { fixture_id: string; start_date: string }) => {
     },
 });
 
-// ─── Task 3: Schedule Daily Matches (CRON 08:00) ──────────────
+// ─── Task 3: Schedule Daily Matches & NHL Eval (CRON 08:00) ──────────────
 export const scheduleDailyMatches = schedules.task({
     id: "schedule-daily-matches",
-    
+
     retry: standardRetry,
-cron: "0 8 * * *",
+    cron: "0 8 * * *",
     run: async () => {
+        // 1. NHL Evaluate
+        const nhlRes = await fetch(`${API_URL}/api/trigger/nhl-evaluate-performance`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${CRON_SECRET}`
+            },
+        });
+        if (!nhlRes.ok) console.error(`NHL evaluation failed: ${nhlRes.statusText}`);
+
         const res = await fetch(`${API_URL}/api/trigger/daily-matches`, {
             headers: { "Authorization": `Bearer ${CRON_SECRET}` }
         });
@@ -106,35 +116,69 @@ cron: "0 8 * * *",
     },
 });
 
-// ─── Task 4: Update Live Scores (CRON every 5 min, 12h-23h) ───
-export const updateLiveScores = schedules.task({
-    id: "update-live-scores",
-    
-    retry: standardRetry,
-cron: "* 11-23 * * *",  // Every 1 min, 12h-00h Paris (11h-23h UTC)
-    run: async () => {
-        const res = await fetch(`${API_URL}/api/trigger/update-live-scores`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${CRON_SECRET}`
-            },
-        });
+// ─── Task 4: Global Minutely Scheduler (Live Scores & Momentum) ───
+export const globalMinutelyScheduler = schedules.task({
+    id: "global-minutely-scheduler",
 
-        if (!res.ok) {
-            throw new Error(`Failed to update live scores: ${res.statusText}`);
+    retry: standardRetry,
+    cron: "* * * * *",  // Every 1 min, 24/7
+    run: async () => {
+        const now = new Date();
+        const hour = now.getUTCHours();
+        const min = now.getUTCMinutes();
+
+        let promises: Promise<Response>[] = [];
+
+        // 1. Football Live Scores (11h-23h UTC)
+        if (hour >= 11 && hour <= 23) {
+            promises.push(
+                fetch(`${API_URL}/api/trigger/update-live-scores`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${CRON_SECRET}`
+                    }
+                })
+            );
         }
 
-        return await res.json();
+        // 2. Football Momentum (Every 5 mins)
+        if (min % 5 === 0) {
+            promises.push(
+                fetch(`${API_URL}/api/trigger/football-momentum`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${CRON_SECRET}`
+                    }
+                })
+            );
+        }
+
+        // 3. NHL Live Scores (16h-08h UTC) => hour >= 16 || hour <= 8
+        if (hour >= 16 || hour <= 8) {
+            promises.push(
+                fetch(`${API_URL}/api/trigger/nhl-update-live-scores`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${CRON_SECRET}`
+                    }
+                })
+            );
+        }
+
+        await Promise.allSettled(promises);
+        return { scheduled_jobs_ran: promises.length };
     },
 });
 
 // ─── Task 4b: Fetch H-1 Lineups (CRON every 15 min, 10h-22h UTC) ──
 export const fetchLineups = schedules.task({
     id: "fetch-lineups",
-    
+
     retry: standardRetry,
-cron: "*/15 10-22 * * *",  // Every 15 min to catch H-1 for any kickoff
+    cron: "*/15 10-22 * * *",  // Every 15 min to catch H-1 for any kickoff
     run: async () => {
         const res = await fetch(`${API_URL}/api/trigger/fetch-lineups`, {
             method: "POST",
@@ -152,13 +196,28 @@ cron: "*/15 10-22 * * *",  // Every 15 min to catch H-1 for any kickoff
     },
 });
 
-// ─── Task 5: Run Daily Pipeline (CRON 06:00) ──────────────────
+// ─── Task 5: Run Daily Pipeline & Reflection (CRON 06:00) ──────────────────
 export const runDailyPipeline = schedules.task({
     id: "run-daily-pipeline",
-    
+
     retry: standardRetry,
-cron: "0 6 * * *",  // Every day at 06:00 UTC
+    cron: "0 6 * * *",  // Every day at 06:00 UTC
     run: async () => {
+        // 1. Run Reflection Engine First
+        const reflectionRes = await fetch(`${API_URL}/api/trigger/run-reflection`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${CRON_SECRET}`
+            },
+        });
+
+        if (!reflectionRes.ok) {
+            console.error(`Reflection failed: ${reflectionRes.statusText}`);
+            // We do not throw to ensure the pipeline still runs
+        }
+
+        // 2. Run Daily Pipeline
         const res = await fetch(`${API_URL}/api/trigger/run-daily-pipeline`, {
             method: "POST",
             headers: {
@@ -175,14 +234,21 @@ cron: "0 6 * * *",  // Every day at 06:00 UTC
     },
 });
 
-// ─── Task 6: Detect Value Bets (CRON 10:00) ───────────────────
+// ─── Task 6: Detect Value Bets (Football & NHL) ───────────────────
 export const detectValueBets = schedules.task({
     id: "detect-value-bets",
-    
+
     retry: standardRetry,
-cron: "0 10 * * *",  // Every day at 10:00 UTC (after pipeline)
+    cron: "0 10,15 * * *",  // Runs at 10:00 (Football) and 15:00 (NHL)
     run: async () => {
-        const res = await fetch(`${API_URL}/api/trigger/detect-value-bets`, {
+        const hour = new Date().getUTCHours();
+        let endpoint = "detect-value-bets"; // Football
+
+        if (hour === 15) {
+            endpoint = "nhl-value-bets";
+        }
+
+        const res = await fetch(`${API_URL}/api/trigger/${endpoint}`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
@@ -201,9 +267,9 @@ cron: "0 10 * * *",  // Every day at 10:00 UTC (after pipeline)
 // ─── Task 7: Daily Recap (CRON 23:30) ─────────────────────────
 export const dailyRecap = schedules.task({
     id: "daily-recap",
-    
+
     retry: standardRetry,
-cron: "30 23 * * *",  // Every day at 23:30 UTC
+    cron: "30 23 * * *",  // Every day at 23:30 UTC
     run: async () => {
         const res = await fetch(`${API_URL}/api/trigger/daily-recap`, {
             method: "POST",
@@ -228,9 +294,9 @@ cron: "30 23 * * *",  // Every day at 23:30 UTC
 // ─── Task 8: NHL Pipeline (CRON 09:00 UTC = 10h Paris) ────────
 export const nhlRunPipeline = schedules.task({
     id: "nhl-run-pipeline",
-    
+
     retry: standardRetry,
-cron: "0 9 * * *",  // 09:00 UTC = 10h Paris
+    cron: "0 9 * * *",  // 09:00 UTC = 10h Paris
     run: async () => {
         const res = await fetch(`${API_URL}/api/trigger/nhl-run-pipeline`, {
             method: "POST",
@@ -248,81 +314,17 @@ cron: "0 9 * * *",  // 09:00 UTC = 10h Paris
     },
 });
 
-// ─── Task 9: NHL Value Bets (CRON 15:00 UTC = 16h Paris) ──────
-export const nhlDetectValueBets = schedules.task({
-    id: "nhl-detect-value-bets",
-    
-    retry: standardRetry,
-cron: "0 15 * * *",  // 15:00 UTC = 16h Paris
-    run: async () => {
-        const res = await fetch(`${API_URL}/api/trigger/nhl-value-bets`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${CRON_SECRET}`
-            },
-        });
 
-        if (!res.ok) {
-            throw new Error(`NHL value bets failed: ${res.statusText}`);
-        }
 
-        return await res.json();
-    },
-});
 
-// ─── Task 9: NHL Live Scores (CRON every 2 min, 16h-08h UTC) ──
-export const nhlUpdateLiveScores = schedules.task({
-    id: "nhl-update-live-scores",
-    
-    retry: standardRetry,
-cron: "* 16,17,18,19,20,21,22,23,0,1,2,3,4,5,6,7,8 * * *",  // 17h-09h Paris
-    run: async () => {
-        const res = await fetch(`${API_URL}/api/trigger/nhl-update-live-scores`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${CRON_SECRET}`
-            },
-        });
 
-        if (!res.ok) {
-            throw new Error(`NHL live scores failed: ${res.statusText}`);
-        }
-
-        return await res.json();
-    },
-});
-
-// ─── Task 10: NHL Performance Evaluation (CRON daily at 08h UTC / 10h Paris) ──
-export const nhlEvaluatePerformance = schedules.task({
-    id: "nhl-evaluate-performance",
-    
-    retry: standardRetry,
-cron: "0 8 * * *",
-    run: async () => {
-        const res = await fetch(`${API_URL}/api/trigger/nhl-evaluate-performance`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${CRON_SECRET}`
-            },
-        });
-
-        if (!res.ok) {
-            throw new Error(`NHL performance evaluation failed: ${res.statusText}`);
-        }
-
-        return await res.json();
-    },
-});
 
 // ─── Task 11: NHL ML Training Reminder ──────────────────────
 export const nhlMlReminder = task({
     id: "nhl-ml-reminder",
-    
+
     retry: standardRetry,
-run: async () => {
+    run: async () => {
         // Automatically checkpoint and wait for 14 days
         await wait.for({ days: 14 });
 
@@ -345,9 +347,9 @@ run: async () => {
 // ─── Task 11: NHL Fetch Odds (CRON 22:00 UTC = 23h Paris) ─────
 export const nhlFetchOdds = schedules.task({
     id: "nhl-fetch-odds",
-    
+
     retry: standardRetry,
-cron: "0 22 * * *",
+    cron: "0 22 * * *",
     run: async () => {
         const res = await fetch(`${API_URL}/api/trigger/nhl-fetch-odds`, {
             method: "POST",
@@ -365,27 +367,6 @@ cron: "0 22 * * *",
     },
 });
 
-// ─── Task 12: Football Live Momentum Tracker (CRON Every 5 Mins)
-export const footballMomentumTracker = schedules.task({
-    id: "football-momentum-tracker",
-    
-    retry: standardRetry,
-cron: "*/5 * * * *",
-    run: async () => {
-        const res = await fetch(`${API_URL}/api/trigger/football-momentum`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${CRON_SECRET}`
-            },
-        });
 
-        if (!res.ok) {
-            throw new Error(`Football momentum tracker failed: ${res.statusText}`);
-        }
-
-        return await res.json();
-    },
-});
 
 

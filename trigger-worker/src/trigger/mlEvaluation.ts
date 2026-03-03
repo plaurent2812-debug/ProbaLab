@@ -1,4 +1,4 @@
-import { schedules } from "@trigger.dev/sdk/v3";
+import { schedules, wait } from "@trigger.dev/sdk/v3";
 
 export const mlEvaluationTask = schedules.task({
     id: "ml-evaluation-daily",
@@ -27,13 +27,36 @@ export const mlEvaluationTask = schedules.task({
                 throw new Error(`API returned ${response.status}: ${text}`);
             }
 
-            const data = await response.json();
-            console.log("[ML Evaluation] Success:", data);
+            const evalData = await response.json();
+            console.log("[ML Evaluation] Success:", evalData);
+
+            // ML Retrain (Runs Weekly on Saturdays at 05:00 UTC)
+            // By putting it here we save 1 cron schedule
+            const now = new Date();
+            if (now.getUTCDay() === 6) { // 6 = Saturday
+                console.log("[MLOps] Starting weekly continuous training round");
+                
+                await wait.for({ minutes: 60 }); // Wait until 05:00 UTC
+                
+                const trainResponse = await fetch(`${API_URL}/api/trigger/retrain-models`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${CRON_SECRET}`,
+                    },
+                });
+
+                if (!trainResponse.ok) {
+                    console.error(`API returned ${trainResponse.status} for retrain`);
+                } else {
+                    console.log("[MLOps] Success:", await trainResponse.json());
+                }
+            }
 
             return {
                 success: true,
                 evaluatedAt: new Date().toISOString(),
-                apiResponse: data,
+                evalApiResponse: evalData,
             };
         } catch (error) {
             console.error("[ML Evaluation] Failed to run evaluate-performance:", error);
