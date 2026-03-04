@@ -188,7 +188,6 @@ function BottomNav() {
     { to: "/", label: "Tous", icon: LayoutGrid, exact: true },
     { to: "/football", label: "Direct", icon: Radio },
     { to: "/watchlist", label: "Favoris", icon: Star },
-    { to: "/nhl", label: "NHL", icon: NHLIcon },
     { to: "/premium", label: "Premium", icon: Trophy },
   ]
 

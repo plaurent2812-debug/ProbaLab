@@ -63,17 +63,6 @@ function MatchRow({ match, isStarred, onToggleStar }) {
     const isHot = pred?.confidence_score >= 7 && !isFinished
     const hasScore = isFinished || isLive
 
-    // Goal events
-    const events = (match.events_json || []).filter(e => {
-        if (!e.player) return false
-        if (e.comments === 'Penalty Shootout') return false
-        if (e.time >= 120 && !e.extra_time) return false
-        return true
-    })
-    const homeEvents = events.filter(e => e.team === match.home_team)
-    const awayEvents = events.filter(e => e.team === match.away_team)
-    const hasEvents = hasScore && events.length > 0
-
     return (
         <div
             className="fs-match-row"
@@ -96,11 +85,6 @@ function MatchRow({ match, isStarred, onToggleStar }) {
             <div className="fs-match-teams">
                 {/* Home */}
                 <div className="flex-1 flex items-center gap-1.5 min-w-0 justify-end">
-                    {hasEvents && homeEvents.length > 0 && (
-                        <span className="text-[9px] text-muted-foreground truncate hidden sm:inline">
-                            {homeEvents.map(e => `${e.player} ${e.time}'`).join(', ')}
-                        </span>
-                    )}
                     <span className={cn("fs-team-name text-right", homeWon && "winner")}>
                         {match.home_team}
                     </span>
@@ -140,11 +124,6 @@ function MatchRow({ match, isStarred, onToggleStar }) {
                     <span className={cn("fs-team-name", awayWon && "winner")}>
                         {match.away_team}
                     </span>
-                    {hasEvents && awayEvents.length > 0 && (
-                        <span className="text-[9px] text-muted-foreground truncate hidden sm:inline">
-                            {awayEvents.map(e => `${e.player} ${e.time}'`).join(', ')}
-                        </span>
-                    )}
                 </div>
             </div>
 
