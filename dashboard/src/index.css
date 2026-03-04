@@ -132,26 +132,45 @@
     overscroll-behavior: none;
   }
 
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     font-feature-settings: 'cv11', 'ss01';
     letter-spacing: -0.02em;
   }
 }
 
 /* ── Scrollbar (thin) ──────────────────────────────────────── */
-::-webkit-scrollbar { width: 4px; height: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 ::-webkit-scrollbar-thumb {
   background: hsl(var(--border));
   border-radius: 999px;
 }
+
 ::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--muted-foreground) / 0.4);
 }
 
 /* ── Hide scrollbar for date bar ───────────────────────────── */
-.scrollbar-hide::-webkit-scrollbar { display: none; }
-.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
 
 /* ══════════════════════════════════════════════════════════════
    FlashScore-style components
@@ -167,7 +186,10 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
-.fs-date-bar::-webkit-scrollbar { display: none; }
+
+.fs-date-bar::-webkit-scrollbar {
+  display: none;
+}
 
 .fs-date-item {
   flex-shrink: 0;
@@ -187,24 +209,29 @@
   min-width: 56px;
   user-select: none;
 }
+
 .fs-date-item:hover {
   color: hsl(var(--foreground));
   background: hsl(var(--fs-row-hover));
 }
+
 .fs-date-item.active {
   color: hsl(var(--primary));
   border-bottom-color: hsl(var(--primary));
   font-weight: 700;
 }
+
 .fs-date-item .date-day {
   font-size: 0.65rem;
   font-weight: 500;
   opacity: 0.7;
   margin-bottom: 1px;
 }
+
 .fs-date-item.active .date-day {
   opacity: 1;
 }
+
 .fs-date-item .date-num {
   font-size: 0.75rem;
   font-weight: 700;
@@ -222,9 +249,11 @@
   user-select: none;
   transition: background 0.15s ease;
 }
+
 .fs-league-header:hover {
   background: hsl(var(--fs-row-hover));
 }
+
 .fs-league-country {
   font-size: 0.65rem;
   font-weight: 600;
@@ -232,11 +261,13 @@
   color: hsl(var(--muted-foreground));
   letter-spacing: 0.05em;
 }
+
 .fs-league-name {
   font-size: 0.8rem;
   font-weight: 700;
   color: hsl(var(--foreground));
 }
+
 .fs-league-count {
   margin-left: auto;
   display: inline-flex;
@@ -251,6 +282,7 @@
   background: hsl(var(--muted));
   color: hsl(var(--muted-foreground));
 }
+
 .fs-league-count.has-live {
   background: hsl(var(--fs-live) / 0.15);
   color: hsl(var(--fs-live));
@@ -267,7 +299,11 @@
   min-height: 40px;
   gap: 6px;
 }
-.fs-match-row:last-child { border-bottom: none; }
+
+.fs-match-row:last-child {
+  border-bottom: none;
+}
+
 .fs-match-row:hover {
   background: hsl(var(--fs-row-hover));
 }
@@ -285,10 +321,12 @@
 .fs-match-teams {
   flex: 1;
   min-width: 0;
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 6px;
 }
+
 .fs-team-name {
   flex: 1;
   min-width: 0;
@@ -299,6 +337,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
 .fs-team-name.winner {
   font-weight: 700;
   color: hsl(var(--foreground));
@@ -316,6 +355,7 @@
   font-variant-numeric: tabular-nums;
   padding: 2px 0;
 }
+
 .fs-score-box .score-val {
   width: 20px;
   height: 22px;
@@ -326,9 +366,11 @@
   border-radius: 3px;
   font-size: 0.75rem;
 }
+
 .fs-score-box .score-val.winner {
   color: hsl(var(--primary));
 }
+
 .fs-score-box.live .score-val {
   background: hsl(var(--fs-live) / 0.12);
   color: hsl(var(--fs-live));
@@ -350,8 +392,15 @@
 }
 
 @keyframes live-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.6;
+  }
 }
 
 /* ── Prediction chip (compact) ─────────────────────────────── */
@@ -382,6 +431,7 @@
   padding-bottom: env(safe-area-inset-bottom, 0px);
   height: 56px;
 }
+
 .fs-bottom-nav-item {
   flex: 1;
   display: flex;
@@ -397,10 +447,12 @@
   text-decoration: none;
   -webkit-tap-highlight-color: transparent;
 }
+
 .fs-bottom-nav-item:hover,
 .fs-bottom-nav-item.active {
   color: hsl(var(--primary));
 }
+
 .fs-bottom-nav-item svg {
   width: 20px;
   height: 20px;
@@ -418,6 +470,7 @@
   font-weight: 700;
   color: hsl(var(--foreground));
 }
+
 .fs-summary-badge {
   display: inline-flex;
   align-items: center;
@@ -446,6 +499,7 @@
   border: none;
   padding: 0;
 }
+
 .fs-star-btn:hover {
   background: hsl(var(--accent));
 }
@@ -454,24 +508,48 @@
 .flame-badge {
   animation: flame-pulse 2s ease-in-out infinite;
 }
+
 @keyframes flame-pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.15); }
+
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.15);
+  }
 }
 
 /* ── Animations ────────────────────────────────────────────── */
 @keyframes fade-in-up {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
+
 .animate-fade-in-up {
   animation: fade-in-up 0.3s ease-out both;
 }
 
 @keyframes slide-in-left {
-  from { opacity: 0; transform: translateX(-12px); }
-  to   { opacity: 1; transform: translateX(0); }
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
+
 .animate-slide-in-left {
   animation: slide-in-left 0.3s ease-out both;
 }
@@ -492,11 +570,12 @@
 /* ── Glow effects ──────────────────────────────────────────── */
 .glow-primary {
   box-shadow: 0 0 24px hsl(var(--primary) / 0.15),
-              0 0 60px hsl(var(--primary) / 0.05);
+    0 0 60px hsl(var(--primary) / 0.05);
 }
+
 .glow-card {
   box-shadow: 0 2px 12px hsl(var(--primary) / 0.06),
-              0 1px 3px hsl(var(--foreground) / 0.03);
+    0 1px 3px hsl(var(--foreground) / 0.03);
 }
 
 /* ── Gradient text ─────────────────────────────────────────── */
@@ -532,6 +611,7 @@
 .match-card {
   transition: all 0.15s ease;
 }
+
 .match-card:hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 16px hsl(var(--primary) / 0.08);
