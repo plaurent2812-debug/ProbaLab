@@ -19,6 +19,7 @@ from google import genai
 from google.genai import types
 from src.models.scorer_engine import predict_scorers
 from src.models.stats_engine import analyze_match, update_elo_from_results
+from src.pipeline.inference import predict_meta_1x2
 
 # ── Client Gemini ─────────────────────────────────────────────
 if not GEMINI_API_KEY:
@@ -338,23 +339,29 @@ def blend_predictions(stats_result: dict, ai_result: AIFeatures | None) -> dict:
     final["correct_score"] = stats_result.get("correct_score")
     final["proba_correct_score"] = stats_result.get("proba_correct_score")
     
-    # Indiquer la version (features_v1 = Phase 1 de la refonte)
-    final["model_version"] = "features_v1"
-
-    # Kelly / value bet fields from stats engine
-    final["kelly_edge"] = stats_result.get("kelly_edge")
-    final["kelly_fraction"] = stats_result.get("kelly_fraction")
-    final["value_bet"] = stats_result.get("value_bet", False)
-
     # Intégrer les AI Features si présentes
+    ai_features_dict = {}
     if ai_result:
-        final["ai_features"] = ai_result.model_dump()
+        ai_features_dict = ai_result.model_dump()
+        final["ai_features"] = ai_features_dict
         final["analysis_text"] = ai_result.analysis_text
         final["likely_scorer"] = ai_result.likely_scorer
         final["likely_scorer_reason"] = ai_result.likely_scorer_reason
     else:
         final["ai_features"] = {}
         final["analysis_text"] = f"Analyse stats uniquement. xG: {stats_result.get('xg_home')}-{stats_result.get('xg_away')}."
+
+    # Interroger le Meta-Modèle XGBoost (Phase 2)
+    meta_preds = predict_meta_1x2(stats_result, ai_features_dict)
+    if meta_preds:
+        # Override les probabilités avec celles de XGBoost
+        final["proba_home"] = meta_preds["proba_home_meta"]
+        final["proba_draw"] = meta_preds["proba_draw_meta"]
+        final["proba_away"] = meta_preds["proba_away_meta"]
+        final["model_version"] = "meta_v1"
+    else:
+        # Indiquer la version (features_v1 = Phase 1 de la refonte)
+        final["model_version"] = "features_v1"
 
     # Pour l'instant on reprend la recommandation 100% issue des stats (Phase 1)
     final["recommended_bet"] = stats_result.get("recommended_bet", "")
