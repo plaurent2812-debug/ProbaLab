@@ -227,37 +227,35 @@ Marché →  Dom: {market.get("market_home", "?")}%  |  Nul: {market.get("market
         for i, l in enumerate(learnings, 1):
             learnings_block += f"{i}. {l}\n"
 
-    system_prompt = f"""Tu es un expert en paris sportifs renommé.
+    system_prompt = f"""Tu es un expert en paris sportifs renommé et un analyste tactique de haut niveau.
 Tu reçois des données statistiques avancées issues de nos modèles.
-Ta mission : rédiger une analyse brève, percutante et orientée parieur.{learnings_block}
+Ta mission : extraire des "features" quantitatives (-1.0 à 1.0) évaluant le contexte qualitatif du match.{learnings_block}
 
-CONSIGNES DE RÉDACTION :
-- Ton audience est constituée de parieurs, pas de data scientists.
-- NE MENTIONNE JAMAIS les termes techniques comme "Poisson", "ELO", "Dixon-Coles", "Modèle mathématique".
-- Utilise des termes de parieur : "Dynamique", "Forme", "Avantage", "Value", "Contexte".
-- Sois direct et convaincant.
+CONSIGNES STRICTES :
+- Analyse le contexte global (enjeu, blessures, météo, style).
+- Quantifie chaque dimension requise entre -1.0 et 1.0. 
+  * 1.0 = Extrême positif / Impact total
+  * 0.0 = Neutre / Équilibré
+  * -1.0 = Extrême négatif / Désastreux
+- Rédige une analyse brève (3-5 phrases) justifiant tes scores.
+- Évite le jargon de data scientist (ELO, Poisson), utilise des termes de scouting/football.
 
-IMPORTANT : Réponds UNIQUEMENT avec un objet JSON valide, sans texte avant ni après.
+IMPORTANT : Réponds UNIQUEMENT avec un objet JSON valide respectant SCRUPULEUSEMENT cette structure, sans texte avant ni après :
 {{
-        "proba_home": int (0-100),
-  "proba_draw": int (0-100),
-  "proba_away": int (0-100),
-  "proba_btts": int (0-100),
-  "proba_over_2_5": int (0-100),
-  "analysis_text": "Analyse narrative de 3-5 phrases. Parle de la forme des équipes, des blessés clés ou de l'enjeu. Ne dis pas 'le modèle prédit', dis 'L'équipe X semble avantagée car...'.",
-  "recommended_bet": "Le pari à plus forte value (ex: 'BTTS Oui', 'Victoire Domicile', 'Plus de 2.5 buts')",
-  "confidence_score": int (1-10),
-  "likely_scorer": "Nom du buteur le plus probable",
-  "likely_scorer_reason": "Explication en 1-2 phrases de pourquoi ce joueur est le plus susceptible de marquer (forme récente, historique face à cet adversaire, position, stats de tirs/xG)",
-  "adjustment_reason": "Si tu ajustes les probas du modèle, explique pourquoi en 1 phrase."
+  "motivation_score": float (-1.0 à 1.0),
+  "media_pressure": float (-1.0 à 1.0),
+  "injury_tactical_impact": float (-1.0 à 1.0, 1.0 avantage Domicile, -1.0 avantage Extérieur),
+  "cohesion_score": float (-1.0 à 1.0),
+  "style_risk": float (-1.0 à 1.0, 1.0 ultra-offensif attendu, -1.0 bus défensif),
+  "analysis_text": "Analyse narrative de 3-5 phrases expliquant ces notes.",
+  "likely_scorer": "Nom du buteur probable ou null",
+  "likely_scorer_reason": "Pourquoi ce joueur, ou null"
 }}"""
 
     user_prompt = f"""{data_block}
 
-En te basant sur ces données statistiques ET ton expertise football, génère ton analyse.
-Si les stats du modèle te semblent correctes, garde les probabilités proches.
-Si tu identifies un facteur qualitatif non capturé (derby, pression, historique particulier), ajuste en expliquant pourquoi.
-Reste réaliste et cohérent avec les données."""
+En te basant sur ces données statistiques ET ton expertise football, extrais tes évaluations sous forme de features JSON quantifiées entre -1.0 et 1.0. 
+Concentre-toi sur l'intangible que les chiffres purs (xG, cotes) montrent mal : la pression mentale, la désorganisation tactique liée aux blessés, ou l'urgence de résultat."""
 
     return system_prompt, user_prompt
 
@@ -300,60 +298,27 @@ def ask_gemini(system_prompt: str, user_prompt: str) -> str | None:
 # ═══════════════════════════════════════════════════════════════════
 
 
-def blend_predictions(stats_result: dict, ai_result: dict | None) -> dict:
-    """Blend statistical and AI probability predictions with dynamic weights.
+def blend_predictions(stats_result: dict, ai_result: AIFeatures | None) -> dict:
+    """Blend structural logic. (Temporarily pure stats in Phase 1).
 
-    B2: Instead of fixed 70/30 weights, dynamically adjusts based on:
-    - AI confidence score (higher → more AI weight)
-    - Convergence between models (agreement → more total confidence)
-    - Stats spread (dominant outcome → trust stats more)
+    Phase 1: Gemini output is now pure features (no probabilities).
+    The prediction is currently 100% statistical. AI features are saved
+    in the payload for future ML training.
 
     Args:
         stats_result: Probabilities and metadata from the statistical
             engine (Poisson + ELO model).
-        ai_result: Parsed JSON from Claude's response, or ``None`` when
-            the AI call failed or returned invalid JSON.
+        ai_result: Parsed AIFeatures from Gemini's response, or ``None``.
 
     Returns:
         Merged prediction dict ready for database insertion.
     """
-    fields_to_blend = ["proba_home", "proba_draw", "proba_away", "proba_btts", "proba_over_25"]
-
-    # B2: Dynamic weight calculation
-    w_stats = WEIGHT_STATS  # base: 0.70
-    w_ai = WEIGHT_AI  # base: 0.30
-
-    if ai_result:
-        ai_conf = ai_result.get("confidence_score", 5)
-        stats_spread = max(
-            stats_result.get("proba_home", 33),
-            stats_result.get("proba_draw", 33),
-            stats_result.get("proba_away", 33),
-        ) - min(
-            stats_result.get("proba_home", 33),
-            stats_result.get("proba_draw", 33),
-            stats_result.get("proba_away", 33),
-        )
-
-        # High AI confidence → shift weight toward AI (max +10%)
-        if ai_conf >= 8:
-            w_ai = min(0.40, WEIGHT_AI + 0.10)
-        elif ai_conf >= 6:
-            w_ai = min(0.35, WEIGHT_AI + 0.05)
-        elif ai_conf <= 3:
-            w_ai = max(0.15, WEIGHT_AI - 0.15)
-
-        # Dominant stats spread → trust stats more
-        if stats_spread > 25:
-            w_ai = max(0.20, w_ai - 0.05)
-
-        w_stats = 1.0 - w_ai
-
     final = {}
-    for field in fields_to_blend:
-        s_val = stats_result.get(field, 50)
-        a_val = ai_result.get(field, s_val) if ai_result else s_val
-        final[field] = round(s_val * w_stats + a_val * w_ai)
+    
+    # Phase 1: 100% stats until Phase 2 XGBoost is ready
+    fields_to_keep = ["proba_home", "proba_draw", "proba_away", "proba_btts", "proba_over_25"]
+    for field in fields_to_keep:
+        final[field] = stats_result.get(field, 50)
 
     # Normaliser 1X2
     total = final["proba_home"] + final["proba_draw"] + final["proba_away"]
@@ -362,7 +327,7 @@ def blend_predictions(stats_result: dict, ai_result: dict | None) -> dict:
         final["proba_draw"] = round(final["proba_draw"] / total * 100)
         final["proba_away"] = 100 - final["proba_home"] - final["proba_draw"]
 
-    # Champs non blendés (directement du modèle stats ou IA)
+    # Champs annexes
     final["proba_over_05"] = stats_result.get("proba_over_05")
     final["proba_over_15"] = stats_result.get("proba_over_15")
     final["proba_over_35"] = stats_result.get("proba_over_35")
@@ -372,33 +337,28 @@ def blend_predictions(stats_result: dict, ai_result: dict | None) -> dict:
     final["proba_dc_12"] = final["proba_home"] + final["proba_away"]
     final["correct_score"] = stats_result.get("correct_score")
     final["proba_correct_score"] = stats_result.get("proba_correct_score")
-    final["model_version"] = "hybrid_v3"
+    
+    # Indiquer la version (features_v1 = Phase 1 de la refonte)
+    final["model_version"] = "features_v1"
 
     # Kelly / value bet fields from stats engine
     final["kelly_edge"] = stats_result.get("kelly_edge")
     final["kelly_fraction"] = stats_result.get("kelly_fraction")
     final["value_bet"] = stats_result.get("value_bet", False)
 
-    # Blend weights used (for audit)
-    final["blend_weights"] = {"stats": round(w_stats, 2), "ai": round(w_ai, 2)}
-
-    # Analyse et recommandation de l'IA
+    # Intégrer les AI Features si présentes
     if ai_result:
-        final["analysis_text"] = ai_result.get("analysis_text", "")
-        final["recommended_bet"] = ai_result.get(
-            "recommended_bet", stats_result.get("recommended_bet", "")
-        )
-        final["confidence_score"] = ai_result.get(
-            "confidence_score", stats_result.get("confidence_score", 5)
-        )
-        final["likely_scorer"] = ai_result.get("likely_scorer")
-        final["likely_scorer_reason"] = ai_result.get("likely_scorer_reason")
+        final["ai_features"] = ai_result.model_dump()
+        final["analysis_text"] = ai_result.analysis_text
+        final["likely_scorer"] = ai_result.likely_scorer
+        final["likely_scorer_reason"] = ai_result.likely_scorer_reason
     else:
-        final["analysis_text"] = (
-            f"Analyse stats uniquement. xG: {stats_result.get('xg_home')}-{stats_result.get('xg_away')}."
-        )
-        final["recommended_bet"] = stats_result.get("recommended_bet", "")
-        final["confidence_score"] = stats_result.get("confidence_score", 5)
+        final["ai_features"] = {}
+        final["analysis_text"] = f"Analyse stats uniquement. xG: {stats_result.get('xg_home')}-{stats_result.get('xg_away')}."
+
+    # Pour l'instant on reprend la recommandation 100% issue des stats (Phase 1)
+    final["recommended_bet"] = stats_result.get("recommended_bet", "")
+    final["confidence_score"] = stats_result.get("confidence_score", 5)
 
     # Stats JSON pour audit
     final["stats_json"] = {
@@ -536,15 +496,20 @@ def run_brain() -> None:
             scorers = None
 
         # ── C. Analyse IA ────────────────────────────────────────
-        logger.info("   🧠 Analyse Claude...")
+        logger.info("   🧠 Analyse Gemini...")
         system_prompt, user_prompt = build_prompt(fix, stats_result, scorers)
-        ai_text = ask_claude(system_prompt, user_prompt)
-        ai_result = extract_json(ai_text) if ai_text else None
+        ai_text = ask_gemini(system_prompt, user_prompt)
+        ai_result_dict = extract_json(ai_text) if ai_text else None
 
-        if ai_result:
-            logger.info("   ✅ Analyse Claude OK")
+        ai_result = None
+        if ai_result_dict:
+            try:
+                ai_result = AIFeatures.model_validate(ai_result_dict)
+                logger.info("   ✅ Analyse Gemini OK (JSON validé)")
+            except Exception as e:
+                logger.warning("   ⚠️ JSON invalide pour AIFeatures: %s", e)
         else:
-            logger.warning("   ⚠️ JSON invalide, stats uniquement")
+            logger.warning("   ⚠️ JSON introuvable, stats uniquement")
 
         # ── D. Fusion ────────────────────────────────────────────
         try:
@@ -613,8 +578,9 @@ def run_brain() -> None:
                 "confidence_score": final.get("confidence_score", 5),
                 "likely_scorer": final.get("likely_scorer"),
                 "likely_scorer_proba": final.get("likely_scorer_proba"),
-                "model_version": "v1",
+                "model_version": "v1",  # Reset à v1 en DB d'après la phase 0
                 "stats_json": final.get("stats_json"),
+                "ai_features": final.get("ai_features", {}),  # Nouveau champ
             }
 
             # Vérifier si une prédiction existe déjà pour ce match et ce modèle
