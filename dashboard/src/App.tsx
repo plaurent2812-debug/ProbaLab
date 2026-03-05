@@ -71,7 +71,7 @@ function Header() {
   const navigate = useNavigate()
   const location = useLocation()
 
-  const isFootball = location.pathname.startsWith('/football') || location.pathname === '/'
+  const isFootball = location.pathname.startsWith('/football')
   const isNHL = location.pathname.startsWith('/nhl')
 
   return (
