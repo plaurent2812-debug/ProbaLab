@@ -100,6 +100,23 @@ def _scheduled_telegram_tickets():
         print(f"[scheduler] Erreur Telegram: {e}")
 
 
+def _scheduled_nhl_pipeline():
+    """Called by APScheduler at 16h00 and 22h00 Paris — full NHL pipeline + DeepThink."""
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+        from datetime import date
+
+        from src.fetchers.nhl_pipeline import run_nhl_pipeline
+
+        print(f"[scheduler] 🏒 Pipeline NHL automatique — {date.today()}")
+        result = run_nhl_pipeline()
+        n_matches = result.get("matches", 0)
+        n_players = result.get("players_analyzed", 0)
+        print(f"[scheduler] 🏒 ✅ NHL terminé: {n_matches} matchs, {n_players} joueurs")
+    except Exception as e:
+        print(f"[scheduler] 🏒 ❌ Erreur NHL pipeline: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app_instance):
     """Start/stop APScheduler with the FastAPI app."""
@@ -136,6 +153,34 @@ async def lifespan(app_instance):
                 misfire_grace_time=600,
             )
 
+            # 🏒 NHL Pipeline — 16h00 Paris (premier scan)
+            scheduler.add_job(
+                _scheduled_nhl_pipeline,
+                trigger=CronTrigger(
+                    hour="16",
+                    minute="0",
+                    timezone=paris_tz,
+                ),
+                id="nhl_pipeline_16h",
+                name="NHL Pipeline 16h (premier scan)",
+                replace_existing=True,
+                misfire_grace_time=900,  # 15 min de tolérance
+            )
+
+            # 🏒 NHL Pipeline — 22h00 Paris (mise à jour lineups)
+            scheduler.add_job(
+                _scheduled_nhl_pipeline,
+                trigger=CronTrigger(
+                    hour="22",
+                    minute="0",
+                    timezone=paris_tz,
+                ),
+                id="nhl_pipeline_22h",
+                name="NHL Pipeline 22h (MAJ lineups)",
+                replace_existing=True,
+                misfire_grace_time=900,
+            )
+
             # Rattrapage immédiat 10s après le démarrage
             from datetime import datetime as _dt
             from datetime import timedelta as _td
@@ -148,7 +193,7 @@ async def lifespan(app_instance):
                 name="Rattrapage scores au démarrage",
             )
             scheduler.start()
-            print("[scheduler] ✅ Démarré — scores auto (18h-23h45) + rattrapage dans 10s")
+            print("[scheduler] ✅ Démarré — scores auto (18h-23h45) + NHL (16h+22h) + rattrapage dans 10s")
         except Exception as e:
             print(f"[scheduler] ⚠️  Impossible de démarrer: {e}")
             scheduler = None
