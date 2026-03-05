@@ -195,6 +195,9 @@ function NHLMatchRow({ match, isStarred, onToggleStar }) {
     const conf = match.confidence_score
     const isHot = conf >= 7 && !isFinished
 
+    // Prediction
+    const probaOver55 = match.proba_over_55
+
     return (
         <div
             className="fs-match-row"
@@ -246,20 +249,36 @@ function NHLMatchRow({ match, isStarred, onToggleStar }) {
                 </div>
             </div>
 
-            {/* Prediction */}
-            {(!isFinished && conf != null) && (
-                <div className="shrink-0 flex items-center gap-1 pl-1">
-                    {isHot && <Flame className="w-3 h-3 text-orange-500 flame-badge" />}
-                    <span className={cn(
-                        "fs-pred-chip",
-                        conf >= 8 ? "bg-emerald-500/15 text-emerald-500" :
-                            conf >= 6 ? "bg-amber-500/15 text-amber-500" :
-                                "bg-muted text-muted-foreground"
-                    )}>
-                        {conf}/10
+            {/* Tags & Prediction */}
+            <div className="shrink-0 flex items-center gap-1.5 pl-2">
+                {/* Match Style Tags */}
+                {probaOver55 != null && probaOver55 >= 57 && (
+                    <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-orange-500/15 text-orange-500 flex items-center gap-1">
+                        <Flame className="w-2.5 h-2.5" />
+                        Offensif
                     </span>
-                </div>
-            )}
+                )}
+                {probaOver55 != null && probaOver55 <= 47 && (
+                    <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-slate-500/20 text-slate-400">
+                        Défensif
+                    </span>
+                )}
+
+                {/* Confidence Score */}
+                {(!isFinished && conf != null) && (
+                    <div className="flex items-center gap-1 ml-0.5">
+                        {isHot && <Flame className="w-3 h-3 text-orange-500 flame-badge" />}
+                        <span className={cn(
+                            "fs-pred-chip",
+                            conf >= 8 ? "bg-emerald-500/15 text-emerald-500" :
+                                conf >= 6 ? "bg-amber-500/15 text-amber-500" :
+                                    "bg-muted text-muted-foreground"
+                        )}>
+                            {conf}/10
+                        </span>
+                    </div>
+                )}
+            </div>
 
             <button
                 className="fs-star-btn"
