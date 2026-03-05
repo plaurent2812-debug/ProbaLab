@@ -70,6 +70,16 @@ def build_features(player: dict[str, Any]) -> dict[str, Any]:
     pp_toi = float(player.get("pp_toi_avg") or 0)
     team_pp = float(player.get("team_pp_pct") or 0.20)
 
+    # PP TOI Share (fraction of team PP time this player plays)
+    pp_share = float(player.get("pp_share") or 0)
+    if pp_share <= 0 and pp_toi > 0:
+        # Estimate from raw PP TOI: avg team total PP is ~4min/game
+        pp_share = _clamp(pp_toi / 4.0, 0, 1.0)
+
+    # Opponent PK L10 estimate and penalty volume
+    opp_pk_l10 = float(player.get("opp_pk_l10_est") or 0.80)
+    opp_penalty_volume = float(player.get("opp_penalty_volume") or 1.0)
+
     # Back-to-back / fatigue contextualisée
     is_b2b = bool(player.get("is_back_to_back", False))
     opp_is_b2b = bool(player.get("opp_is_back_to_back", False))
@@ -106,6 +116,9 @@ def build_features(player: dict[str, Any]) -> dict[str, Any]:
         "toi_avg": toi_avg,
         "pp_toi": pp_toi,
         "team_pp": team_pp,
+        "pp_share": pp_share,
+        "opp_pk_l10": opp_pk_l10,
+        "opp_penalty_volume": opp_penalty_volume,
         "fatigue_factor": fatigue_factor,
     }
 
@@ -117,10 +130,22 @@ def compute_goal_probability(features: dict[str, Any]) -> float:
     defn = features["def_factor"]
     fatigue = features.get("fatigue_factor", 1.0)
 
-    # Bonus PP si bon jeu de puissance
+    # PP bonus: uses PP share, opponent PK L10, and opponent penalty volume
     pp_bonus = 1.0
-    if features.get("pp_toi", 0) > 3.0 and features.get("team_pp", 0) > 0.22:
-        pp_bonus = 1.05
+    pp_share = features.get("pp_share", 0)
+    opp_pk_l10 = features.get("opp_pk_l10", 0.80)
+    opp_penalty_vol = features.get("opp_penalty_volume", 1.0)
+
+    if pp_share > 0.3 and features.get("team_pp", 0) > 0.18:
+        # Base PP bonus from team PP%
+        base_pp = 1.0 + (features.get("team_pp", 0.20) - 0.20) * 0.5
+        # Scale by how bad the opponent's PK is (worse PK = bigger boost)
+        pk_weakness = 1.0 + (0.80 - opp_pk_l10) * 2.0
+        pk_weakness = _clamp(pk_weakness, 0.85, 1.30)
+        # Scale by opponent penalty volume
+        pp_bonus = base_pp * pk_weakness * _clamp(opp_penalty_vol, 0.9, 1.2)
+        # Scale by player's PP share involvement
+        pp_bonus = 1.0 + (pp_bonus - 1.0) * _clamp(pp_share, 0.1, 1.0)
 
     lam = gpg * home * defn * fatigue * pp_bonus
     raw = 1.0 - math.exp(-lam) if lam > 0 else 0.0

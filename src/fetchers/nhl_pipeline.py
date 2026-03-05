@@ -124,6 +124,8 @@ def fetch_standings() -> dict:
         gp = max(1, t.get("gamesPlayed", 1))
         ga = t.get("goalAgainst", 0)
         gf = t.get("goalFor", 0)
+        l10_gp = max(1, t.get("l10GamesPlayed", 10))
+        l10_ga = t.get("l10GoalsAgainst", 0)
         team_stats[abbrev] = {
             "gaa": round(ga / gp, 2),
             "gf_per_game": round(gf / gp, 2),
@@ -131,12 +133,100 @@ def fetch_standings() -> dict:
             "pk_pct": t.get("penaltyKillPctg", 0.80),
             "l10_pts_pct": t.get("l10PtsPctg", 0.5),
             "pk_pct": t.get("pkPctg", 80.0) / 100.0,
+            "l10_gaa": round(l10_ga / l10_gp, 2),
             "wins": t.get("wins", 0),
             "losses": t.get("losses", 0),
             "points": t.get("points", 0),
             "shots_against_per_game": t.get("shotsAgainstPerGame", 30.0),
         }
     return team_stats
+
+
+def fetch_team_special_teams() -> dict[str, dict]:
+    """Fetch advanced special teams stats from the NHL stats REST API.
+
+    Returns a dict mapping team_full_name -> {
+        pk_pct, pk_pct_l10_est, tsh_per_game,
+        pp_pct, pp_toi_seconds, pp_opportunities_per_game,
+        shots_against_per_game
+    }.
+
+    For L10 PK%, we estimate using L10 goals-against from standings
+    relative to season GAA as a modifier on season PK%.
+    """
+    NHL_STATS_API = "https://api.nhle.com/stats/rest/en"
+    stats = {}
+
+    # 1. Penalty Kill stats (season)
+    try:
+        resp = httpx.get(
+            f"{NHL_STATS_API}/team/penaltykill",
+            params={"cayenneExp": "seasonId=20252026 and gameTypeId=2"},
+            timeout=15.0,
+            follow_redirects=True,
+        )
+        if resp.status_code == 200:
+            for t in resp.json().get("data", []):
+                name = t.get("teamFullName", "")
+                stats[name] = {
+                    "pk_pct": t.get("penaltyKillPct", 0.80),
+                    "tsh_per_game": t.get("timesShorthandedPerGame", 3.0),
+                    "pk_toi_per_game": t.get("pkTimeOnIcePerGame", 240),
+                }
+    except Exception as e:
+        logger.warning(f"[NHL] Failed to fetch PK stats: {e}")
+
+    # 2. Power Play stats (season)
+    try:
+        resp = httpx.get(
+            f"{NHL_STATS_API}/team/powerplay",
+            params={"cayenneExp": "seasonId=20252026 and gameTypeId=2"},
+            timeout=15.0,
+            follow_redirects=True,
+        )
+        if resp.status_code == 200:
+            for t in resp.json().get("data", []):
+                name = t.get("teamFullName", "")
+                if name not in stats:
+                    stats[name] = {}
+                stats[name]["pp_pct"] = t.get("powerPlayPct", 0.20)
+                stats[name]["pp_toi_seconds"] = t.get("ppTimeOnIcePerGame", 240)
+                stats[name]["pp_opportunities_per_game"] = t.get(
+                    "ppOpportunitiesPerGame", 3.0
+                )
+    except Exception as e:
+        logger.warning(f"[NHL] Failed to fetch PP stats: {e}")
+
+    # 3. Summary stats (season) for shots against
+    try:
+        resp = httpx.get(
+            f"{NHL_STATS_API}/team/summary",
+            params={"cayenneExp": "seasonId=20252026 and gameTypeId=2"},
+            timeout=15.0,
+            follow_redirects=True,
+        )
+        if resp.status_code == 200:
+            for t in resp.json().get("data", []):
+                name = t.get("teamFullName", "")
+                if name not in stats:
+                    stats[name] = {}
+                stats[name]["shots_against_per_game"] = t.get(
+                    "shotsAgainstPerGame", 30.0
+                )
+    except Exception as e:
+        logger.warning(f"[NHL] Failed to fetch summary stats: {e}")
+
+    logger.info(f"[NHL] Special teams stats loaded for {len(stats)} teams")
+
+    # Convert full team names to abbreviations for compatibility
+    name_to_abbrev = {v: k for k, v in TEAM_NAMES.items()}
+    result = {}
+    for name, data in stats.items():
+        abbrev = name_to_abbrev.get(name)
+        if abbrev:
+            result[abbrev] = data
+
+    return result
 
 
 def fetch_roster(team: str) -> list[dict]:
@@ -586,6 +676,7 @@ def _score_player(
     game_script_mult: float = 1.0,
     l5_form: dict = None,
     h2h: dict = None,
+    special_teams: dict = None,
 ) -> dict:
     """Score a single player for goal, assist, point, shot probabilities.
 
@@ -638,20 +729,52 @@ def _score_player(
 
     goalie_adj = goalie_form.get(opp, {}).get("form", 0)
 
+    # ─── Special Teams Data ───
+    st = special_teams or {}
+    my_st = st.get(team, {})
+    opp_st = st.get(opp, {})
+
     # Power Play boost: good PP% of own team + bad PK% of opponent
-    my_pp = my_stats.get("pp_pct", 0.20) if my_stats else 0.20
-    opp_pk = opp_stats.get("pk_pct", 0.80) if opp_stats else 0.80
+    my_pp = my_st.get("pp_pct", my_stats.get("pp_pct", 0.20) if my_stats else 0.20)
+
+    # FEATURE 1: L10 PK% estimate — use L10 goals data to adjust season PK%
+    # If opponent's L10 GAA is worse than season GAA, their recent PK is likely worse too
+    opp_pk_season = opp_st.get("pk_pct", opp_stats.get("pk_pct", 0.80) if opp_stats else 0.80)
+    l10_gaa = opp_stats.get("l10_gaa", 0) if opp_stats else 0
+    season_gaa = opp_stats.get("gaa", 3.0) if opp_stats else 3.0
+    if l10_gaa > 0 and season_gaa > 0:
+        # If L10 GAA is 20% worse than season, estimate PK is proportionally worse
+        gaa_drift = l10_gaa / season_gaa  # >1 = defense worse recently
+        # Scale PK% inversely: worse defense = worse PK (clamped)
+        pk_l10_modifier = max(0.85, min(1.15, 2.0 - gaa_drift))
+        opp_pk = max(0.60, min(0.95, opp_pk_season * pk_l10_modifier))
+    else:
+        opp_pk = opp_pk_season
+
     team_pp_advantage = (my_pp - 0.20) * 0.5 + (0.80 - opp_pk) * 0.5  # Raw advantage
 
-    # PP1 Reliance (Only give PP boost to players who actually score on the PP)
+    # FEATURE 2: PP TOI Share — fraction of team's PP time this player gets
+    # Uses PP points as proxy for PP1 involvement
     pp_reliance = pp_points / max(1, points)
-    # If a player gets 30%+ of their points on the PP, they are a specialist. Cap at 0.5 for scaling.
-    pp_weight = min(1.0, pp_reliance / 0.30)
+    # Calculate share: player PP points / team total PP goals gives PP1 status
+    team_pp_goals = my_st.get("pp_pct", 0.20) * my_st.get("pp_opportunities_per_game", 3.0)
+    if team_pp_goals > 0 and gp > 10:
+        # Estimate player's share of team's PP production
+        player_pp_rate = pp_goals / gp
+        pp_share = min(1.0, player_pp_rate / max(0.01, team_pp_goals))
+    else:
+        pp_share = min(1.0, pp_reliance / 0.30)
 
-    # Base boost is 1.0. We add the team advantage scaled by how much this player plays on the PP (min 10% exposure)
+    # FEATURE 3: Opponent Penalties Conceded (TSH per game)
+    # More penalties by opponent = more PP opportunities = bigger PP boost
+    opp_tsh_per_game = opp_st.get("tsh_per_game", 3.0)
+    # Average is ~3.0 TSH/game. Scale the PP boost by how undisciplined the opponent is
+    opp_penalty_volume = max(0.8, min(1.4, opp_tsh_per_game / 3.0))
+
+    # Final PP boost: team advantage × player share × opponent penalty volume
     pp_boost = 1.0 + (
-        team_pp_advantage * max(0.1, pp_weight) * 2.0
-    )  # Double impact for true PP1 guys
+        team_pp_advantage * max(0.1, pp_share) * 2.0 * opp_penalty_volume
+    )
 
     # Back-to-back & 3-in-4 fatigue penalty
     b2b_penalty = fatigue_dict.get(team, 1.0)
@@ -781,6 +904,10 @@ def _score_player(
         "b2b": fatigue_dict.get(team, 1.0) < 1.0,
         "pp_boost": round(pp_boost, 3),
         "pp_reliance": round(pp_reliance, 2),
+        "pp_share": round(pp_share, 3),
+        "opp_pk_l10_est": round(opp_pk, 4),
+        "opp_tsh_per_game": round(opp_tsh_per_game, 2),
+        "opp_penalty_volume": round(opp_penalty_volume, 3),
         "fatigue_penalty": round(b2b_penalty, 2),
         "sh_pct_regression": round(sh_regress, 2),
         "l5_form": l5,
@@ -900,6 +1027,18 @@ def run_nhl_pipeline() -> dict:
     standings = fetch_standings()
     logger.info(f"[NHL] Standings chargés pour {len(standings)} équipes")
 
+    # 2b. Fetch special teams stats (PK%, PP%, PIM, shots against)
+    special_teams = fetch_team_special_teams()
+    # Enrich standings with special teams data (shots_against, pk_pct, pp_pct)
+    for abbrev, st_data in special_teams.items():
+        if abbrev in standings:
+            if "shots_against_per_game" in st_data:
+                standings[abbrev]["shots_against_per_game"] = st_data["shots_against_per_game"]
+            if "pk_pct" in st_data:
+                standings[abbrev]["pk_pct"] = st_data["pk_pct"]
+            if "pp_pct" in st_data:
+                standings[abbrev]["pp_pct"] = st_data["pp_pct"]
+
     # 3. Detect schedule fatigue (B2B and 3-in-4)
     fatigue_dict = detect_fatigue(future_games)
     if fatigue_dict:
@@ -997,6 +1136,7 @@ def run_nhl_pipeline() -> dict:
                 fatigue_dict,
                 ai_factors,
                 home_script_mult,
+                special_teams=special_teams,
             )
             if player["prob_goal"] > 5 or player["prob_shot"] > 15:
                 player["_skater"] = skater  # Keep reference for pass 2
@@ -1016,6 +1156,7 @@ def run_nhl_pipeline() -> dict:
                 fatigue_dict,
                 ai_factors,
                 away_script_mult,
+                special_teams=special_teams,
             )
             if player["prob_goal"] > 5 or player["prob_shot"] > 15:
                 player["_skater"] = skater
@@ -1061,6 +1202,7 @@ def run_nhl_pipeline() -> dict:
                     p_script_mult,
                     l5_form=l5,
                     h2h=h2h,
+                    special_teams=special_teams,
                 )
                 # Update in-place
                 idx = match_players.index(player)
