@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime, timezone
 
-from config import SEASON, api_get, supabase
+from src.config import SEASON, api_get, supabase
 from fastapi import APIRouter, HTTPException
 
 logger = logging.getLogger("probalab.players")

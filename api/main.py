@@ -39,7 +39,7 @@ except ImportError:
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
 RESEND_FROM = os.getenv("RESEND_FROM", "ProbaLab <noreply@probalab.fr>")
 
-from config import supabase
+from src.config import supabase
 from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -53,7 +53,7 @@ def _scheduled_update_scores():
         sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
         from datetime import date
 
-        from fetchers.results import fetch_and_update_results
+        from src.fetchers.results import fetch_and_update_results
 
         print(f"[scheduler] Mise à jour des scores — {date.today()}")
         fetch_and_update_results()
@@ -67,7 +67,7 @@ def _startup_update_scores():
         sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
         from datetime import date, timedelta
 
-        from fetchers.results import fetch_and_update_results
+        from src.fetchers.results import fetch_and_update_results
 
         print("[scheduler] 🚀 Rattrapage des scores au démarrage (J, J-1, J-2)...")
         for delta in range(3):
@@ -84,8 +84,8 @@ def _scheduled_telegram_tickets():
         sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
         from datetime import date
 
-        from telegram_bot import send_telegram_message
-        from ticket_generator import format_telegram_message, generate_daily_tickets
+        from src.telegram_bot import send_telegram_message
+        from src.ticket_generator import format_telegram_message, generate_daily_tickets
 
         print(f"[scheduler] Création et envoi des tickets Telegram — {date.today()}")
 
@@ -565,7 +565,7 @@ def get_prediction_detail(fixture_id: str):
     away_scorers = []
 
     if fixture:
-        from config import SEASON
+        from src.config import SEASON
 
         home_id = fixture.get("home_team_id")
         away_id = fixture.get("away_team_id")
@@ -939,7 +939,7 @@ def get_team_roster(team_name: str):
         team_api_id = team_data[0]["api_id"]
 
     try:
-        from config import SEASON, api_get
+        from src.config import SEASON, api_get
 
         # The players/squads endpoint returns the current squad of a team
         resp = api_get("players/squads", {"team": team_api_id})
@@ -1039,7 +1039,7 @@ def _run_pipeline_background(mode: str):
         cmd = [
             sys.executable,
             "-c",
-            "from fetchers.nhl_pipeline import run_nhl_pipeline; run_nhl_pipeline()",
+            "from src.fetchers.nhl_pipeline import run_nhl_pipeline; run_nhl_pipeline()",
         ]
     else:
         cmd = [sys.executable, "run_pipeline.py"]
@@ -1183,7 +1183,7 @@ def admin_update_scores(
             import sys
 
             sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-            from fetchers.results import fetch_and_update_results
+            from src.fetchers.results import fetch_and_update_results
 
             fetch_and_update_results(date)
         except Exception as e:

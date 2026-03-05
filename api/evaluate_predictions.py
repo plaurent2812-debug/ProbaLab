@@ -6,7 +6,7 @@ from pathlib import Path
 # Add the parent package to the path so we can import config
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from config import supabase
+from src.config import supabase
 
 
 def calculate_metrics_for_match(pred_home_prob, pred_draw_prob, pred_away_prob, actual_result):

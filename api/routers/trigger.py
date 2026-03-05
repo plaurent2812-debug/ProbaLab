@@ -9,8 +9,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
-from brain import ask_gemini, extract_json
-from config import api_get, logger, supabase
+from src.brain import ask_gemini, extract_json
+from src.config import api_get, logger, supabase
 
 try:
     import httpx
@@ -584,12 +584,12 @@ def retrain_models():
     logger.info("[MLOps] 🚀 Déclenchement du réentrainement continu...")
     try:
         # 1. Build new training data vectors
-        from training import build_data
+        from src.training import build_data
 
         build_data.run(rebuild=False)
 
         # 2. Retrain the XGBoost models and push them to Supabase
-        from training import train
+        from src.training import train
 
         train.run()
 
@@ -1205,7 +1205,7 @@ def nhl_fetch_odds():
     logger.info("[NHL Odds] 🏒 Démarrage fetch_nhl_odds...")
     start = time.time()
     try:
-        from fetchers.fetch_nhl_odds import fetch_nhl_odds
+        from src.fetchers.fetch_nhl_odds import fetch_nhl_odds
 
         result = fetch_nhl_odds()
     except Exception as e:
@@ -1224,7 +1224,7 @@ def football_momentum():
     logger.info("[Football Momentum] 🌪️ Démarrage du scan live...")
     start = time.time()
     try:
-        from fetchers.live_momentum import run_momentum_tracker
+        from src.fetchers.live_momentum import run_momentum_tracker
 
         result = run_momentum_tracker()
     except Exception as e:
@@ -1410,7 +1410,7 @@ def nhl_evaluate_performance():
     """Trigger the NHL performance evaluation script."""
     logger.info("[NHL Performance] 📈 Démarrage de l'évaluation des performances...")
     try:
-        from fetchers.fetch_nhl_results import evaluate_nhl_predictions
+        from src.fetchers.fetch_nhl_results import evaluate_nhl_predictions
 
         evaluate_nhl_predictions(days_back=7)
         return {"status": "ok", "message": "Performance evaluation completed"}
@@ -1428,7 +1428,7 @@ def nhl_run_pipeline():
     start = _time.time()
 
     try:
-        from fetchers.nhl_pipeline import run_nhl_pipeline
+        from src.fetchers.nhl_pipeline import run_nhl_pipeline
 
         result = run_nhl_pipeline()
     except Exception as e:
@@ -1480,7 +1480,7 @@ def run_reflection():
     """Trigger the AI Reflection Engine (daily self-correction loop)."""
     logger.info("[Reflection] 🧠 Démarrage du moteur d'auto-analyse IA...")
     try:
-        from reflection_engine import process_daily_reflection
+        from src.reflection_engine import process_daily_reflection
 
         process_daily_reflection("football")
         process_daily_reflection("nhl")

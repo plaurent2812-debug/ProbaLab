@@ -4,7 +4,7 @@ import os
 
 import httpx
 import stripe
-from config import logger, supabase
+from src.config import logger, supabase
 from fastapi import APIRouter, Header, HTTPException, Request
 
 router = APIRouter()

@@ -4,13 +4,13 @@ import os
 import pickle
 
 import pandas as pd
-from config import supabase
+from src.config import supabase
 from fastapi import APIRouter, Depends, Header, HTTPException
-from nhl.calibration import probability_calibrator
+from src.nhl.calibration import probability_calibrator
 
 # Imports NHL Modules
-from nhl.feature_engineering import feature_engineer
-from nhl.schemas import (
+from src.nhl.feature_engineering import feature_engineer
+from src.nhl.schemas import (
     BrainPrediction,
     BrainRequest,
     BrainResponse,
@@ -23,7 +23,7 @@ from nhl.schemas import (
 
 # ML Models Import with Fallback
 try:
-    from nhl.ml_models import (
+    from src.nhl.ml_models import (
         ModelBacktester,
         assist_predictor,
         goal_predictor,
@@ -33,7 +33,7 @@ try:
 
     ENHANCED_ML_AVAILABLE = True
 except ImportError:
-    from nhl.ml_models import goal_predictor
+    from src.nhl.ml_models import goal_predictor
 
     shot_predictor = None
     point_predictor = None
