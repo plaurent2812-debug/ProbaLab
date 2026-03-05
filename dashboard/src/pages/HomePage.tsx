@@ -156,20 +156,17 @@ export default function HomePage() {
 
     useEffect(() => {
         const today = new Date().toISOString().slice(0, 10)
-        const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10)
 
-        // Fetch football matches
-        const fetchFB = Promise.all([fetchPredictions(today), fetchPredictions(tomorrow)])
-            .then(([r1, r2]) => {
+        // Fetch football matches (today only)
+        const fetchFB = fetchPredictions(today)
+            .then((r1) => {
                 const todayMatches = (r1.matches || []).map(m => ({ ...m, sport: 'football' }))
-                const tomorrowMatches = (r2.matches || []).map(m => ({ ...m, sport: 'football' }))
 
                 setFbCount(todayMatches.length)
                 setFbLiveCount(todayMatches.filter(m => ["1H", "2H", "HT", "LIVE"].includes(m.status)).length)
 
-                // VIP = from today+tomorrow, high confidence or edge
-                const all = [...todayMatches, ...tomorrowMatches]
-                const vip = all.filter(m => {
+                // VIP = today only, high confidence or edge
+                const vip = todayMatches.filter(m => {
                     if (["FT", "AET", "PEN"].includes(m.status) || !m.prediction) return false
                     const c = m.prediction.confidence_score || 0
                     const sj = m.prediction.stats_json || {}
