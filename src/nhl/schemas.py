@@ -1,27 +1,29 @@
+from typing import List, Optional
+
 from pydantic import BaseModel
 
 
 class BrainPlayer(BaseModel):
     id: str
-    name: str | None = ""
+    name: Optional[str] = ""
     gpg: float
     spg: float
-    apg: float | None = 0.0
+    apg: Optional[float] = 0.0
     opp_gaa: float = 3.0
-    is_home: bool | None = False
-    opp_shots_allowed_avg: float | None = 30.0
-    shooting_pct: float | None = None
-    toi_avg: float | None = None
-    pp_toi_avg: float | None = None
-    team_pp_pct: float | None = None
-    is_back_to_back: bool | None = False
-    days_rest: int | None = 2
-    gpg_l5: float | None = None
-    spg_l5: float | None = None
+    is_home: Optional[bool] = False
+    opp_shots_allowed_avg: Optional[float] = 30.0
+    shooting_pct: Optional[float] = None
+    toi_avg: Optional[float] = None
+    pp_toi_avg: Optional[float] = None
+    team_pp_pct: Optional[float] = None
+    is_back_to_back: Optional[bool] = False
+    days_rest: Optional[int] = 2
+    gpg_l5: Optional[float] = None
+    spg_l5: Optional[float] = None
 
 
 class BrainRequest(BaseModel):
-    players: list[BrainPlayer]
+    players: List[BrainPlayer]
     apply_calibration: bool = True
 
 
@@ -29,13 +31,13 @@ class BrainPrediction(BaseModel):
     id: str
     math_prob_goal: float
     math_exp_shots: float
-    prob_point: float | None = 0.0
-    prob_assist: float | None = 0.0
-    confidence: str | None = "medium"
+    prob_point: Optional[float] = 0.0
+    prob_assist: Optional[float] = 0.0
+    confidence: Optional[str] = "medium"
 
 
 class BrainResponse(BaseModel):
-    predictions: list[BrainPrediction]
+    predictions: List[BrainPrediction]
 
 
 class GameWinProbRequest(BaseModel):
@@ -61,7 +63,7 @@ class CalibrateProbaRequest(BaseModel):
 class DataLakeRow(BaseModel):
     date: str
     player_id: str
-    player_name: str | None = ""
+    player_name: Optional[str] = ""
     team: str
     opp: str
     algo_score_goal: int
@@ -69,12 +71,12 @@ class DataLakeRow(BaseModel):
     is_home: int
     python_prob: float
     python_vol: float
-    result_goal: str | None = ""
-    result_shot: str | None = ""
+    result_goal: Optional[str] = ""
+    result_shot: Optional[str] = ""
 
 
 class IngestDataLakeRequest(BaseModel):
-    rows: list[DataLakeRow]
+    rows: List[DataLakeRow]
 
 
 class SuiviAlgoRow(BaseModel):
@@ -85,14 +87,14 @@ class SuiviAlgoRow(BaseModel):
     pari: str
     cote: float
     resultat: str
-    score_reel: str | None = ""
-    diagnostic_ia: str | None = ""
-    analyse_postmortem: str | None = ""
-    id_ref: str | None = ""
+    score_reel: Optional[str] = ""
+    diagnostic_ia: Optional[str] = ""
+    analyse_postmortem: Optional[str] = ""
+    id_ref: Optional[str] = ""
 
 
 class IngestSuiviAlgoRequest(BaseModel):
-    rows: list[SuiviAlgoRow]
+    rows: List[SuiviAlgoRow]
 
 
 class MarketStat(BaseModel):
@@ -110,7 +112,7 @@ class DailyAnalysisRequest(BaseModel):
     wins: int
     losses: int
     accuracy: float
-    market_stats: list[MarketStat] = []
+    market_stats: List[MarketStat] = []
     trigger_retrain: bool = True  # Déclencher le réentraînement ML
 
 
@@ -122,4 +124,4 @@ class UpdateDataLakeResultRow(BaseModel):
 
 
 class UpdateDataLakeResultsRequest(BaseModel):
-    rows: list[UpdateDataLakeResultRow]
+    rows: List[UpdateDataLakeResultRow]

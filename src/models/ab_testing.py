@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 ab_testing.py — A/B testing pour comparer des versions de modèles.
 
@@ -11,7 +12,6 @@ Usage :
     3. Obtenir un rapport via get_ab_report()
 """
 
-from __future__ import annotations
 
 from typing import Any
 

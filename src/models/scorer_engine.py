@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 scorer_engine.py — Prédiction des buteurs les plus probables (v2).
 
@@ -14,7 +15,6 @@ Facteurs pris en compte :
   10. xG-based : probabilité Poisson basée sur le xG de l'équipe
 """
 
-from __future__ import annotations
 
 import math
 

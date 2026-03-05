@@ -1,3 +1,4 @@
+from __future__ import annotations
 #!/usr/bin/env python3
 """
 fetchers/fetch_nhl_results.py — Évaluation des prédictions NHL (Top 1).

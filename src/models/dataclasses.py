@@ -1,10 +1,10 @@
+from __future__ import annotations
 """
 dataclasses.py — Structures de données typées pour le projet Football IA.
 
 Remplace les dicts anonymes par des objets structurés avec validation.
 """
 
-from __future__ import annotations
 
 from dataclasses import dataclass, field
 

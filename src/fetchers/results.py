@@ -1,3 +1,4 @@
+from __future__ import annotations
 #!/usr/bin/env python3
 """
 fetchers/results.py — Mise à jour des scores et statuts des matchs du jour.
@@ -14,7 +15,6 @@ Usage :
   python3 -m fetchers.results --date 2025-02-18  → Date spécifique
 """
 
-from __future__ import annotations
 
 import os
 import sys

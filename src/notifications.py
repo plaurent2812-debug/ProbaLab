@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 notifications.py — Notifications Telegram & Discord pour Football IA.
 
@@ -10,7 +11,6 @@ Configuration requise dans .env :
     DISCORD_WEBHOOK_URL=<url>  (optionnel)
 """
 
-from __future__ import annotations
 
 import os
 from typing import Any

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Module de calibration des probabilités - Refonte v3.
 

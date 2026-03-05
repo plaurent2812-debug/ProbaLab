@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 schemas.py — Pydantic validation models for API-Football responses.
 
@@ -10,7 +11,6 @@ Usage:
     validated = validate_fixture_response(data)
 """
 
-from __future__ import annotations
 
 from typing import Any
 
