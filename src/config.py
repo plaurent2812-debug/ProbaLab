@@ -6,6 +6,7 @@ Configuration partagée pour tous les scripts du projet Football IA.
 import logging
 import os
 import time
+from pathlib import Path
 
 import requests
 from dotenv import load_dotenv
@@ -43,7 +44,8 @@ def setup_logger(name: str = "football_ia", level: int = logging.INFO) -> loggin
 logger: logging.Logger = setup_logger()
 
 # ── Chargement .env ──────────────────────────────────────────────
-load_dotenv()
+env_path = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(dotenv_path=env_path)
 
 SUPABASE_URL: str | None = os.getenv("SUPABASE_URL")
 SUPABASE_KEY: str | None = os.getenv("SUPABASE_KEY")

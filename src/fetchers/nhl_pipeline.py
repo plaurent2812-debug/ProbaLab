@@ -96,20 +96,27 @@ def _fetch_json(endpoint: str) -> dict | None:
 # ─── Data fetchers ───────────────────────────────────────────────
 
 
-def fetch_schedule() -> list[dict]:
-    """Fetch today's NHL games."""
+def fetch_schedule() -> tuple[list[dict], str]:
+    """Fetch today's NHL games.
+    
+    Returns:
+        A tuple of (games_list, schedule_date_str).
+        schedule_date_str is the NHL "hockey day" date (YYYY-MM-DD),
+        which corresponds to the North American date, NOT UTC.
+    """
     data = _fetch_json("/schedule/now")
     if not data or "gameWeek" not in data:
-        return []
+        return [], datetime.utcnow().strftime("%Y-%m-%d")
 
     today = datetime.utcnow().strftime("%Y-%m-%d")
     for day in data["gameWeek"]:
         if day["date"] == today:
-            return day.get("games", [])
+            return day.get("games", []), day["date"]
+    # Fallback: find the closest day with games (handles timezone edge cases)
     for day in data["gameWeek"]:
         if day.get("games"):
-            return day["games"]
-    return []
+            return day["games"], day["date"]
+    return [], today
 
 
 def fetch_standings() -> dict:
@@ -630,7 +637,13 @@ def get_gemini_nhl_analysis(
 ) -> str:
     """Use Gemini to generate a detailed, player-centric NHL match analysis."""
     try:
-        from src.brain import ask_gemini, get_active_learnings
+        from src.brain import get_gemini_client, get_active_learnings
+        from google import genai
+        from google.genai import types
+        
+        client = get_gemini_client()
+        if not client:
+            return f"{home_team} vs {away_team} : Client Gemini non initialisé."
     except ImportError:
         return f"{home_team} vs {away_team} : Analyse indisponible."
 
@@ -659,41 +672,39 @@ def get_gemini_nhl_analysis(
 
         players_data.append(
             f"- {p['player_name']} ({p['team']}) {form_tag}: "
-            f"{ppg:.2f} pts/m ({gpg:.2f} G, {apg:.2f} A). "
-            f"Probas ce soir: Point {point_prob}%, But {goal_prob}%, Passe {assist_prob}%."
+            f"Saison: {ppg} pts/m, {gpg} b/m. "
+            f"Modèle: But: {goal_prob}%, Point: {point_prob}%"
         )
+    players_str = "\n".join(players_data)
 
-    learnings = get_active_learnings("nhl") if "get_active_learnings" in locals() else []
+    learnings = get_active_learnings("nhl")
     learnings_block = ""
     if learnings:
-        learnings_block = (
-            "\n\n--- LEÇONS D'AUTO-CORRECTION ---\nPrends en compte ces enseignements :\n"
-        )
+        learnings_block = "\n\n--- LEÇONS D'AUTO-CORRECTION ---\nPrends en compte tes erreurs passées :\n"
         for i, l in enumerate(learnings, 1):
             learnings_block += f"{i}. {l}\n"
+    system_prompt = f"""Tu es un analyste expert de la NHL. 
+Ta mission est de fournir une synthèse narrative très courte et percutante (- de 60 mots) qui explique le contexte du match et justifie les notes (sur 10) des joueurs calculées par notre modèle.
+{learnings_block}"""
 
-    system_prompt = (
-        "Tu es un expert en NHL qui s'adresse à des passionnés et parieurs.\n"
-        "Ta mission est de rédiger une brève analyse (3 à 4 phrases maximum) axée sur les joueurs clés.\n"
-        f"{learnings_block}\n"
-        "CONSIGNES CRUCIALES :\n"
-        "1. SOIS BREF ET DIRECT : Pas d'intro ni de conclusion générique, va à l'essentiel.\n"
-        "2. AXE L'ANALYSE SUR LES JOUEURS : Cite la forme actuelle et les complémentarités (ex: un duo dynamique).\n"
-        "3. UTILISE UN TON de passionné/parieur : Parle de 'value', 'forme', 'spot favorable', 'chances de marquer'.\n"
-        "4. ÉVITE LE JARGON TROP TECHNIQUE : Pas de 'AI factors', 'probabilités individuelles exactes' ou termes mathématiques complexes.\n"
-        "5. Rends le texte facile à lire pour le grand public."
-    )
+    user_prompt = f"""Match : {home_team} vs {away_team}
+Contexte IA d'équipe (Fatigue/Statuts) : Domicile={h_ai:.2f}, Extérieur={a_ai:.2f} (1.0 = Neutre. >1.0 = Avantage, <1.0 = Désavantage)
 
-    user_prompt = (
-        f"Match : {home_team} vs {away_team}\n"
-        f"Contexte offensif estimé (1.0 = normal, >1.2 = très ouvert, <0.8 = fermé) : {home_team} ({h_ai}), {away_team} ({a_ai})\n\n"
-        "Joueurs à surveiller ce soir :\n" + "\n".join(players_data) + "\n\n"
-        "Rédige ton analyse courte et percutante."
-    )
+Top joueurs (selon modèle) :
+{players_str}
+
+Rédige l'analyse."""
 
     try:
-        response = ask_gemini(system_prompt, user_prompt)
-        return response if response else f"Analyse automatique pour {home_team} vs {away_team}."
+        response = client.models.generate_content(
+            model="gemini-2.5-pro",
+            contents=user_prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                temperature=0.3,
+            ),
+        )
+        return response.text or "Analyse non disponible."
     except Exception as e:
         logger.warning(f"[NHL] AI analysis failed: {e}")
         return f"Échec de l'analyse IA pour {home_team} vs {away_team}."
@@ -1103,10 +1114,11 @@ def run_nhl_pipeline() -> dict:
     logger.info("=" * 60)
 
     # 1. Fetch schedule
-    games = fetch_schedule()
+    games, schedule_date = fetch_schedule()
     if not games:
         logger.info("[NHL] Aucun match aujourd'hui.")
         return {"status": "no_games", "matches": 0}
+    logger.info(f"[NHL] Date du schedule NHL : {schedule_date}")
 
     future_games = [
         g
@@ -1163,7 +1175,7 @@ def run_nhl_pipeline() -> dict:
         logger.info("[NHL] 🧠 AI factors: aucun (fallback = 1.0)")
 
     # 6. Analyze each game
-    today = datetime.utcnow().strftime("%Y-%m-%d")
+    today = schedule_date  # Use the NHL schedule date, not UTC
     all_players = []
     fixtures_data = []
 
@@ -1274,7 +1286,7 @@ def run_nhl_pipeline() -> dict:
             if not game_log:
                 continue
 
-            l5 = calculate_l5_form(game_log)
+            l5 = calculate_recent_form(game_log)
             h2h = calculate_h2h_factor(game_log, opp_abbrev)
 
             # Re-score with L5 + H2H
@@ -1422,6 +1434,12 @@ def run_nhl_pipeline() -> dict:
         rec_bet = "Analyse en cours..."
         conf = 3
 
+        # Calculate team win probabilities for fallback and insertion
+        win_prob = calculate_win_prob(home_abbrev, away_abbrev, standings, fatigue_dict)
+        ph = win_prob["home"]
+        pa = win_prob["away"]
+        po55 = win_prob.get("over_55", 50)
+
         # Sort match players to find the best bet
         # Priorities: Point > 50%, Goal > 30%, Assist > 35%
         best_p_points = sorted(match_players, key=lambda p: p["prob_point"], reverse=True)
@@ -1443,8 +1461,6 @@ def run_nhl_pipeline() -> dict:
             conf = min(10, max(1, round(p["prob_assist"] / 10)))
         else:
             # Fallback to team win if no strong player bet
-            ph = win_prob["home"]
-            pa = win_prob["away"]
             if ph >= pa:
                 rec_bet = f"Victoire {home_name} (incl. OT)"
                 conf = min(10, max(1, round(ph / 10)))
@@ -1459,10 +1475,7 @@ def run_nhl_pipeline() -> dict:
         analysis_text = get_gemini_nhl_analysis(home_name, away_name, match_players, ai_factors)
 
         # Win probabilities for fixtures_data (saved to Supabase)
-        win_prob = calculate_win_prob(home_abbrev, away_abbrev, standings, fatigue_dict)
-        ph = win_prob["home"]
-        pa = win_prob["away"]
-        po55 = win_prob.get("over_55", 50)
+
 
         fixtures_data.append(
             {

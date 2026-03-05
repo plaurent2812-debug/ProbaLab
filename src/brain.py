@@ -21,12 +21,21 @@ from src.models.scorer_engine import predict_scorers
 from src.models.stats_engine import analyze_match, update_elo_from_results
 from src.pipeline.inference import predict_meta
 
-# ── Client Gemini ─────────────────────────────────────────────
-if not GEMINI_API_KEY:
-    logger.critical("ERREUR: GEMINI_API_KEY manquante.")
-    exit()
+import os
 
-client = genai.Client(api_key=GEMINI_API_KEY)
+# ── Client Gemini ─────────────────────────────────────────────
+# Initialisation du client Gemini (reportée à l'utilisation pour éviter les crashs d'import)
+client = None
+
+def get_gemini_client():
+    global client
+    if client is None:
+        api_key = GEMINI_API_KEY or os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            logger.critical("ERREUR: GEMINI_API_KEY manquante.")
+            return None
+        client = genai.Client(api_key=api_key)
+    return client
 MODEL_NAME = "gemini-2.5-pro"
 
 
@@ -153,9 +162,9 @@ MATCH : {fixture["home_team"]} (DOM) vs {fixture["away_team"]} (EXT)
 LIGUE : Ligue ID {fixture["league_id"]}  |  DATE : {fixture["date"]}
 
 --- Modèle Poisson ajusté ---
-xG Domicile : {stats["xg_home"]}  |  xG Extérieur : {stats["xg_away"]}
-Poisson →  Dom: {stats["proba_home"]}%  |  Nul: {stats["proba_draw"]}%  |  Ext: {stats["proba_away"]}%
-BTTS: {stats["proba_btts"]}%  |  O2.5: {stats["proba_over_25"]}%  |  Score exact probable: {stats["correct_score"]}
+xG Domicile : {stats.get("xg_home", "?")}  |  xG Extérieur : {stats.get("xg_away", "?")}
+Poisson →  Dom: {stats.get("proba_home", "?")}%  |  Nul: {stats.get("proba_draw", "?")}%  |  Ext: {stats.get("proba_away", "?")}%
+BTTS: {stats.get("proba_btts", "?")}%  |  O2.5: {stats.get("proba_over_25", "?")}%  |  Score exact probable: {stats.get("correct_score", "?")}
 
 --- ELO ---
 ELO Domicile : {ctx.get("elo_home", "?")}  |  ELO Extérieur : {ctx.get("elo_away", "?")}
@@ -277,6 +286,10 @@ def ask_gemini(system_prompt: str, user_prompt: str) -> str | None:
     Returns:
         The text content of Gemini's reply, or ``None`` on API error.
     """
+    client = get_gemini_client()
+    if not client:
+        return None
+
     try:
         response = client.models.generate_content(
             model=MODEL_NAME,
@@ -525,12 +538,17 @@ def run_brain() -> None:
         ai_result = None
         if ai_result_dict:
             try:
+                from src.models.ai_features import AIFeatures
                 ai_result = AIFeatures.model_validate(ai_result_dict)
                 logger.info("   ✅ Analyse Gemini OK (JSON validé)")
             except Exception as e:
                 logger.warning("   ⚠️ JSON invalide pour AIFeatures: %s", e)
         else:
             logger.warning("   ⚠️ JSON introuvable, stats uniquement")
+
+        # Sleep to avoid [Errno 35] Resource temporarily unavailable (API limits)
+        import time
+        time.sleep(1.0)
 
         # ── D. Fusion ────────────────────────────────────────────
         try:

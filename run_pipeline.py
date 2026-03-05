@@ -9,6 +9,7 @@ Usage :
   python3 run_pipeline.py results  → Mise à jour des scores du jour (CRON 15min)
   python3 run_pipeline.py results --date 2025-02-18  → Date spécifique
 """
+from __future__ import annotations
 
 import sys
 import time
