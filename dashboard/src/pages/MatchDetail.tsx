@@ -348,6 +348,72 @@ export default function MatchDetailPage() {
                 )}
             </Card>
 
+            {/* True Value Bet Banner (Football) */}
+            {(() => {
+                if (!matchData?.value_edges || Object.keys(matchData.value_edges).length === 0) return null;
+
+                // Find highest edge
+                const edges = matchData.value_edges;
+                const odds = matchData.odds || {};
+                let bestKey = null;
+                let maxEdge = 0;
+
+                for (const [k, v] of Object.entries(edges)) {
+                    if (v > maxEdge) {
+                        maxEdge = v;
+                        bestKey = k;
+                    }
+                }
+
+                if (!bestKey) return null;
+
+                const nameMap = {
+                    "home": `Victoire ${fixture?.home_team}`,
+                    "away": `Victoire ${fixture?.away_team}`,
+                    "draw": "Match Nul",
+                    "over_25": "Plus de 2.5 Buts",
+                    "under_25": "Moins de 2.5 Buts",
+                    "btts_yes": "Les 2 équipes marquent : Oui",
+                    "btts_no": "Les 2 équipes marquent : Non",
+                };
+
+                const oddMap = {
+                    "home": odds.home_win_odds,
+                    "away": odds.away_win_odds,
+                    "draw": odds.draw_odds,
+                    "over_25": odds.over_25_odds,
+                    "under_25": odds.under_25_odds,
+                    "btts_yes": odds.btts_yes_odds,
+                    "btts_no": odds.btts_no_odds,
+                };
+
+                return (
+                    <Card className="border-emerald-500/50 bg-emerald-500/10 overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-500">
+                        <CardHeader className="py-2.5 px-4 flex flex-row items-center justify-between border-b border-emerald-500/20">
+                            <CardTitle className="text-[13px] uppercase tracking-wider font-bold flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+                                <Target className="w-4 h-4" />
+                                True Value Bet
+                            </CardTitle>
+                            <Badge className="border-emerald-500 text-emerald-700 bg-emerald-500/20 hover:bg-emerald-500/30">
+                                Edge: +{maxEdge}%
+                            </Badge>
+                        </CardHeader>
+                        <CardContent className="p-4 flex items-center justify-between">
+                            <div>
+                                <p className="text-base font-bold text-foreground">{nameMap[bestKey] || bestKey}</p>
+                                <p className="text-xs text-muted-foreground mt-0.5">Avantage mathématique sur le bookmaker</p>
+                            </div>
+                            <div className="text-right">
+                                <p className="text-[10px] uppercase font-bold text-muted-foreground mb-0.5">Cote Réelle</p>
+                                <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
+                                    @ {(oddMap[bestKey] || 0).toFixed(2)}
+                                </span>
+                            </div>
+                        </CardContent>
+                    </Card>
+                )
+            })()}
+
             {/* Probabilités 1X2 — FREE */}
             {p && (
                 <Card className="border-border/50">

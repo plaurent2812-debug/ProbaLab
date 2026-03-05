@@ -238,64 +238,121 @@ def calculate_team_strengths(league_id: int) -> dict | None:
         ``"league_avg_home"`` and ``"league_avg_away"`` averages, or
         ``None`` if insufficient data is available.
     """
-    # ── Option 1 : Récupérer les stats xG de la Vue Supabase ──
-    xg_stats = (
-        supabase.table("team_xg_stats")
-        .select("*")
+    # ── Option 1 : Récupérer TOUS les matchs de la saison pour l'itération bayésienne ──
+    # 1. Obtenir les IDs des matchs terminés pour cette ligue
+    fixtures_resp = (
+        supabase.table("fixtures")
+        .select("api_fixture_id")
         .eq("league_id", league_id)
-        .eq("season", SEASON)
+        .in_("status", ["FT", "AET", "PEN"])
         .execute()
-        .data
     )
+    if not fixtures_resp.data:
+        return None
+        
+    fixture_ids = [f["api_fixture_id"] for f in fixtures_resp.data]
+    
+    # Supabase a une limite sur in_() (~100-200 elems max généralement), 
+    # mais match_team_stats peut simplement être récupéré globalement puis on filtre localement
+    
+    mts_resp = supabase.table("match_team_stats").select("fixture_api_id, team_api_id, expected_goals").execute()
+    if not mts_resp.data:
+        return None
+        
+    # Grouper par match
+    matches = {}
+    for row in mts_resp.data:
+        fid = row["fixture_api_id"]
+        if fid in fixture_ids and row["expected_goals"] is not None:
+            if fid not in matches:
+                matches[fid] = []
+            matches[fid].append(row)
+            
+    # Filtre les matchs où on a bien les 2 équipes
+    valid_fixtures = [m for m in matches.values() if len(m) == 2]
 
-    if not xg_stats or len(xg_stats) < 4:
-        # Fallback de sécurité si la vue n'est pas peuplée
+    if len(valid_fixtures) < 10:
         return None
 
-    # Moyennes de la ligue basées sur les xG
-    total_xg_for = sum((s["xg_for_total"] or 0) for s in xg_stats)
-    total_xg_against = sum((s["xg_against_total"] or 0) for s in xg_stats)
-    total_matches = max(sum(s["matches_played"] for s in xg_stats), 1)
+    # Moyennes de la ligue
+    total_xg = sum(sum(team["expected_goals"] for team in match) for match in valid_fixtures)
+    total_matches = len(valid_fixtures)
+    league_avg_xg_scored = (total_xg / 2.0) / total_matches
 
-    # Note: La vue agglomère Home et Away pour l'instant (on le séparera plus tard si besoin)
-    league_avg_xg_scored = total_xg_for / total_matches
-    league_avg_xg_conceded = total_xg_against / total_matches
-
-    # Avantage domicile global fallback
-    strengths = {}
-    for s in xg_stats:
-        tid = s["team_api_id"]
-        mp = max(s["matches_played"], 1)
-
-        # Ratios bruts xG
-        team_avg_xg_for = (s["xg_for_total"] or 0) / mp
-        team_avg_xg_against = (s["xg_against_total"] or 0) / mp
+    # 1. Initialiser les forces à 1.0 et compiler les stats brutes (For/Against) vs (Opponents)
+    teams_stats = {}
+    for match in valid_fixtures:
+        t1, t2 = match[0], match[1]
         
-        # Vu que xg_stats agglomère home/away, pour l'instant on utilise la même force
-        raw_atk = team_avg_xg_for / max(league_avg_xg_scored, 0.5)
-        raw_def = team_avg_xg_against / max(league_avg_xg_conceded, 0.5)
+        tid1, xg1 = t1["team_api_id"], t1["expected_goals"]
+        tid2, xg2 = t2["team_api_id"], t2["expected_goals"]
+        
+        for tid in (tid1, tid2):
+            if tid not in teams_stats:
+                teams_stats[tid] = {"xg_for": [], "xg_against": [], "opponents": [], "atk": 1.0, "def": 1.0}
+        
+        teams_stats[tid1]["xg_for"].append(xg1 / max(league_avg_xg_scored, 0.1))
+        teams_stats[tid1]["xg_against"].append(xg2 / max(league_avg_xg_scored, 0.1))
+        teams_stats[tid1]["opponents"].append(tid2)
 
-        raw_home_atk = raw_atk
-        raw_home_def = raw_def
-        raw_away_atk = raw_atk
-        raw_away_def = raw_def
+        teams_stats[tid2]["xg_for"].append(xg2 / max(league_avg_xg_scored, 0.1))
+        teams_stats[tid2]["xg_against"].append(xg1 / max(league_avg_xg_scored, 0.1))
+        teams_stats[tid2]["opponents"].append(tid1)
 
-        # Pour pallier à la vue agrégée, l'avantage domicile est fixé au bonus xG de la ligue (ex: 1.12)
-        # On regresse la performance si échantillon faible
+    # 2. Itération Bayésienne (Schedule Adjustment / Smoothing)
+    # Lissage sur 5 itérations pour converger vers les vras forces tenant compte du calendrier
+    # xG généré par A = Atk_A * Def_B -> Donc Atk_A = xG généré / Def_B
+    for _ in range(5):
+        new_atk = {}
+        new_def = {}
+        for tid, stats in teams_stats.items():
+            if not stats["opponents"]:
+                continue
+            
+            # Nouvelle force d'attaque = Moyenne des (xG_marqués / Defense_Adversaire)
+            opp_def_sum = sum(teams_stats[opp]["def"] for opp in stats["opponents"])
+            opp_atk_sum = sum(teams_stats[opp]["atk"] for opp in stats["opponents"])
+            
+            # Lissage bayésien avec un prior de 1.0 pour éviter les divisions par zéro sur ptits échantillons
+            prior_weight = 3.0
+            
+            total_atk_val = sum(xg for xg in stats["xg_for"]) + (1.0 * prior_weight)
+            total_atk_div = opp_def_sum + prior_weight
+            new_atk[tid] = total_atk_val / total_atk_div
+            
+            # Nouvelle force de défense = Moyenne des (xG_concédés / Attaque_Adversaire)
+            total_def_val = sum(xg for xg in stats["xg_against"]) + (1.0 * prior_weight)
+            total_def_div = opp_atk_sum + prior_weight
+            new_def[tid] = total_def_val / total_def_div
+
+        # Normaliser pour que la moyenne reste autour de 1.0
+        avg_atk = sum(new_atk.values()) / max(len(new_atk), 1)
+        avg_def = sum(new_def.values()) / max(len(new_def), 1)
+        
+        for tid in teams_stats:
+            teams_stats[tid]["atk"] = new_atk[tid] / avg_atk
+            teams_stats[tid]["def"] = new_def[tid] / avg_def
+
+    # Format output (On simule Home/Away différencié plus tard si on a + de données)
+    strengths = {}
+    for tid, stats in teams_stats.items():
+        mp = len(stats["opponents"])
+        raw_atk = stats["atk"]
+        raw_def = stats["def"]
+        
         strengths[tid] = {
-            "home_attack": regress_to_mean(raw_home_atk, mp, 1.0),
-            "home_defense": regress_to_mean(raw_home_def, mp, 1.0),
-            "away_attack": regress_to_mean(raw_away_atk, mp, 1.0),
-            "away_defense": regress_to_mean(raw_away_def, mp, 1.0),
+            "home_attack": regress_to_mean(raw_atk, mp, 1.0),
+            "home_defense": regress_to_mean(raw_def, mp, 1.0),
+            "away_attack": regress_to_mean(raw_atk, mp, 1.0),
+            "away_defense": regress_to_mean(raw_def, mp, 1.0),
             "home_advantage": HOME_XG_BONUS
         }
 
-    # Pour xg_home et xg_away, on simule que Home marque X% de plus globalement
     return {
         "strengths": strengths,
-        "league_avg_home": league_avg_xg_scored * (HOME_XG_BONUS),
+        "league_avg_home": league_avg_xg_scored * HOME_XG_BONUS,
         "league_avg_away": league_avg_xg_scored * (2.0 - HOME_XG_BONUS),
-        "avg_matches_played": total_matches / len(xg_stats),
+        "avg_matches_played": total_matches / max(len(teams_stats) / 2.0, 1.0),
     }
 
 

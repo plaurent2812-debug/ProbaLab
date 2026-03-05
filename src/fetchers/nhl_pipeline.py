@@ -939,18 +939,45 @@ def _score_player(
         exp_assists *= 1.08
         exp_shots *= 1.15
 
-    # ─── Poisson Probabilities ───
-    # Prob of at least 1 event = 1 - e^(-lambda)
-    prob_goal = (1 - math.exp(-max(0, exp_goals))) * 100
-    prob_assist = (1 - math.exp(-max(0, exp_assists))) * 100
-    prob_point = (1 - math.exp(-max(0, exp_points))) * 100
+    # ─── Zero-Inflated Poisson (ZIP) Probabilities ───
+    # Calculate theta_zero: the structural probability of producing a "zero"
+    # regardless of talent (due to bottom-line assignments or defensive roles).
+    theta_zero = 0.05  # Base structural zero (injury mid-game, bad luck)
 
-    # Prob of 3+ shots (Over 2.5) = 1 - P(0) - P(1) - P(2)
+    if position_code == "D":
+        if toi_minutes < 18.0:
+            theta_zero = 0.45  # Bottom pairing D-men
+        elif toi_minutes < 22.0:
+            theta_zero = 0.20  # Top 4 D-men
+        else:
+            theta_zero = 0.10  # Elite offensive D-men
+    else:  # Forwards
+        if toi_minutes < 13.0:
+            theta_zero = 0.40  # 4th line scrubs
+        elif toi_minutes < 15.5:
+            theta_zero = 0.20  # 3rd line
+        elif toi_minutes < 18.0:
+            theta_zero = 0.08  # 2nd line
+        else:
+            theta_zero = 0.04  # 1st line stars
+
+    # ZIP formula for P(X >= 1) = (1 - theta_zero) * (1 - e^(-lambda))
+    prob_goal = (1.0 - theta_zero) * (1 - math.exp(-max(0, exp_goals))) * 100
+    prob_assist = (1.0 - theta_zero) * (1 - math.exp(-max(0, exp_assists))) * 100
+    prob_point = (1.0 - theta_zero) * (1 - math.exp(-max(0, exp_points))) * 100
+
+    # For shots (Over 2.5), we apply a smaller structural zero 
+    # since even 4th liners can occasionally throw pucks on net.
+    theta_zero_shots = theta_zero * 0.5
     l_s = max(0, exp_shots)
     p0 = math.exp(-l_s)
     p1 = p0 * l_s
     p2 = p1 * l_s / 2
-    prob_shot = (1 - (p0 + p1 + p2)) * 100
+    # ZIP formula for P(X >= 3)
+    zip_p0 = theta_zero_shots + (1 - theta_zero_shots) * p0
+    zip_p1 = (1 - theta_zero_shots) * p1
+    zip_p2 = (1 - theta_zero_shots) * p2
+    prob_shot = (1.0 - (zip_p0 + zip_p1 + zip_p2)) * 100
 
     res = {
         "player_id": player_id,

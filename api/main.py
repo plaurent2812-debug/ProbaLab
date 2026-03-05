@@ -417,6 +417,43 @@ def _get_league_map() -> dict:
     return _league_cache["map"]
 
 
+# ─── Expected Value (EV+) Calculator ─────────────────────────────
+def _calculate_ev(proba: float | None, odds: float | None) -> float | None:
+    """EV = (Probability * Odds) - 1. Returns an edge representing expected ROI."""
+    if not proba or not odds or pd.isna(odds):
+        return None
+    edge = (proba / 100.0) * odds - 1.0
+    return round(edge * 100, 2)  # Return as percentage (e.g. 5.4 for +5.4% EV)
+
+def _get_ev_edges(pred: dict, odds: dict) -> dict:
+    """Match model probabilities against bookmaker odds to find edges."""
+    if not pred or not odds:
+        return {}
+
+    edges = {}
+    
+    # 1X2 Market
+    edges["home"] = _calculate_ev(pred.get("proba_home"), odds.get("home_win_odds"))
+    edges["draw"] = _calculate_ev(pred.get("proba_draw"), odds.get("draw_odds"))
+    edges["away"] = _calculate_ev(pred.get("proba_away"), odds.get("away_win_odds"))
+
+    # Over 2.5 Market
+    proba_over_25 = pred.get("proba_over_2_5") or pred.get("proba_over_25")
+    edges["over_25"] = _calculate_ev(proba_over_25, odds.get("over_25_odds"))
+    
+    # Under 2.5 Market
+    if proba_over_25 is not None:
+        edges["under_25"] = _calculate_ev(100 - proba_over_25, odds.get("under_25_odds"))
+
+    # BTTS
+    edges["btts_yes"] = _calculate_ev(pred.get("proba_btts"), odds.get("btts_yes_odds"))
+    if pred.get("proba_btts") is not None:
+        edges["btts_no"] = _calculate_ev(100 - pred.get("proba_btts"), odds.get("btts_no_odds"))
+
+    # Only return positive edges (Value Bets) > 2% margin of error
+    return {k: v for k, v in edges.items() if v is not None and v > 2.0}
+
+
 @app.get("/api/predictions")
 def get_predictions(
     date: str | None = Query(None, description="ISO date YYYY-MM-DD"),
@@ -440,6 +477,7 @@ def get_predictions(
     )
 
     fixture_ids = [f["id"] for f in fixtures]
+    api_fixture_ids = [f["api_fixture_id"] for f in fixtures if f.get("api_fixture_id")]
     if not fixture_ids:
         return {"date": date, "matches": []}
 
@@ -448,6 +486,17 @@ def get_predictions(
         supabase.table("predictions").select("*").in_("fixture_id", fixture_ids).execute().data
         or []
     )
+
+    # Get odds for those fixtures
+    odds_data = []
+    if api_fixture_ids:
+        # Avoid Supabase URL length limits by fetching in chunks or just taking top N. 
+        # Usually day schedule < 100
+        odds_data = (
+            supabase.table("fixture_odds").select("*").in_("fixture_api_id", api_fixture_ids).execute().data
+            or []
+        )
+    odds_by_api_id = {str(o["fixture_api_id"]): o for o in odds_data}
 
     # Get league names (with simple TTL cache)
     league_map = _get_league_map()
@@ -527,6 +576,17 @@ def get_predictions(
                 }
                 if pred
                 else None,
+                "odds": odds_by_api_id.get(str(f.get("api_fixture_id"))),
+                "value_edges": _get_ev_edges(
+                    {
+                        "proba_home": get_val("proba_home"),
+                        "proba_draw": get_val("proba_draw"),
+                        "proba_away": get_val("proba_away"),
+                        "proba_btts": get_val("proba_btts"),
+                        "proba_over_2_5": get_val("proba_over_2_5") or get_val("proba_over_25"),
+                    },
+                    odds_by_api_id.get(str(f.get("api_fixture_id"))) or {}
+                ) if pred else {}
             }
         )
 
@@ -695,12 +755,27 @@ def get_prediction_detail(fixture_id: str):
                 except Exception:
                     fixture[side] = None
 
+    # Fetch odds
+    odds = None
+    if fixture and fixture.get("api_fixture_id"):
+        try:
+            odds_res = supabase.table("fixture_odds").select("*").eq("fixture_api_id", fixture["api_fixture_id"]).limit(1).execute().data
+            if odds_res:
+                odds = odds_res[0]
+        except Exception:
+            pass
+
+    # Calculate Value Edge
+    value_edges = _get_ev_edges(prediction, odds or {}) if prediction else {}
+
     return {
         "fixture": fixture,
         "prediction": prediction,
         "home_scorers": home_scorers,
         "away_scorers": away_scorers,
         "match_stats": match_stats,
+        "odds": odds,
+        "value_edges": value_edges,
     }
 
 

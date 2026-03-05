@@ -188,7 +188,7 @@ export default function NHLMatchDetailPage() {
     const confidence = fixture?.confidence_score
     const recommendedBet = fixture?.recommended_bet
 
-    // Calculate Value Bet
+    // Calculate Value Bet (EV+ with True Odds)
     let valueBet = null
     if (fixture?.odds_json?.bookmakers) {
         let homeOdd = 0; let awayOdd = 0;
@@ -201,19 +201,27 @@ export default function NHLMatchDetailPage() {
                     }
                 }
             }
-            if (homeOdd > 0) break;
+            if (homeOdd > 0 && awayOdd > 0) break;
         }
 
-        if (homeOdd > 0 && homeProb > 0) {
-            const edge = homeProb - (100 / homeOdd);
-            if (edge >= 3) {
-                valueBet = { team: fixture.home_team, type: "Victoire", odd: homeOdd, edge: edge.toFixed(1) }
+        if (homeOdd > 0 && awayOdd > 0 && homeProb > 0 && awayProb > 0) {
+            // 1. Calculate Bookmaker Margin (Vigorish)
+            const margin = (1 / homeOdd) + (1 / awayOdd);
+
+            // 2. True probabilities according to market (Vig-free)
+            const trueHomeProb = (1 / homeOdd) / margin;
+            const trueAwayProb = (1 / awayOdd) / margin;
+
+            // 3. Expected Value calculations: EV = (Prob * Odd) - 1
+            const homeEV = (homeProb / 100) * homeOdd - 1;
+            const awayEV = (awayProb / 100) * awayOdd - 1;
+
+            // Only recommend Value Bets with > 2.0% positive EV
+            if (homeEV > 0.02) {
+                valueBet = { team: fixture.home_team, type: "Victoire", odd: homeOdd, edge: (homeEV * 100).toFixed(1) }
             }
-        }
-        if (awayOdd > 0 && awayProb > 0) {
-            const edge = awayProb - (100 / awayOdd);
-            if (edge >= 3 && (!valueBet || edge > parseFloat(valueBet.edge))) {
-                valueBet = { team: fixture.away_team, type: "Victoire", odd: awayOdd, edge: edge.toFixed(1) }
+            if (awayEV > 0.02 && (!valueBet || awayEV * 100 > parseFloat(valueBet.edge))) {
+                valueBet = { team: fixture.away_team, type: "Victoire", odd: awayOdd, edge: (awayEV * 100).toFixed(1) }
             }
         }
     }
