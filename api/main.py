@@ -879,6 +879,30 @@ def save_best_bets(body: dict):
 
 
 
+@app.post("/api/nhl/fetch-game-stats")
+def nhl_fetch_game_stats(body: dict, authorization: str = Header(None)):
+    """
+    Called by Trigger.dev before resolve: fetches actual player stats
+    from the NHL API boxscore and stores them in nhl_player_game_stats.
+    """
+    expected = f"Bearer {os.getenv('CRON_SECRET', 'super_secret_probalab_2026')}"
+    if authorization != expected:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    date = body.get("date")
+    if not date:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="date required (YYYY-MM-DD)")
+
+    try:
+        from src.nhl.fetch_game_stats import fetch_and_store_game_stats
+        result = fetch_and_store_game_stats(date)
+        return result
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
 @app.post("/api/best-bets/resolve")
 def resolve_best_bets(body: dict, authorization: str = Header(None)):
     """
@@ -1041,65 +1065,86 @@ def resolve_best_bets(body: dict, authorization: str = Header(None)):
             fx_by_team[h_abbrev] = f
             fx_by_team[a_abbrev] = f
 
-        # Try to look up player results in nhl_data_lake (updated by morning pipeline)
-        # The pipeline stores actual results after game day
+        # ── Real stats resolution from nhl_player_game_stats ─────
+        # The table is populated by fetch_game_stats.py (called before this endpoint)
         for bet in bets:
             try:
                 label = bet["bet_label"]
                 player_name = bet.get("player_name", "")
                 if not player_name:
-                    # Try to extract from label: "Player Name Over 0.5 Points — ..."
+                    # Extract from label: "Leon Draisaitl Over 0.5 Points — EDM vs CAR"
                     parts = label.split(" Over 0.5 Points")
                     player_name = parts[0].strip() if parts else ""
 
                 if not player_name:
+                    errors.append({"bet_id": bet.get("id"), "error": "Cannot extract player name"})
                     continue
 
-                # Look for player in nhl_data_lake with actual points recorded
-                # The pipeline updates prob_point which reflects actual results after game
-                player_data = (
-                    supabase.table("nhl_data_lake")
-                    .select("player_name, team, python_prob, prob_point, date")
+                # Lookup real stats for that player on game date
+                stats_resp = (
+                    supabase.table("nhl_player_game_stats")
+                    .select("player_name, team, goals, assists, points, shots, game_id")
                     .ilike("player_name", f"%{player_name}%")
-                    .gte("date", date)
-                    .lte("date", next_day)
+                    .eq("game_date", date)
                     .limit(1)
                     .execute()
                 )
 
-                if player_data.data:
-                    # If the pipeline has updated data for the actual game day = result known
-                    p = player_data.data[0]
-                    # prob_point > 0 after game means the player had points
-                    # Actually we need actual game stats — check if fixture is finished
-                    player_team = p.get("team", "")
-                    fx = fx_by_team.get(player_team)
-
+                if not stats_resp.data:
+                    # Stats not yet loaded — check if the game is finished at all
+                    player_team = bet.get("team", "")
+                    fx = fx_by_team.get(player_team) if player_team else None
                     if fx and fx.get("home_score") is not None:
-                        # Fixture finished — use a fallback: prob_point > 60% = likely scored
-                        # Real implementation: call NHL API for player game log
-                        # For now: mark as VOID to indicate "need manual check"
-                        # until we have actual player stats stored
-                        (
-                            supabase.table("best_bets")
-                            .update({
-                                "result": "VOID",
-                                "notes": f"Match terminé ({fx['home_team']} {fx.get('home_score','?')}-{fx.get('away_score','?')} {fx['away_team']}) — stats joueur non dispo, vérification manuelle requise.",
-                                "updated_at": datetime.now().isoformat(),
-                            })
-                            .eq("id", bet["id"])
-                            .execute()
-                        )
-                        resolved.append({
-                            "id": bet["id"],
-                            "label": label,
-                            "result": "VOID",
-                            "note": "Fixture finished but player stats not in DB — marked VOID",
+                        # Game finished but stats not yet in DB — try tomorrow's Trigger run
+                        # or mark VOID if we've already waited
+                        errors.append({
+                            "bet_id": bet.get("id"),
+                            "error": f"Stats missing for {player_name} on {date} — will retry",
                         })
-                    # else: game not finished yet, skip
+                    # else: game not finished yet, skip silently
+                    continue
+
+                p_stats = stats_resp.data[0]
+                actual_points = int(p_stats.get("points") or 0)
+                actual_goals = int(p_stats.get("goals") or 0)
+                actual_shots = int(p_stats.get("shots") or 0)
+                game_id = p_stats.get("game_id")
+
+                # Determine result based on market
+                market = bet.get("market", "player_points_over_0.5")
+                if market == "player_points_over_0.5":
+                    result_val = "WIN" if actual_points >= 1 else "LOSS"
+                elif market == "player_goals_over_0.5":
+                    result_val = "WIN" if actual_goals >= 1 else "LOSS"
+                elif market == "player_shots_over_2.5":
+                    result_val = "WIN" if actual_shots >= 3 else "LOSS"
                 else:
-                    # No player data for game date — try to resolve from fixture result only
-                    pass
+                    result_val = "WIN" if actual_points >= 1 else "LOSS"
+
+                note = (
+                    f"Auto-résolu: {p_stats['player_name']} — "
+                    f"{actual_goals}G {actual_points - actual_goals}A = {actual_points}Pts "
+                    f"({actual_shots} tirs) · match {game_id}"
+                )
+
+                (
+                    supabase.table("best_bets")
+                    .update({
+                        "result": result_val,
+                        "notes": note,
+                        "updated_at": datetime.now().isoformat(),
+                    })
+                    .eq("id", bet["id"])
+                    .execute()
+                )
+                resolved.append({
+                    "id": bet["id"],
+                    "label": label,
+                    "player": player_name,
+                    "result": result_val,
+                    "goals": actual_goals,
+                    "points": actual_points,
+                })
 
             except Exception as e:
                 errors.append({"bet_id": bet.get("id"), "error": str(e)})

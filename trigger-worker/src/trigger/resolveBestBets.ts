@@ -52,7 +52,10 @@ export const resolveFootballBets = schedules.task({
  * ── Resolve NHL Best Bets ──────────────────────────────────────────
  * Runs at 12:00 Paris (11:00 UTC) — all North American NHL games
  * from the prior night are finished (latest ~04:30 Paris).
- * Checks nhl_fixtures for FT scores and resolves player point bets.
+ *
+ * Step 1: Call /api/nhl/fetch-game-stats → fetches NHL API boxscores,
+ *         stores real goals/assists/points in nhl_player_game_stats
+ * Step 2: Call /api/best-bets/resolve → reads those stats, marks WIN/LOSS
  */
 export const resolveNHLBets = schedules.task({
     id: "resolve-nhl-bets",
@@ -60,29 +63,50 @@ export const resolveNHLBets = schedules.task({
     retry: standardRetry,
     run: async (payload) => {
         // NHL matches listed for date D are played during night D→D+1
-        // so at noon we look at "yesterday" which was game night
+        // so at noon we look at "yesterday" (the game night)
         const yesterday = new Date(payload.timestamp);
         yesterday.setDate(yesterday.getDate() - 1);
         const date = yesterday.toISOString().slice(0, 10);
 
-        console.log(`[NHL Resolve] Checking bets for game night ${date}`);
+        console.log(`[NHL Resolve] Game night: ${date}`);
 
-        const res = await fetch(`${API_URL}/api/best-bets/resolve`, {
+        const headers = {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${CRON_SECRET}`,
+        };
+
+        // Step 1 — Fetch real player stats from NHL API
+        console.log(`[NHL Resolve] Step 1: fetching game stats for ${date}`);
+        const fetchRes = await fetch(`${API_URL}/api/nhl/fetch-game-stats`, {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${CRON_SECRET}`,
-            },
+            headers,
+            body: JSON.stringify({ date }),
+        });
+
+        if (!fetchRes.ok) {
+            const text = await fetchRes.text();
+            throw new Error(`Fetch game stats failed (${fetchRes.status}): ${text}`);
+        }
+
+        const fetchResult = await fetchRes.json();
+        console.log(`[NHL Resolve] Stats fetched:`, fetchResult);
+
+        // Step 2 — Resolve pending bets using the freshly stored stats
+        console.log(`[NHL Resolve] Step 2: resolving bets for ${date}`);
+        const resolveRes = await fetch(`${API_URL}/api/best-bets/resolve`, {
+            method: "POST",
+            headers,
             body: JSON.stringify({ date, sport: "nhl" }),
         });
 
-        if (!res.ok) {
-            const text = await res.text();
-            throw new Error(`NHL resolve failed (${res.status}): ${text}`);
+        if (!resolveRes.ok) {
+            const text = await resolveRes.text();
+            throw new Error(`NHL resolve failed (${resolveRes.status}): ${text}`);
         }
 
-        const result = await res.json();
-        console.log(`[NHL Resolve] Done:`, result);
-        return result;
+        const resolveResult = await resolveRes.json();
+        console.log(`[NHL Resolve] Done:`, resolveResult);
+
+        return { fetchResult, resolveResult };
     },
 });
