@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import { Protected } from '@/lib/auth'
 import { triggerPipeline, triggerNHLPipeline, fetchPipelineStatus, stopPipeline } from '@/lib/api'
-import { Shield, Play, Loader2, Cpu, Terminal, Activity, Server, Database, StopCircle } from 'lucide-react'
+import { Shield, Play, Loader2, Cpu, Terminal, Activity, Server, Database, StopCircle, Clock, Calendar } from 'lucide-react'
 
 function AdminDashboard() {
     const [status, setStatus] = useState(null)
@@ -256,6 +256,106 @@ function AdminDashboard() {
                                         En attente de logs...
                                     </div>
                                 )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* ─── Automations Schedule ─── */}
+                <div className="glass rounded-2xl border border-white/5 p-6 shadow-xl">
+                    <h2 className="text-lg font-semibold flex items-center gap-2 mb-6">
+                        <Clock className="w-5 h-5 text-amber-400" />
+                        <span>Automatisations Trigger.dev</span>
+                        <span className="text-xs font-normal text-muted-foreground ml-auto">Heures en UTC → Paris</span>
+                    </h2>
+
+                    <div className="grid md:grid-cols-3 gap-6">
+                        {/* ⚽ Football */}
+                        <div className="space-y-3">
+                            <h3 className="text-sm font-bold text-indigo-400 flex items-center gap-1.5 mb-3">
+                                <span>⚽</span> Football
+                            </h3>
+                            {[
+                                { time: '06:00', paris: '07:00', cron: '0 6 * * *', name: 'Pipeline Quotidien', desc: 'Fetch données + IA + Prédictions + History reflect' },
+                                { time: '08:00', paris: '09:00', cron: '0 8 * * *', name: 'Schedule Daily', desc: 'Matchs du jour + NHL eval' },
+                                { time: '10:00 / 15:00', paris: '11:00 / 16:00', cron: '0 10,15 * * *', name: 'Value Bets', desc: 'Détection value bets Football & NHL' },
+                                { time: '*/15 (10h-22h)', paris: '11h-23h', cron: '*/15 10-22 * * *', name: 'Fetch Lineups', desc: 'Compos probables H-1 avant kickoff' },
+                                { time: '*/1 min', paris: '24/7', cron: '* * * * *', name: 'Live Tracker', desc: 'Scores live + momentum + stats en direct' },
+                                { time: '23:30', paris: '00:30', cron: '30 23 * * *', name: 'Recap Journée', desc: 'Résumé des résultats + bilan du jour' },
+                            ].map((t, i) => (
+                                <div key={i} className="flex items-start gap-3 p-2.5 rounded-lg bg-white/5 hover:bg-white/8 transition-colors">
+                                    <div className="shrink-0 w-[85px] text-right">
+                                        <div className="text-xs font-mono font-bold text-foreground">{t.paris}</div>
+                                        <div className="text-[10px] font-mono text-muted-foreground">{t.time} UTC</div>
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="text-xs font-semibold">{t.name}</div>
+                                        <div className="text-[10px] text-muted-foreground">{t.desc}</div>
+                                        <div className="text-[9px] font-mono text-muted-foreground/60 mt-0.5">{t.cron}</div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* 🏒 NHL */}
+                        <div className="space-y-3">
+                            <h3 className="text-sm font-bold text-cyan-400 flex items-center gap-1.5 mb-3">
+                                <span>🏒</span> NHL
+                            </h3>
+                            {[
+                                { time: '09:00', paris: '10:00', cron: '0 9 * * *', name: 'Pipeline NHL', desc: 'Schedule + Roster + Scoring + DeepThink' },
+                                { time: '22:00', paris: '23:00', cron: '0 22 * * *', name: 'Fetch Odds NHL', desc: 'Cotes des bookmakers pour value bets' },
+                            ].map((t, i) => (
+                                <div key={i} className="flex items-start gap-3 p-2.5 rounded-lg bg-white/5 hover:bg-white/8 transition-colors">
+                                    <div className="shrink-0 w-[85px] text-right">
+                                        <div className="text-xs font-mono font-bold text-foreground">{t.paris}</div>
+                                        <div className="text-[10px] font-mono text-muted-foreground">{t.time} UTC</div>
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="text-xs font-semibold">{t.name}</div>
+                                        <div className="text-[10px] text-muted-foreground">{t.desc}</div>
+                                        <div className="text-[9px] font-mono text-muted-foreground/60 mt-0.5">{t.cron}</div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* 🧠 ML & Évaluation */}
+                        <div className="space-y-3">
+                            <h3 className="text-sm font-bold text-purple-400 flex items-center gap-1.5 mb-3">
+                                <span>🧠</span> ML & Évaluation
+                            </h3>
+                            {[
+                                { time: '04:00', paris: '05:00', cron: '0 4 * * *', name: 'ML Évaluation', desc: 'Brier Score + Log Loss + ECE + history sync' },
+                                { time: 'Ven 02:00', paris: 'Ven 03:00', cron: '0 2 * * 5', name: 'Retrain XGBoost', desc: 'Réentraînement hebdomadaire du méta-modèle' },
+                            ].map((t, i) => (
+                                <div key={i} className="flex items-start gap-3 p-2.5 rounded-lg bg-white/5 hover:bg-white/8 transition-colors">
+                                    <div className="shrink-0 w-[85px] text-right">
+                                        <div className="text-xs font-mono font-bold text-foreground">{t.paris}</div>
+                                        <div className="text-[10px] font-mono text-muted-foreground">{t.time} UTC</div>
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="text-xs font-semibold">{t.name}</div>
+                                        <div className="text-[10px] text-muted-foreground">{t.desc}</div>
+                                        <div className="text-[9px] font-mono text-muted-foreground/60 mt-0.5">{t.cron}</div>
+                                    </div>
+                                </div>
+                            ))}
+
+                            {/* Leagues info */}
+                            <div className="mt-4 p-3 rounded-lg bg-indigo-500/5 border border-indigo-500/10">
+                                <div className="text-xs font-semibold flex items-center gap-1.5 mb-2">
+                                    <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+                                    Ligues suivies
+                                </div>
+                                <div className="text-[10px] text-muted-foreground space-y-0.5">
+                                    <div>🇫🇷 Ligue 1 · Ligue 2 · Coupe de France</div>
+                                    <div>🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League · FA Cup</div>
+                                    <div>🇪🇸 La Liga · Copa del Rey</div>
+                                    <div>🇮🇹 Serie A · Coppa Italia</div>
+                                    <div>🇩🇪 Bundesliga · DFB-Pokal</div>
+                                    <div>🏆 Champions League · Europa League</div>
+                                </div>
                             </div>
                         </div>
                     </div>
