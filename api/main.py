@@ -618,7 +618,7 @@ def get_best_bets(
                 )
                 .eq("date", date)
                 .neq("player_id", "META_ANALYSIS")
-                .gte("python_prob", 50)
+                .gte("python_prob", 0.50)  # stored as decimal: 0.70 = 70%
                 .order("python_prob", desc=True)
                 .limit(20)
                 .execute()
@@ -626,7 +626,8 @@ def get_best_bets(
 
             nhl_bets = []
             for p in (nhl_resp.data or []):
-                prob = float(p.get("python_prob") or 0)
+                prob_raw = float(p.get("python_prob") or 0)
+                prob = round(prob_raw * 100, 1)  # convert to percentage
                 if prob < 50:
                     continue
                 implied_odds = round(100 / prob, 2)
@@ -640,16 +641,33 @@ def get_best_bets(
                     "market": "player_points_over_0.5",
                     "odds": implied_odds,
                     "confidence": min(10, int(prob / 10)),
-                    "proba_model": round(prob, 1),
+                    "proba_model": prob,
                     "algo_score_goal": p.get("algo_score_goal") or 0,
                     "result": "PENDING",
                 })
 
             result["nhl"] = nhl_bets[:5]
 
-            # Fallback: if no data for that date, try to use data from nhl_fixtures + most recent nhl_data_lake
+            # Fallback: if no data for that date, use nhl_fixtures + most recent nhl_data_lake
+            # nhl_fixtures stores FULL names ("Detroit Red Wings")
+            # nhl_data_lake stores ABBREVIATIONS ("DET") → need a mapping table
             if not nhl_bets:
                 try:
+                    NHL_NAME_TO_ABBREV = {
+                        "Anaheim Ducks": "ANA", "Boston Bruins": "BOS", "Buffalo Sabres": "BUF",
+                        "Calgary Flames": "CGY", "Carolina Hurricanes": "CAR", "Chicago Blackhawks": "CHI",
+                        "Colorado Avalanche": "COL", "Columbus Blue Jackets": "CBJ", "Dallas Stars": "DAL",
+                        "Detroit Red Wings": "DET", "Edmonton Oilers": "EDM", "Florida Panthers": "FLA",
+                        "Los Angeles Kings": "LAK", "Minnesota Wild": "MIN", "Montreal Canadiens": "MTL",
+                        "Montréal Canadiens": "MTL", "Nashville Predators": "NSH", "New Jersey Devils": "NJD",
+                        "New York Islanders": "NYI", "New York Rangers": "NYR", "Ottawa Senators": "OTT",
+                        "Philadelphia Flyers": "PHI", "Pittsburgh Penguins": "PIT", "San Jose Sharks": "SJS",
+                        "Seattle Kraken": "SEA", "St. Louis Blues": "STL", "Tampa Bay Lightning": "TBL",
+                        "Toronto Maple Leafs": "TOR", "Utah Hockey Club": "UTA", "Vancouver Canucks": "VAN",
+                        "Vegas Golden Knights": "VGK", "Washington Capitals": "WSH", "Winnipeg Jets": "WPG",
+                    }
+                    NHL_ABBREV_TO_NAME = {v: k for k, v in NHL_NAME_TO_ABBREV.items()}
+
                     nxt = (datetime.fromisoformat(date) + timedelta(days=1)).strftime("%Y-%m-%d")
                     fixtures_resp = (
                         supabase.table("nhl_fixtures")
@@ -661,57 +679,60 @@ def get_best_bets(
                     nhl_fixtures = fixtures_resp.data or []
 
                     if nhl_fixtures:
-                        # Get team abbreviations from fixtures
-                        teams_in_play = set()
+                        # Convert full names → abbreviations + build home/away lookup
+                        abbrev_teams = set()
+                        fx_by_abbrev = {}
                         for fx in nhl_fixtures:
-                            teams_in_play.add(fx.get("home_team", ""))
-                            teams_in_play.add(fx.get("away_team", ""))
+                            h_name = fx.get("home_team", "")
+                            a_name = fx.get("away_team", "")
+                            h_abbrev = NHL_NAME_TO_ABBREV.get(h_name, h_name[:3].upper())
+                            a_abbrev = NHL_NAME_TO_ABBREV.get(a_name, a_name[:3].upper())
+                            abbrev_teams.add(h_abbrev)
+                            abbrev_teams.add(a_abbrev)
+                            fx_by_abbrev[h_abbrev] = {"opp": a_abbrev, "opp_name": a_name, "is_home": True}
+                            fx_by_abbrev[a_abbrev] = {"opp": h_abbrev, "opp_name": h_name, "is_home": False}
 
-                        # Get most recent nhl_data_lake for these teams
+                        # Get most recent nhl_data_lake for these abbreviations
                         recent_resp = (
                             supabase.table("nhl_data_lake")
                             .select("player_id, player_name, team, opp, is_home, python_prob, algo_score_goal, algo_score_shot, date")
-                            .in_("team", list(teams_in_play))
+                            .in_("team", list(abbrev_teams))
                             .neq("player_id", "META_ANALYSIS")
-                            .gte("python_prob", 50)
+                            .gte("python_prob", 0.50)  # stored as decimal
                             .order("python_prob", desc=True)
                             .limit(30)
                             .execute()
                         )
 
-                        # Build fixture lookup for opp
-                        fx_by_team = {}
-                        for fx in nhl_fixtures:
-                            h, a = fx.get("home_team", ""), fx.get("away_team", "")
-                            fx_by_team[h] = {"opp": a, "is_home": True}
-                            fx_by_team[a] = {"opp": h, "is_home": False}
-
                         nhl_bets_fallback = []
                         seen_players = set()
                         for p in (recent_resp.data or []):
-                            team = p.get("team", "")
-                            if team not in fx_by_team:
+                            team_abbrev = p.get("team", "")
+                            if team_abbrev not in fx_by_abbrev:
                                 continue
                             pid = p.get("player_id", "")
                             if pid in seen_players:
                                 continue
                             seen_players.add(pid)
-                            prob = float(p.get("python_prob") or 0)
-                            fx_info = fx_by_team[team]
-                            opp = fx_info["opp"]
-                            is_home = fx_info["is_home"]
-                            home_away = "vs" if is_home else "@"
+                            prob_raw = float(p.get("python_prob") or 0)
+                            prob = round(prob_raw * 100, 1)  # convert to %
+                            if prob < 50:
+                                continue
+                            fx_info = fx_by_abbrev[team_abbrev]
+                            opp_name = fx_info["opp_name"]
+                            home_away = "vs" if fx_info["is_home"] else "@"
                             implied_odds = round(100 / prob, 2)
+                            team_name = NHL_ABBREV_TO_NAME.get(team_abbrev, team_abbrev)
 
                             nhl_bets_fallback.append({
                                 "id": None,
                                 "player_name": p.get("player_name", ""),
-                                "team": team,
-                                "label": f"{p.get('player_name', '')} Over 0.5 Points — {team} {home_away} {opp}",
+                                "team": team_abbrev,
+                                "label": f"{p.get('player_name', '')} Over 0.5 Points — {team_name} {home_away} {opp_name}",
                                 "market": "player_points_over_0.5",
                                 "odds": implied_odds,
                                 "confidence": min(10, int(prob / 10)),
-                                "proba_model": round(prob, 1),
+                                "proba_model": prob,
                                 "algo_score_goal": p.get("algo_score_goal") or 0,
                                 "result": "PENDING",
                                 "note": f"Données du {p.get('date', '')}",
@@ -722,8 +743,9 @@ def get_best_bets(
                         result["nhl"] = nhl_bets_fallback
                         if nhl_bets_fallback:
                             result["nhl_note"] = f"Pipeline NHL pas encore lancé pour le {date} — données approximatives basées sur la dernière analyse disponible."
-                except Exception:
-                    pass
+                except Exception as ex:
+                    result["nhl_fallback_error"] = str(ex)
+
 
         except Exception as e:
             result["nhl_error"] = str(e)
