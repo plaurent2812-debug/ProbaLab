@@ -505,6 +505,288 @@ def get_football_meta_analysis(
     return {"ok": False, "date": date, "analysis": None, "source": None}
 
 
+# ─── Paris du Soir — Best Bets ──────────────────────────────────
+
+
+@app.get("/api/best-bets")
+def get_best_bets(
+    date: str | None = Query(None, description="ISO date YYYY-MM-DD"),
+    sport: str | None = Query(None, description="'football' | 'nhl' | None = both"),
+):
+    """Return the 5 best football + 5 best NHL bets for a given date."""
+    if not date:
+        date = datetime.now().strftime("%Y-%m-%d")
+
+    result = {"date": date, "football": [], "nhl": []}
+
+    # ── Football best bets ────────────────────────────────────────
+    if sport in (None, "football"):
+        try:
+            next_day = (datetime.fromisoformat(date) + timedelta(days=1)).strftime("%Y-%m-%d")
+
+            # Get fixtures for that date
+            fx_resp = (
+                supabase.table("fixtures")
+                .select("id, home_team, away_team, date")
+                .gte("date", f"{date}T00:00:00Z")
+                .lt("date", f"{next_day}T00:00:00Z")
+                .eq("status", "NS")
+                .execute()
+            )
+            fx_map = {f["id"]: f for f in (fx_resp.data or [])}
+
+            if fx_map:
+                pred_resp = (
+                    supabase.table("predictions")
+                    .select(
+                        "fixture_id, proba_home, proba_draw, proba_away, "
+                        "proba_btts, proba_over_2_5, proba_over_15, "
+                        "recommended_bet, confidence_score, is_value_bet, "
+                        "analysis_text, proba_over_35"
+                    )
+                    .in_("fixture_id", list(fx_map.keys()))
+                    .gte("confidence_score", 6)
+                    .order("confidence_score", desc=True)
+                    .execute()
+                )
+
+                football_bets = []
+                for p in (pred_resp.data or []):
+                    fix = fx_map.get(p["fixture_id"])
+                    if not fix:
+                        continue
+
+                    # Build candidate bets from all markets
+                    probas = {
+                        "Victoire domicile": p.get("proba_home") or 0,
+                        "Match nul": p.get("proba_draw") or 0,
+                        "Victoire extérieur": p.get("proba_away") or 0,
+                        "BTTS — Les deux équipes marquent": p.get("proba_btts") or 0,
+                        "Over 2.5 buts": p.get("proba_over_2_5") or 0,
+                        "Over 1.5 buts": p.get("proba_over_15") or 0,
+                        "Over 3.5 buts": p.get("proba_over_35") or 0,
+                    }
+
+                    for market, proba in probas.items():
+                        if proba < 55:
+                            continue
+                        implied_odds = round(100 / proba, 2) if proba > 0 else 0
+                        # Target window: 1.65 – 2.30
+                        if not (1.65 <= implied_odds <= 2.30):
+                            continue
+
+                        ev_score = (proba / 100) * implied_odds - 1
+                        composite = (p.get("confidence_score") or 0) * 10 + ev_score * 50 + proba * 0.3
+
+                        football_bets.append({
+                            "id": None,
+                            "fixture_id": p["fixture_id"],
+                            "label": f"{fix['home_team']} vs {fix['away_team']} — {market}",
+                            "market": market,
+                            "odds": implied_odds,
+                            "confidence": p.get("confidence_score") or 0,
+                            "proba_model": proba,
+                            "is_value": bool(p.get("is_value_bet")),
+                            "ev_score": round(ev_score, 3),
+                            "composite": composite,
+                            "result": "PENDING",
+                        })
+
+                # Sort by composite score, dedupe by fixture
+                football_bets.sort(key=lambda x: -x["composite"])
+                seen_fixtures = set()
+                top5 = []
+                for bet in football_bets:
+                    if bet["fixture_id"] not in seen_fixtures:
+                        top5.append(bet)
+                        seen_fixtures.add(bet["fixture_id"])
+                    if len(top5) >= 5:
+                        break
+
+                result["football"] = top5
+
+        except Exception as e:
+            result["football_error"] = str(e)
+
+    # ── NHL best bets ─────────────────────────────────────────────
+    if sport in (None, "nhl"):
+        try:
+            nhl_resp = (
+                supabase.table("nhl_data_lake")
+                .select(
+                    "player_id, player_name, team, opp, is_home, "
+                    "python_prob, algo_score_goal, algo_score_shot"
+                )
+                .eq("date", date)
+                .neq("player_id", "META_ANALYSIS")
+                .gte("python_prob", 50)
+                .order("python_prob", desc=True)
+                .limit(20)
+                .execute()
+            )
+
+            nhl_bets = []
+            for p in (nhl_resp.data or []):
+                prob = float(p.get("python_prob") or 0)
+                if prob < 50:
+                    continue
+                implied_odds = round(100 / prob, 2)
+                home_away = "vs" if p.get("is_home") else "@"
+
+                nhl_bets.append({
+                    "id": None,
+                    "player_name": p.get("player_name", ""),
+                    "team": p.get("team", ""),
+                    "label": f"{p.get('player_name', '')} Over 0.5 Points — {p.get('team', '')} {home_away} {p.get('opp', '')}",
+                    "market": "player_points_over_0.5",
+                    "odds": implied_odds,
+                    "confidence": min(10, int(prob / 10)),
+                    "proba_model": round(prob, 1),
+                    "algo_score_goal": p.get("algo_score_goal") or 0,
+                    "result": "PENDING",
+                })
+
+            result["nhl"] = nhl_bets[:5]
+
+        except Exception as e:
+            result["nhl_error"] = str(e)
+
+    # ── Enrich with saved tracking results ───────────────────────
+    try:
+        saved = (
+            supabase.table("best_bets")
+            .select("*")
+            .eq("date", date)
+            .execute()
+        )
+        saved_map = {}
+        for s in (saved.data or []):
+            saved_map[s["bet_label"]] = s
+
+        for bet in result["football"]:
+            if bet["label"] in saved_map:
+                s = saved_map[bet["label"]]
+                bet["id"] = s["id"]
+                bet["result"] = s.get("result", "PENDING")
+                bet["notes"] = s.get("notes", "")
+
+        for bet in result["nhl"]:
+            if bet["label"] in saved_map:
+                s = saved_map[bet["label"]]
+                bet["id"] = s["id"]
+                bet["result"] = s.get("result", "PENDING")
+                bet["notes"] = s.get("notes", "")
+
+    except Exception:
+        pass
+
+    return result
+
+
+@app.patch("/api/best-bets/{bet_id}/result")
+def update_bet_result(
+    bet_id: int,
+    body: dict,
+):
+    """Update the result of a tracked bet (admin only — secured by API key)."""
+    result_val = body.get("result", "").upper()
+    if result_val not in ("WIN", "LOSS", "VOID", "PENDING"):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="result must be WIN, LOSS, VOID or PENDING")
+
+    try:
+        resp = (
+            supabase.table("best_bets")
+            .update({
+                "result": result_val,
+                "notes": body.get("notes", ""),
+                "updated_at": datetime.now().isoformat(),
+            })
+            .eq("id", bet_id)
+            .execute()
+        )
+        return {"ok": True, "updated": resp.data}
+    except Exception as e:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/best-bets/save")
+def save_best_bets(body: dict):
+    """Save a best bet to the tracking table."""
+    try:
+        bet_data = {
+            "date": body.get("date"),
+            "sport": body.get("sport"),
+            "bet_label": body.get("label"),
+            "market": body.get("market"),
+            "odds": body.get("odds"),
+            "confidence": body.get("confidence"),
+            "proba_model": body.get("proba_model"),
+            "fixture_id": body.get("fixture_id"),
+            "player_name": body.get("player_name"),
+            "result": "PENDING",
+        }
+        resp = supabase.table("best_bets").insert(bet_data).execute()
+        return {"ok": True, "id": resp.data[0]["id"] if resp.data else None}
+    except Exception as e:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/best-bets/stats")
+def get_best_bets_stats():
+    """Return win rate and ROI stats for the performance dashboard."""
+    try:
+        resp = (
+            supabase.table("best_bets")
+            .select("sport, result, date, odds")
+            .neq("result", "PENDING")
+            .neq("result", "VOID")
+            .order("date", desc=True)
+            .limit(200)
+            .execute()
+        )
+        rows = resp.data or []
+
+        def calc_stats(bets):
+            wins = sum(1 for b in bets if b["result"] == "WIN")
+            losses = sum(1 for b in bets if b["result"] == "LOSS")
+            total = wins + losses
+            win_rate = round(wins / total * 100, 1) if total else 0
+            # ROI: assuming flat 1% stake (normalized to 1 unit)
+            roi = 0
+            for b in bets:
+                if b["result"] == "WIN":
+                    roi += (float(b.get("odds") or 1.85) - 1)
+                else:
+                    roi -= 1
+            roi_pct = round(roi / total * 100, 1) if total else 0
+            return {"wins": wins, "losses": losses, "total": total, "win_rate": win_rate, "roi_pct": roi_pct}
+
+        football = [b for b in rows if b["sport"] == "football"]
+        nhl = [b for b in rows if b["sport"] == "nhl"]
+
+        # 30-day timeline
+        from collections import defaultdict
+        timeline = defaultdict(lambda: {"wins": 0, "losses": 0})
+        for b in rows:
+            d = b["date"]
+            if b["result"] == "WIN":
+                timeline[d]["wins"] += 1
+            else:
+                timeline[d]["losses"] += 1
+
+        return {
+            "global": calc_stats(rows),
+            "football": calc_stats(football),
+            "nhl": calc_stats(nhl),
+            "timeline": [{"date": k, **v} for k, v in sorted(timeline.items())[-30:]],
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
 @app.get("/api/predictions")
 def get_predictions(
     date: str | None = Query(None, description="ISO date YYYY-MM-DD"),

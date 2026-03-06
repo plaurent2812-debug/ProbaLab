@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, NavLink, useNavigate, useLocation } from "react-router-dom"
 import { lazy, Suspense, useState, useEffect, Component } from "react"
-import { Zap, Trophy, Shield, User, Star, Radio, LayoutGrid } from "lucide-react"
+import { Zap, Trophy, Shield, User, Star, Radio, LayoutGrid, Target } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { AuthProvider, useAuth } from "@/lib/auth"
 import { ThemeProvider } from "@/components/theme-provider"
@@ -54,6 +54,7 @@ const PremiumPage = lazy(() => import("@/pages/Premium"))
 const TeamProfile = lazy(() => import("@/pages/TeamProfile"))
 const ProfilePage = lazy(() => import("@/pages/Profile"))
 const WatchlistPage = lazy(() => import("@/pages/WatchlistPage"))
+const ParisDuSoirPage = lazy(() => import("@/pages/ParisDuSoir"))
 import GoalNotifications from "@/components/GoalNotifications"
 
 
@@ -113,6 +114,17 @@ function Header() {
             >
               🏒 NHL
             </NavLink>
+            {(isPremium || isAdmin) && (
+              <NavLink
+                to="/paris-du-soir"
+                className={({ isActive }) => cn(
+                  "px-3 py-2 text-xs font-bold transition-colors border-b-2 hidden md:flex items-center gap-1",
+                  isActive ? "text-amber-400 border-amber-400" : "text-muted-foreground border-transparent hover:text-foreground"
+                )}
+              >
+                <Target className="w-3 h-3" />Paris du Soir
+              </NavLink>
+            )}
             {isAdmin && (
               <>
                 <NavLink
@@ -296,6 +308,7 @@ function AppContent() {
               <Route path="/admin" element={<AdminGuard><AdminPage /></AdminGuard>} />
               <Route path="/profile" element={<Protected><ProfilePage /></Protected>} />
               <Route path="/watchlist" element={<WatchlistPage />} />
+              <Route path="/paris-du-soir" element={<ParisDuSoirPage />} />
             </Routes>
           </div>
         </Suspense>
