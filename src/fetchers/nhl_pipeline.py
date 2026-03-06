@@ -1775,18 +1775,23 @@ def generate_deepthink_meta_analysis(
     try:
         logger.info("[NHL] 🧠 DeepThink: Generating strategic meta-analysis...")
         response = gclient.models.generate_content(
-            model="gemini-2.5-pro",
+            model="gemini-2.5-flash",
             contents=user_prompt,
             config=types.GenerateContentConfig(
                 system_instruction=system_prompt,
                 temperature=0.4,
                 max_output_tokens=2000,
-                thinking_config=types.ThinkingConfig(
-                    thinking_budget=8000,
-                ),
             ),
         )
-        result = response.text
+        # Robuste: extraire le texte de la réponse
+        result = ""
+        if response and response.candidates:
+            for part in response.candidates[0].content.parts:
+                if hasattr(part, "text") and part.text:
+                    result += part.text
+        if not result:
+            result = getattr(response, "text", "") or ""
+        
         if result and len(result) > 50:
             logger.info(f"[NHL] 🧠 DeepThink analysis generated ({len(result)} chars)")
             return result
@@ -1796,3 +1801,4 @@ def generate_deepthink_meta_analysis(
     except Exception as e:
         logger.warning(f"[NHL] DeepThink generation failed: {e}")
         return None
+
