@@ -270,17 +270,14 @@ function AdminDashboard() {
                     </h2>
 
                     <div className="grid md:grid-cols-3 gap-6">
-                        {/* ⚽ Football */}
+                        {/* ⚽ Football Only */}
                         <div className="space-y-3">
                             <h3 className="text-sm font-bold text-indigo-400 flex items-center gap-1.5 mb-3">
                                 <span>⚽</span> Football
                             </h3>
                             {[
-                                { time: '06:00', paris: '07:00', cron: '0 6 * * *', name: 'Pipeline Quotidien', desc: 'Fetch données + IA + Prédictions + History reflect' },
-                                { time: '08:00', paris: '09:00', cron: '0 8 * * *', name: 'Schedule Daily', desc: 'Matchs du jour + NHL eval' },
-                                { time: '10:00 / 15:00', paris: '11:00 / 16:00', cron: '0 10,15 * * *', name: 'Value Bets', desc: 'Détection value bets Football & NHL' },
+                                { time: '06:00', paris: '07:00', cron: '0 6 * * *', name: 'Pipeline Quotidien', desc: 'Reflection + Fetch données + IA + Prédictions' },
                                 { time: '*/15 (10h-22h)', paris: '11h-23h', cron: '*/15 10-22 * * *', name: 'Fetch Lineups', desc: 'Compos probables H-1 avant kickoff' },
-                                { time: '*/1 min', paris: '24/7', cron: '* * * * *', name: 'Live Tracker', desc: 'Scores live + momentum + stats en direct' },
                                 { time: '23:30', paris: '00:30', cron: '30 23 * * *', name: 'Recap Journée', desc: 'Résumé des résultats + bilan du jour' },
                             ].map((t, i) => (
                                 <div key={i} className="flex items-start gap-3 p-2.5 rounded-lg bg-white/5 hover:bg-white/8 transition-colors">
@@ -297,14 +294,15 @@ function AdminDashboard() {
                             ))}
                         </div>
 
-                        {/* 🏒 NHL */}
+                        {/* ⚽🏒 Mixed (Football + NHL) */}
                         <div className="space-y-3">
-                            <h3 className="text-sm font-bold text-cyan-400 flex items-center gap-1.5 mb-3">
-                                <span>🏒</span> NHL
+                            <h3 className="text-sm font-bold text-amber-400 flex items-center gap-1.5 mb-3">
+                                <span>⚽🏒</span> Mixte
                             </h3>
                             {[
-                                { time: '09:00', paris: '10:00', cron: '0 9 * * *', name: 'Pipeline NHL', desc: 'Schedule + Roster + Scoring + DeepThink' },
-                                { time: '22:00', paris: '23:00', cron: '0 22 * * *', name: 'Fetch Odds NHL', desc: 'Cotes des bookmakers pour value bets' },
+                                { time: '08:00', paris: '09:00', cron: '0 8 * * *', name: 'Schedule Daily', desc: '⚽ Matchs du jour + halftime/70min monitors\n🏒 NHL Performance eval' },
+                                { time: '*/1 min', paris: '24/7', cron: '* * * * *', name: 'Live Tracker', desc: '⚽ Live scores (11h-23h) + momentum (*/5min)\n🏒 NHL live scores (16h-08h)' },
+                                { time: '10:00 / 15:00', paris: '11:00 / 16:00', cron: '0 10,15 * * *', name: 'Value Bets', desc: '⚽ Football value bets (10h UTC)\n🏒 NHL value bets (15h UTC)' },
                             ].map((t, i) => (
                                 <div key={i} className="flex items-start gap-3 p-2.5 rounded-lg bg-white/5 hover:bg-white/8 transition-colors">
                                     <div className="shrink-0 w-[85px] text-right">
@@ -313,21 +311,23 @@ function AdminDashboard() {
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <div className="text-xs font-semibold">{t.name}</div>
-                                        <div className="text-[10px] text-muted-foreground">{t.desc}</div>
+                                        <div className="text-[10px] text-muted-foreground whitespace-pre-line">{t.desc}</div>
                                         <div className="text-[9px] font-mono text-muted-foreground/60 mt-0.5">{t.cron}</div>
                                     </div>
                                 </div>
                             ))}
                         </div>
 
-                        {/* 🧠 ML & Évaluation */}
+                        {/* 🏒 NHL + 🧠 ML */}
                         <div className="space-y-3">
-                            <h3 className="text-sm font-bold text-purple-400 flex items-center gap-1.5 mb-3">
-                                <span>🧠</span> ML & Évaluation
+                            <h3 className="text-sm font-bold text-cyan-400 flex items-center gap-1.5 mb-3">
+                                <span>🏒</span> NHL + <span className="text-purple-400">🧠 ML</span>
                             </h3>
                             {[
-                                { time: '04:00', paris: '05:00', cron: '0 4 * * *', name: 'ML Évaluation', desc: 'Brier Score + Log Loss + ECE + history sync' },
-                                { time: 'Ven 02:00', paris: 'Ven 03:00', cron: '0 2 * * 5', name: 'Retrain XGBoost', desc: 'Réentraînement hebdomadaire du méta-modèle' },
+                                { time: '09:00', paris: '10:00', cron: '0 9 * * *', name: '🏒 Pipeline NHL', desc: 'Schedule + Roster + Scoring + DeepThink' },
+                                { time: '22:00', paris: '23:00', cron: '0 22 * * *', name: '🏒 Fetch Odds NHL', desc: 'Cotes des bookmakers pour value bets' },
+                                { time: '04:00', paris: '05:00', cron: '0 4 * * *', name: '🧠 ML Évaluation', desc: 'Brier Score + Log Loss + ECE + history sync' },
+                                { time: 'Ven 02:00', paris: 'Ven 03:00', cron: '0 2 * * 5', name: '🧠 Retrain XGBoost', desc: 'Réentraînement hebdomadaire du méta-modèle' },
                             ].map((t, i) => (
                                 <div key={i} className="flex items-start gap-3 p-2.5 rounded-lg bg-white/5 hover:bg-white/8 transition-colors">
                                     <div className="shrink-0 w-[85px] text-right">
