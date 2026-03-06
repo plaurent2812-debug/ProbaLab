@@ -250,7 +250,7 @@ function NHLMatchRow({ match, isStarred, onToggleStar }) {
             </div>
 
             {/* Tags & Prediction */}
-            <div className="shrink-0 flex items-center gap-1.5 pl-2">
+            <div className="shrink-0 w-[110px] flex items-center gap-1.5 pl-2 justify-end">
                 {/* Match Style Tags */}
                 {probaOver55 != null && probaOver55 >= 57 && (
                     <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-orange-500/15 text-orange-500 flex items-center gap-1">

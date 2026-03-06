@@ -354,6 +354,7 @@
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   padding: 2px 0;
+  box-sizing: border-box;
 }
 
 .fs-score-box .score-val {
