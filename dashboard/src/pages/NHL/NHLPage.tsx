@@ -118,17 +118,29 @@ function MetaAnalysisCard({ date }) {
             {/* Content */}
             {expanded && (
                 <div className="px-4 pb-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                    <div className="border-t border-purple-500/10 pt-3 space-y-2">
+                    <div className="border-t border-purple-500/10 pt-3 space-y-2 max-h-[400px] overflow-y-auto pr-1 custom-scrollbar">
                         {lines.map((line, i) => {
                             // Title lines (starts with # or 🧠)
                             if (line.startsWith('# ') || line.startsWith('🧠')) {
                                 return null // Skip — header already shown
+                            }
+                            // Horizontal rule (---)
+                            if (line.match(/^-{3,}$/)) {
+                                return <hr key={i} className="border-purple-500/10 my-2" />
                             }
                             // Spot headers (## or ### or bold **)
                             if (line.startsWith('## ') || line.startsWith('### ')) {
                                 return (
                                     <h4 key={i} className="text-xs font-bold text-foreground pt-2 first:pt-0">
                                         {line.replace(/^#+\s*/, '')}
+                                    </h4>
+                                )
+                            }
+                            // Spot headers without markdown (e.g. "Spot 1 :", "Spot 2 :")
+                            if (line.match(/^Spot\s*\d/i)) {
+                                return (
+                                    <h4 key={i} className="text-xs font-bold text-foreground pt-2">
+                                        {line}
                                     </h4>
                                 )
                             }
@@ -160,6 +172,14 @@ function MetaAnalysisCard({ date }) {
                                 return (
                                     <p key={i} className="text-xs text-muted-foreground leading-relaxed pl-3 border-l-2 border-purple-500/20">
                                         {line.replace(/^[-•]\s*/, '')}
+                                    </p>
+                                )
+                            }
+                            // Numbered items (1. 2. 3.)
+                            if (line.match(/^\d+\.\s/)) {
+                                return (
+                                    <p key={i} className="text-xs text-muted-foreground leading-relaxed pl-3 border-l-2 border-blue-500/20">
+                                        {line}
                                     </p>
                                 )
                             }
