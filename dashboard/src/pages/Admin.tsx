@@ -276,7 +276,7 @@ function AdminDashboard() {
                                 <span>⚽</span> Football
                             </h3>
                             {[
-                                { time: '06:00', paris: '07:00', cron: '0 6 * * *', name: 'Pipeline Quotidien', desc: 'Reflection + Fetch données + IA + Prédictions' },
+                                { time: '06:00', paris: '07:00', cron: '0 6 * * *', name: 'Pipeline Quotidien', desc: 'Reflection + Fetch données + IA + Prédictions + DeepThink' },
                                 { time: '*/15 (10h-22h)', paris: '11h-23h', cron: '*/15 10-22 * * *', name: 'Fetch Lineups', desc: 'Compos probables H-1 avant kickoff' },
                                 { time: '23:30', paris: '00:30', cron: '30 23 * * *', name: 'Recap Journée', desc: 'Résumé des résultats + bilan du jour' },
                             ].map((t, i) => (
