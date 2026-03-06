@@ -27,11 +27,13 @@ from src.config import logger, supabase
 
 try:
     from src.nhl.ml_models import load_all_models
+    from src.nhl.nhl_ml_predictor import predict_nhl_match as predict_nhl_match_ml, is_available as nhl_ml_available
 
     ML_MODELS = load_all_models()
 except ImportError:
     logger.warning("[NHL] nhl.ml_models not available.")
     ML_MODELS = {}
+    def nhl_ml_available(): return False
 
 NHL_API = "https://api-web.nhle.com/v1"
 
@@ -1451,6 +1453,28 @@ def run_nhl_pipeline() -> dict:
         ph = win_prob["home"]
         pa = win_prob["away"]
         po55 = win_prob.get("over_55", 50)
+
+        # ─── ML Blend (60% Poisson + 40% XGBoost) ───
+        try:
+            if nhl_ml_available():
+                ml_features = {
+                    "proba_home": ph,
+                    "proba_away": pa,
+                    "proba_over_55": po55,
+                    "ai_home_factor": h_ai,
+                    "ai_away_factor": a_ai,
+                }
+                ml_preds = predict_nhl_match_ml(ml_features)
+                if ml_preds.get("ml_home_win") is not None:
+                    ml_home = ml_preds["ml_home_win"]
+                    ml_away = 100 - ml_home
+                    ph = round(0.6 * ph + 0.4 * ml_home)
+                    pa = round(0.6 * pa + 0.4 * ml_away)
+                    logger.info(f"[NHL]   🧠 ML blend: home={ph}% away={pa}% (ML raw: {ml_home}%)")
+                if ml_preds.get("ml_over_55") is not None:
+                    po55 = round(0.6 * po55 + 0.4 * ml_preds["ml_over_55"])
+        except Exception as e:
+            logger.warning(f"[NHL]   ⚠️ ML blend skipped: {e}")
 
         # Sort match players to find the best bet
         # Priorities: Point > 50%, Goal > 30%, Assist > 35%

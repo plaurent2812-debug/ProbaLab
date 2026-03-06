@@ -11,6 +11,7 @@ export const retrainMetaModelTask = schedules.task({
         const CRON_SECRET = process.env.CRON_SECRET || "super_secret_probalab_2026";
 
         try {
+            // 1. Football Meta-Model Retrain
             const response = await fetch(`${API_URL}/api/trigger/retrain-meta-model`, {
                 method: "POST",
                 headers: {
@@ -21,17 +22,31 @@ export const retrainMetaModelTask = schedules.task({
 
             if (!response.ok) {
                 const errorText = await response.text();
-                console.error(`❌ Erreur API (${response.status}): ${errorText}`);
-                throw new Error(`API returned status ${response.status}`);
+                console.error(`❌ Football retrain error (${response.status}): ${errorText}`);
+            } else {
+                console.log("✅ Football Meta-Model retrained:", await response.json());
             }
 
-            const result = await response.json();
-            console.log("✅ Entraînement réussi:", result);
+            // 2. NHL Match-Level ML Retrain
+            console.log("🏒🧠 Déclenchement du retrain NHL Match ML...");
+            const nhlResponse = await fetch(`${API_URL}/api/trigger/nhl-retrain-model`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${CRON_SECRET}`,
+                },
+            });
+
+            if (!nhlResponse.ok) {
+                const errorText = await nhlResponse.text();
+                console.error(`❌ NHL retrain error (${nhlResponse.status}): ${errorText}`);
+            } else {
+                console.log("✅ NHL Match ML retrained:", await nhlResponse.json());
+            }
 
             return {
                 success: true,
-                message: "Meta-Model successfully retrained",
-                details: result
+                message: "Both Football and NHL models retrained",
             };
 
         } catch (error: any) {

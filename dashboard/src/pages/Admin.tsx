@@ -324,10 +324,10 @@ function AdminDashboard() {
                                 <span>🏒</span> NHL + <span className="text-purple-400">🧠 ML</span>
                             </h3>
                             {[
-                                { time: '09:00', paris: '10:00', cron: '0 9 * * *', name: '🏒 Pipeline NHL', desc: 'Schedule + Roster + Scoring + DeepThink' },
+                                { time: '09:00', paris: '10:00', cron: '0 9 * * *', name: '🏒 Pipeline NHL', desc: 'Schedule + Roster + Scoring + ML Blend + DeepThink' },
                                 { time: '22:00', paris: '23:00', cron: '0 22 * * *', name: '🏒 Fetch Odds NHL', desc: 'Cotes des bookmakers pour value bets' },
-                                { time: '04:00', paris: '05:00', cron: '0 4 * * *', name: '🧠 ML Évaluation', desc: 'Brier Score + Log Loss + ECE + history sync' },
-                                { time: 'Ven 02:00', paris: 'Ven 03:00', cron: '0 2 * * 5', name: '🧠 Retrain XGBoost', desc: 'Réentraînement hebdomadaire du méta-modèle' },
+                                { time: '04:00', paris: '05:00', cron: '0 4 * * *', name: '🧠 ML Évaluation', desc: '⚽ Football: Brier Score + Log Loss + ECE\n🏒 NHL: history sync' },
+                                { time: 'Ven 02:00', paris: 'Ven 03:00', cron: '0 2 * * 5', name: '🧠 Retrain XGBoost', desc: '⚽ Football Meta-Modèle + 🏒 NHL Match ML\nRetrain hebdomadaire des deux modèles' },
                             ].map((t, i) => (
                                 <div key={i} className="flex items-start gap-3 p-2.5 rounded-lg bg-white/5 hover:bg-white/8 transition-colors">
                                     <div className="shrink-0 w-[85px] text-right">

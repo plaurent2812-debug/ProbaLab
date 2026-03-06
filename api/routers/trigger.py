@@ -635,6 +635,31 @@ def retrain_meta_model():
         return {"status": "error", "message": str(e)}
 
 
+@router.post("/nhl-retrain-model")
+def nhl_retrain_model():
+    """Retrain NHL match-level XGBoost models (Win + Over 5.5)."""
+    logger.info("[MLOps] 🏒🧠 NHL Match ML Retraining...")
+    try:
+        from src.nhl.train_match import train_nhl_match_models
+
+        result = train_nhl_match_models()
+
+        if result.get("success"):
+            metrics = result.get("metrics", {})
+            msg = (
+                f"🏒🧠 *NHL XGBoost Match ML Retrained*\n\n"
+                f"📊 *Échantillons :* {result['n_samples']} matchs\n"
+            )
+            for name, m in metrics.items():
+                msg += f"🎯 *{name}* : Acc={m['accuracy']:.1%} | Brier={m['brier_score']:.4f}\n"
+            _send_telegram_message(msg)
+
+        return {"status": "ok", **result}
+    except Exception as e:
+        logger.error(f"[MLOps] NHL Retraining Failed: {e}")
+        return {"status": "error", "message": str(e)}
+
+
 @router.post("/fetch-lineups")
 def fetch_lineups():
     """Fetch H-1 lineups for upcoming matches and store in Supabase."""
