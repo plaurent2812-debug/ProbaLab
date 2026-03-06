@@ -878,6 +878,242 @@ def save_best_bets(body: dict):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
+@app.post("/api/best-bets/resolve")
+def resolve_best_bets(body: dict, authorization: str = Header(None)):
+    """
+    Called by Trigger.dev scheduled tasks to auto-resolve PENDING bets.
+    Checks match results and updates best_bets table with WIN/LOSS/VOID.
+    """
+    # Simple auth check
+    expected = f"Bearer {os.getenv('CRON_SECRET', 'super_secret_probalab_2026')}"
+    if authorization != expected:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    date = body.get("date")
+    sport = body.get("sport")  # "football" or "nhl"
+
+    if not date or sport not in ("football", "nhl"):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="date and sport (football|nhl) required")
+
+    resolved = []
+    errors = []
+
+    # ── Load pending bets ─────────────────────────────────────────
+    pending = (
+        supabase.table("best_bets")
+        .select("*")
+        .eq("date", date)
+        .eq("sport", sport)
+        .eq("result", "PENDING")
+        .execute()
+    )
+    bets = pending.data or []
+
+    if not bets:
+        return {"ok": True, "date": date, "sport": sport, "resolved": 0, "message": "No pending bets"}
+
+    # ── Football resolution ───────────────────────────────────────
+    if sport == "football":
+        next_day = (datetime.fromisoformat(date) + timedelta(days=1)).strftime("%Y-%m-%d")
+
+        # Fetch finished fixtures for that date
+        fx_resp = (
+            supabase.table("fixtures")
+            .select("id, home_team, away_team, home_goals, away_goals, status")
+            .gte("date", f"{date}T00:00:00Z")
+            .lt("date", f"{next_day}T00:00:00Z")
+            .in_("status", ["FT", "AET", "PEN"])
+            .execute()
+        )
+        finished = {f["id"]: f for f in (fx_resp.data or [])}
+
+        # Build a map by team names too (for label matching)
+        fx_by_teams = {}
+        for f in (fx_resp.data or []):
+            key = f"{f['home_team']} vs {f['away_team']}"
+            fx_by_teams[key] = f
+
+        for bet in bets:
+            try:
+                label = bet["bet_label"]   # e.g. "PSG vs Lyon — Over 2.5 buts"
+                market = bet["market"]
+                fixture_id = bet.get("fixture_id")
+
+                # Try to find the fixture
+                fx = None
+                if fixture_id and fixture_id in finished:
+                    fx = finished[fixture_id]
+                else:
+                    # Try matching by label prefix "Home vs Away —"
+                    for key, f in fx_by_teams.items():
+                        if label.startswith(key):
+                            fx = f
+                            break
+
+                if not fx:
+                    # Match not finished yet or not found
+                    continue
+
+                h = fx.get("home_goals") or 0
+                a = fx.get("away_goals") or 0
+                total = h + a
+
+                # Evaluate market
+                result_val = None
+                if market == "Victoire domicile":
+                    result_val = "WIN" if h > a else "LOSS"
+                elif market == "Victoire extérieur":
+                    result_val = "WIN" if a > h else "LOSS"
+                elif market == "Match nul":
+                    result_val = "WIN" if h == a else "LOSS"
+                elif market == "Over 2.5 buts":
+                    result_val = "WIN" if total > 2.5 else "LOSS"
+                elif market == "Over 1.5 buts":
+                    result_val = "WIN" if total > 1.5 else "LOSS"
+                elif market == "Over 3.5 buts":
+                    result_val = "WIN" if total > 3.5 else "LOSS"
+                elif market in ("BTTS — Les deux équipes marquent", "BTTS"):
+                    result_val = "WIN" if (h > 0 and a > 0) else "LOSS"
+                else:
+                    # Unknown market
+                    continue
+
+                # Update best_bets
+                (
+                    supabase.table("best_bets")
+                    .update({
+                        "result": result_val,
+                        "notes": f"Auto-résolu: {h}-{a} ({fx['status']})",
+                        "updated_at": datetime.now().isoformat(),
+                    })
+                    .eq("id", bet["id"])
+                    .execute()
+                )
+                resolved.append({
+                    "id": bet["id"],
+                    "label": label,
+                    "result": result_val,
+                    "score": f"{h}-{a}",
+                })
+
+            except Exception as e:
+                errors.append({"bet_id": bet.get("id"), "error": str(e)})
+
+    # ── NHL resolution ────────────────────────────────────────────
+    elif sport == "nhl":
+        next_day = (datetime.fromisoformat(date) + timedelta(days=1)).strftime("%Y-%m-%d")
+
+        NHL_NAME_TO_ABBREV = {
+            "Anaheim Ducks": "ANA", "Boston Bruins": "BOS", "Buffalo Sabres": "BUF",
+            "Calgary Flames": "CGY", "Carolina Hurricanes": "CAR", "Chicago Blackhawks": "CHI",
+            "Colorado Avalanche": "COL", "Columbus Blue Jackets": "CBJ", "Dallas Stars": "DAL",
+            "Detroit Red Wings": "DET", "Edmonton Oilers": "EDM", "Florida Panthers": "FLA",
+            "Los Angeles Kings": "LAK", "Minnesota Wild": "MIN", "Montreal Canadiens": "MTL",
+            "Montréal Canadiens": "MTL", "Nashville Predators": "NSH", "New Jersey Devils": "NJD",
+            "New York Islanders": "NYI", "New York Rangers": "NYR", "Ottawa Senators": "OTT",
+            "Philadelphia Flyers": "PHI", "Pittsburgh Penguins": "PIT", "San Jose Sharks": "SJS",
+            "Seattle Kraken": "SEA", "St. Louis Blues": "STL", "Tampa Bay Lightning": "TBL",
+            "Toronto Maple Leafs": "TOR", "Utah Hockey Club": "UTA", "Vancouver Canucks": "VAN",
+            "Vegas Golden Knights": "VGK", "Washington Capitals": "WSH", "Winnipeg Jets": "WPG",
+        }
+
+        # Fetch finished NHL fixtures for that game date
+        # NHL games listed for date D start between 1h-4h Paris = previous UTC day
+        # The Trigger task already adjusts the date, so we search D and D+1
+        nhl_resp = (
+            supabase.table("nhl_fixtures")
+            .select("id, home_team, away_team, home_score, away_score, status")
+            .gte("date", f"{date}T00:00:00Z")
+            .lt("date", f"{next_day}T23:59:59Z")
+            .in_("status", ["FT", "Final", "Official", "OFF"])
+            .execute()
+        )
+        finished_nhl = nhl_resp.data or []
+
+        # Build team-abbrev → fixture map
+        fx_by_team = {}
+        for f in finished_nhl:
+            h_abbrev = NHL_NAME_TO_ABBREV.get(f["home_team"], f["home_team"])
+            a_abbrev = NHL_NAME_TO_ABBREV.get(f["away_team"], f["away_team"])
+            fx_by_team[h_abbrev] = f
+            fx_by_team[a_abbrev] = f
+
+        # Try to look up player results in nhl_data_lake (updated by morning pipeline)
+        # The pipeline stores actual results after game day
+        for bet in bets:
+            try:
+                label = bet["bet_label"]
+                player_name = bet.get("player_name", "")
+                if not player_name:
+                    # Try to extract from label: "Player Name Over 0.5 Points — ..."
+                    parts = label.split(" Over 0.5 Points")
+                    player_name = parts[0].strip() if parts else ""
+
+                if not player_name:
+                    continue
+
+                # Look for player in nhl_data_lake with actual points recorded
+                # The pipeline updates prob_point which reflects actual results after game
+                player_data = (
+                    supabase.table("nhl_data_lake")
+                    .select("player_name, team, python_prob, prob_point, date")
+                    .ilike("player_name", f"%{player_name}%")
+                    .gte("date", date)
+                    .lte("date", next_day)
+                    .limit(1)
+                    .execute()
+                )
+
+                if player_data.data:
+                    # If the pipeline has updated data for the actual game day = result known
+                    p = player_data.data[0]
+                    # prob_point > 0 after game means the player had points
+                    # Actually we need actual game stats — check if fixture is finished
+                    player_team = p.get("team", "")
+                    fx = fx_by_team.get(player_team)
+
+                    if fx and fx.get("home_score") is not None:
+                        # Fixture finished — use a fallback: prob_point > 60% = likely scored
+                        # Real implementation: call NHL API for player game log
+                        # For now: mark as VOID to indicate "need manual check"
+                        # until we have actual player stats stored
+                        (
+                            supabase.table("best_bets")
+                            .update({
+                                "result": "VOID",
+                                "notes": f"Match terminé ({fx['home_team']} {fx.get('home_score','?')}-{fx.get('away_score','?')} {fx['away_team']}) — stats joueur non dispo, vérification manuelle requise.",
+                                "updated_at": datetime.now().isoformat(),
+                            })
+                            .eq("id", bet["id"])
+                            .execute()
+                        )
+                        resolved.append({
+                            "id": bet["id"],
+                            "label": label,
+                            "result": "VOID",
+                            "note": "Fixture finished but player stats not in DB — marked VOID",
+                        })
+                    # else: game not finished yet, skip
+                else:
+                    # No player data for game date — try to resolve from fixture result only
+                    pass
+
+            except Exception as e:
+                errors.append({"bet_id": bet.get("id"), "error": str(e)})
+
+    return {
+        "ok": True,
+        "date": date,
+        "sport": sport,
+        "resolved_count": len(resolved),
+        "resolved": resolved,
+        "errors": errors,
+    }
+
+
 @app.get("/api/best-bets/stats")
 def get_best_bets_stats():
     """Return win rate and ROI stats for the performance dashboard, including market breakdown."""
