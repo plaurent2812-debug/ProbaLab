@@ -36,7 +36,7 @@ def get_gemini_client():
             return None
         client = genai.Client(api_key=api_key)
     return client
-MODEL_NAME = "gemini-2.5-pro"
+MODEL_NAME = "gemini-2.5-flash"
 
 
 # ═══════════════════════════════════════════════════════════════════
