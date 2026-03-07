@@ -5,7 +5,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
@@ -328,9 +328,13 @@ Analyse ces anomalies et recommande le meilleur pari en direct. Retourne le JSON
 
 
 @router.post("/update-live-scores")
-def update_live_scores():
-    """Fetch all live scores from API-Football and update Supabase fixtures table."""
-    logger.info("[Live Scores] Fetching live fixtures...")
+def update_live_scores(detail: bool = Query(False, description="Fetch events & stats (every 5 min)")):
+    """Fetch all live scores from API-Football and update Supabase fixtures table.
+    
+    When detail=False (default): only updates score/status/elapsed (1 API call).
+    When detail=True: also fetches events, stats, and checks stale matches.
+    """
+    logger.info(f"[Live Scores] Fetching live fixtures (detail={detail})...")
 
     resp = api_get("fixtures", {"live": "all"})
     live_fixtures = resp.get("response", []) if resp else []
@@ -376,8 +380,9 @@ def update_live_scores():
                 "elapsed": lf.get("fixture", {}).get("status", {}).get("elapsed"),
             }
 
-            # Fetch goals & events for currently live match
-            try:
+            # Fetch goals & events only in detail mode (every 5 min) to save API quota
+            if detail:
+              try:
                 import time as _time
 
                 events_resp = api_get("fixtures/events", {"fixture": api_fixture_id})
@@ -406,11 +411,11 @@ def update_live_scores():
                             }
                             goals_list.append(goal_info)
                     update_data["events_json"] = goals_list
-            except Exception as ev_err:
+              except Exception as ev_err:
                 logger.warning(f"[Live Scores] Events fetch error for {api_fixture_id}: {ev_err}")
 
-            # Fetch live stats (possession, shots, etc.) — requires live_stats_json column in DB
-            try:
+              # Fetch live stats (possession, shots, etc.)
+              try:
                 stats_resp = api_get("fixtures/statistics", {"fixture": api_fixture_id})
                 if stats_resp and stats_resp.get("response"):
                     raw_stats = stats_resp["response"]
@@ -439,7 +444,7 @@ def update_live_scores():
                             "xg": stats_dict.get("expected_goals"),
                         }
                     update_data["live_stats_json"] = live_stats
-            except Exception as stats_err:
+              except Exception as stats_err:
                 logger.debug(
                     f"[Live Scores] Stats not yet available for {api_fixture_id}: {stats_err}"
                 )
@@ -456,7 +461,13 @@ def update_live_scores():
             logger.error(f"[Live Scores] Error updating fixture {api_fixture_id}: {e}")
             errors += 1
 
-    # ── 2nd pass: detect recently finished matches ──
+    # ── 2nd pass: detect recently finished matches (only in detail mode) ──
+    if not detail:
+        logger.info(
+            f"[Live Scores] ✅ Quick update: {updated} live mis à jour, {errors} erreurs (detail=False, skipping stale check)"
+        )
+        return {"status": "ok", "updated": updated, "finished": 0, "errors": errors, "total_live": len(live_fixtures)}
+
     # Fixtures in our DB marked as live/NS but no longer in the API live response
     today = datetime.now().strftime("%Y-%m-%d")
     stale_statuses = ["1H", "2H", "HT", "ET", "LIVE", "BT", "NS"]

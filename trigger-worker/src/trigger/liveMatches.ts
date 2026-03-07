@@ -101,8 +101,13 @@ export const globalMinutelyScheduler = schedules.task({
         const promises: Promise<Response>[] = [];
 
         // Football live scores (11h–23h UTC)
+        // detail=true every 5 min fetches events/stats; otherwise just score+elapsed
         if (hour >= 11 && hour <= 23) {
-            promises.push(fetch(`${API_URL}/api/trigger/update-live-scores`, {
+            const needDetail = min % 5 === 0;
+            const scoreUrl = needDetail
+                ? `${API_URL}/api/trigger/update-live-scores?detail=true`
+                : `${API_URL}/api/trigger/update-live-scores`;
+            promises.push(fetch(scoreUrl, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "Authorization": `Bearer ${CRON_SECRET}` }
             }));
