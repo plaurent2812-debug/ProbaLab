@@ -31,7 +31,7 @@ export default function AdminOverview() {
 
     useEffect(() => { fetchAll() }, [])
 
-    const quotaPct = quota ? Math.round((quota.current / quota.limit_day) * 100) : 0
+    const quotaPct = quota?.limit_day ? Math.round((quota.current / quota.limit_day) * 100) : 0
     const quotaColor = quotaPct > 80 ? 'text-red-400' : quotaPct > 50 ? 'text-amber-400' : 'text-emerald-400'
     const quotaBarColor = quotaPct > 80 ? 'bg-red-500' : quotaPct > 50 ? 'bg-amber-500' : 'bg-emerald-500'
 

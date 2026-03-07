@@ -206,29 +206,45 @@ def admin_api_quota():
     """Check API-Football remaining quota."""
     import requests as req_lib
     try:
-        from src.config import API_FOOTBALL_KEY
+        api_key = os.getenv("API_FOOTBALL_KEY", "")
+        if not api_key:
+            try:
+                from src.config import API_FOOTBALL_KEY
+                api_key = API_FOOTBALL_KEY or ""
+            except Exception:
+                pass
+        if not api_key:
+            return {"error": "API_FOOTBALL_KEY not configured"}
+
         headers = {
             "x-rapidapi-host": "v3.football.api-sports.io",
-            "x-rapidapi-key": API_FOOTBALL_KEY,
+            "x-rapidapi-key": api_key,
         }
         resp = req_lib.get(
             "https://v3.football.api-sports.io/status",
             headers=headers,
             timeout=10,
         )
-        data = resp.json()
-        response = data.get("response", {}) if isinstance(data, dict) else {}
+        raw = resp.json()
+        logger.info(f"[Admin] API-Football status raw: {raw}")
+
+        response = raw.get("response", {}) if isinstance(raw, dict) else {}
         if isinstance(response, list) and len(response) > 0:
             response = response[0]
         if not isinstance(response, dict):
-            response = {}
+            return {"error": "Unexpected response format", "raw": raw}
+
         account = response.get("account", {})
         requests_info = response.get("requests", {})
         subscription = response.get("subscription", {})
+
+        current = int(requests_info.get("current", 0))
+        limit_day = int(requests_info.get("limit_day", 0))
+
         return {
-            "current": requests_info.get("current", 0),
-            "limit_day": requests_info.get("limit_day", 0),
-            "remaining": (requests_info.get("limit_day", 0) - requests_info.get("current", 0)),
+            "current": current,
+            "limit_day": limit_day,
+            "remaining": max(0, limit_day - current),
             "plan": subscription.get("plan", "unknown"),
             "end": subscription.get("end", ""),
             "firstname": account.get("firstname", ""),
