@@ -55,6 +55,7 @@ const TeamProfile = lazy(() => import("@/pages/TeamProfile"))
 const ProfilePage = lazy(() => import("@/pages/Profile"))
 const WatchlistPage = lazy(() => import("@/pages/WatchlistPage"))
 const ParisDuSoirPage = lazy(() => import("@/pages/ParisDuSoir"))
+const UpdatePasswordPage = lazy(() => import("@/pages/UpdatePassword"))
 import GoalNotifications from "@/components/GoalNotifications"
 
 
@@ -317,6 +318,7 @@ function AppContent() {
               <Route path="/profile" element={<Protected><ProfilePage /></Protected>} />
               <Route path="/watchlist" element={<WatchlistPage />} />
               <Route path="/paris-du-soir" element={<ParisDuSoirPage />} />
+              <Route path="/update-password" element={<UpdatePasswordPage />} />
             </Routes>
           </div>
         </Suspense>

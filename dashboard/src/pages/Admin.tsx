@@ -2,15 +2,24 @@
 import { useState, useEffect } from 'react'
 import { Protected } from '@/lib/auth'
 import { triggerPipeline, triggerNHLPipeline, fetchPipelineStatus, stopPipeline } from '@/lib/api'
-import { Shield, Play, Loader2, Cpu, Terminal, Activity, Server, Database, StopCircle, Clock, Calendar } from 'lucide-react'
+import { Shield, Play, Loader2, Cpu, Terminal, Activity, Server, Database, StopCircle, Clock, Calendar, Users, Settings } from 'lucide-react'
 import AdminUsers from '@/components/AdminUsers'
 
+const TABS = [
+    { id: 'users', label: 'Utilisateurs', icon: Users },
+    { id: 'pipeline', label: 'Pipeline', icon: Cpu },
+    { id: 'automations', label: 'Automatisations', icon: Clock },
+] as const
+
+type TabId = typeof TABS[number]['id']
+
 function AdminDashboard() {
-    const [status, setStatus] = useState(null)
+    const [status, setStatus] = useState<any>(null)
     const [loading, setLoading] = useState(false)
     const [msg, setMsg] = useState('')
     const [nhlLoading, setNhlLoading] = useState(false)
     const [nhlMsg, setNhlMsg] = useState('')
+    const [activeTab, setActiveTab] = useState<TabId>('users')
 
     const refreshStatus = async () => {
         try {
@@ -27,13 +36,13 @@ function AdminDashboard() {
         return () => clearInterval(interval)
     }, [])
 
-    const handleRun = async (mode) => {
+    const handleRun = async (mode: string) => {
         setLoading(true)
         setMsg('')
         try {
             await triggerPipeline(mode)
             setTimeout(refreshStatus, 1000)
-        } catch (err) {
+        } catch (err: any) {
             setMsg(`Erreur: ${err.message}`)
         } finally {
             setLoading(false)
@@ -46,7 +55,7 @@ function AdminDashboard() {
         try {
             await triggerNHLPipeline()
             setTimeout(refreshStatus, 1000)
-        } catch (err) {
+        } catch (err: any) {
             setNhlMsg(`Erreur: ${err.message}`)
         } finally {
             setNhlLoading(false)
@@ -59,7 +68,7 @@ function AdminDashboard() {
             await stopPipeline()
             setMsg('Arrêt en cours...')
             setTimeout(refreshStatus, 1500)
-        } catch (err) {
+        } catch (err: any) {
             setMsg(`Erreur lors de l'arrêt: ${err.message}`)
         }
     }
@@ -106,264 +115,290 @@ function AdminDashboard() {
                     </div>
                 </div>
 
-                <div className="grid lg:grid-cols-3 gap-6">
-                    {/* Colonne Gauche : Contrôles */}
-                    <div className="lg:col-span-1 space-y-6">
-                        {/* ⚽ Football Pipeline */}
-                        <div className="glass rounded-2xl border border-white/5 p-6 shadow-xl relative overflow-hidden group">
-                            <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                {/* ── Tab Navigation ── */}
+                <div className="flex gap-1 p-1 rounded-xl bg-white/5 border border-white/10 w-fit">
+                    {TABS.map(tab => {
+                        const Icon = tab.icon
+                        const isActive = activeTab === tab.id
+                        return (
+                            <button
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id)}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${isActive
+                                        ? 'bg-primary text-primary-foreground shadow-md'
+                                        : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
+                                    }`}
+                            >
+                                <Icon className="w-4 h-4" />
+                                {tab.label}
+                            </button>
+                        )
+                    })}
+                </div>
 
-                            <h2 className="text-lg font-semibold flex items-center gap-2 mb-6">
-                                <Cpu className="w-5 h-5 text-indigo-400" />
-                                <span>⚽ Pipeline Football</span>
-                            </h2>
+                {/* ── Tab: Users ── */}
+                {activeTab === 'users' && <AdminUsers />}
 
-                            <div className="space-y-3 relative z-10">
-                                <button
-                                    onClick={() => handleRun('full')}
-                                    disabled={loading || isRunning}
-                                    className="w-full relative group overflow-hidden rounded-xl p-[1px] focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
-                                >
-                                    <span className="absolute inset-0 bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-500 opacity-70 group-hover:opacity-100 animate-gradient-xy transition-opacity" />
-                                    <div className="relative bg-background/90 backdrop-blur-sm rounded-xl px-4 py-4 flex items-center justify-between group-hover:bg-background/80 transition-all">
-                                        <div className="flex flex-col items-start">
-                                            <span className="font-semibold text-white">Lancer Analyse Complète</span>
-                                            <span className="text-xs text-muted-foreground">Données + IA + Prédictions</span>
+                {/* ── Tab: Pipeline ── */}
+                {activeTab === 'pipeline' && (
+                    <div className="grid lg:grid-cols-3 gap-6">
+                        {/* Colonne Gauche : Contrôles */}
+                        <div className="lg:col-span-1 space-y-6">
+                            {/* ⚽ Football Pipeline */}
+                            <div className="glass rounded-2xl border border-white/5 p-6 shadow-xl relative overflow-hidden group">
+                                <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+
+                                <h2 className="text-lg font-semibold flex items-center gap-2 mb-6">
+                                    <Cpu className="w-5 h-5 text-indigo-400" />
+                                    <span>⚽ Pipeline Football</span>
+                                </h2>
+
+                                <div className="space-y-3 relative z-10">
+                                    <button
+                                        onClick={() => handleRun('full')}
+                                        disabled={loading || isRunning}
+                                        className="w-full relative group overflow-hidden rounded-xl p-[1px] focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                                    >
+                                        <span className="absolute inset-0 bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-500 opacity-70 group-hover:opacity-100 animate-gradient-xy transition-opacity" />
+                                        <div className="relative bg-background/90 backdrop-blur-sm rounded-xl px-4 py-4 flex items-center justify-between group-hover:bg-background/80 transition-all">
+                                            <div className="flex flex-col items-start">
+                                                <span className="font-semibold text-white">Lancer Analyse Complète</span>
+                                                <span className="text-xs text-muted-foreground">Données + IA + Prédictions</span>
+                                            </div>
+                                            {loading ? (
+                                                <Loader2 className="w-5 h-5 text-indigo-400 animate-spin" />
+                                            ) : (
+                                                <Play className="w-5 h-5 text-indigo-400 group-hover:scale-110 transition-transform" />
+                                            )}
                                         </div>
-                                        {loading ? (
-                                            <Loader2 className="w-5 h-5 text-indigo-400 animate-spin" />
-                                        ) : (
-                                            <Play className="w-5 h-5 text-indigo-400 group-hover:scale-110 transition-transform" />
-                                        )}
-                                    </div>
-                                </button>
+                                    </button>
 
-                                <div className="grid grid-cols-2 gap-3 pt-2">
-                                    <button
-                                        onClick={() => handleRun('data')}
-                                        disabled={loading || isRunning}
-                                        className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-indigo-500/30 transition-all"
-                                    >
-                                        <Database className="w-5 h-5 text-blue-400" />
-                                        <span className="text-xs font-medium">Données</span>
-                                    </button>
-                                    <button
-                                        onClick={() => handleRun('analyze')}
-                                        disabled={loading || isRunning}
-                                        className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-purple-500/30 transition-all"
-                                    >
-                                        <Activity className="w-5 h-5 text-purple-400" />
-                                        <span className="text-xs font-medium">IA Seule</span>
-                                    </button>
+                                    <div className="grid grid-cols-2 gap-3 pt-2">
+                                        <button
+                                            onClick={() => handleRun('data')}
+                                            disabled={loading || isRunning}
+                                            className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-indigo-500/30 transition-all"
+                                        >
+                                            <Database className="w-5 h-5 text-blue-400" />
+                                            <span className="text-xs font-medium">Données</span>
+                                        </button>
+                                        <button
+                                            onClick={() => handleRun('analyze')}
+                                            disabled={loading || isRunning}
+                                            className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-purple-500/30 transition-all"
+                                        >
+                                            <Activity className="w-5 h-5 text-purple-400" />
+                                            <span className="text-xs font-medium">IA Seule</span>
+                                        </button>
+                                    </div>
                                 </div>
+
+                                {msg && (
+                                    <div className="mt-4 p-3 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-xs text-indigo-300 flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
+                                        <Server className="w-3 h-3" />
+                                        {msg}
+                                    </div>
+                                )}
                             </div>
 
-                            {msg && (
-                                <div className="mt-4 p-3 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-xs text-indigo-300 flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
-                                    <Server className="w-3 h-3" />
-                                    {msg}
-                                </div>
-                            )}
-                        </div>
+                            {/* 🏒 NHL Pipeline */}
+                            <div className="glass rounded-2xl border border-cyan-500/20 p-6 shadow-xl relative overflow-hidden group">
+                                <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
 
-                        {/* 🏒 NHL Pipeline */}
-                        <div className="glass rounded-2xl border border-cyan-500/20 p-6 shadow-xl relative overflow-hidden group">
-                            <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                                <h2 className="text-lg font-semibold flex items-center gap-2 mb-6">
+                                    <span className="text-xl">🏒</span>
+                                    <span>Pipeline NHL</span>
+                                </h2>
 
-                            <h2 className="text-lg font-semibold flex items-center gap-2 mb-6">
-                                <span className="text-xl">🏒</span>
-                                <span>Pipeline NHL</span>
-                            </h2>
-
-                            <div className="space-y-3 relative z-10">
-                                <button
-                                    onClick={handleNHLRun}
-                                    disabled={nhlLoading}
-                                    className="w-full relative group overflow-hidden rounded-xl p-[1px] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
-                                >
-                                    <span className="absolute inset-0 bg-gradient-to-r from-cyan-500 via-teal-500 to-cyan-500 opacity-70 group-hover:opacity-100 animate-gradient-xy transition-opacity" />
-                                    <div className="relative bg-background/90 backdrop-blur-sm rounded-xl px-4 py-4 flex items-center justify-between group-hover:bg-background/80 transition-all">
-                                        <div className="flex flex-col items-start">
-                                            <span className="font-semibold text-white">Lancer Pipeline NHL</span>
-                                            <span className="text-xs text-muted-foreground">Schedule + Roster + Scoring</span>
+                                <div className="space-y-3 relative z-10">
+                                    <button
+                                        onClick={handleNHLRun}
+                                        disabled={nhlLoading}
+                                        className="w-full relative group overflow-hidden rounded-xl p-[1px] focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                                    >
+                                        <span className="absolute inset-0 bg-gradient-to-r from-cyan-500 via-teal-500 to-cyan-500 opacity-70 group-hover:opacity-100 animate-gradient-xy transition-opacity" />
+                                        <div className="relative bg-background/90 backdrop-blur-sm rounded-xl px-4 py-4 flex items-center justify-between group-hover:bg-background/80 transition-all">
+                                            <div className="flex flex-col items-start">
+                                                <span className="font-semibold text-white">Lancer Pipeline NHL</span>
+                                                <span className="text-xs text-muted-foreground">Schedule + Roster + Scoring</span>
+                                            </div>
+                                            {nhlLoading ? (
+                                                <Loader2 className="w-5 h-5 text-cyan-400 animate-spin" />
+                                            ) : (
+                                                <Play className="w-5 h-5 text-cyan-400 group-hover:scale-110 transition-transform" />
+                                            )}
                                         </div>
-                                        {nhlLoading ? (
-                                            <Loader2 className="w-5 h-5 text-cyan-400 animate-spin" />
-                                        ) : (
-                                            <Play className="w-5 h-5 text-cyan-400 group-hover:scale-110 transition-transform" />
-                                        )}
+                                    </button>
+                                </div>
+
+                                {nhlMsg && (
+                                    <div className={`mt-4 p-3 rounded-lg text-xs flex items-center gap-2 animate-in fade-in slide-in-from-top-2 ${nhlMsg.startsWith('✅')
+                                        ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-300'
+                                        : 'bg-red-500/10 border border-red-500/20 text-red-300'
+                                        }`}>
+                                        <Server className="w-3 h-3" />
+                                        {nhlMsg}
                                     </div>
-                                </button>
+                                )}
                             </div>
 
-                            {nhlMsg && (
-                                <div className={`mt-4 p-3 rounded-lg text-xs flex items-center gap-2 animate-in fade-in slide-in-from-top-2 ${nhlMsg.startsWith('✅')
-                                    ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-300'
-                                    : 'bg-red-500/10 border border-red-500/20 text-red-300'
-                                    }`}>
-                                    <Server className="w-3 h-3" />
-                                    {nhlMsg}
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Stats Rapides */}
-                        {status?.started_at && (
-                            <div className="glass rounded-xl border border-white/5 p-5 space-y-3">
-                                <div className="flex justify-between items-center text-sm">
-                                    <span className="text-muted-foreground">Démarré :</span>
-                                    <span className="font-mono text-xs">{new Date(status.started_at).toLocaleTimeString()}</span>
-                                </div>
-                                {status.finished_at && (
+                            {/* Stats Rapides */}
+                            {status?.started_at && (
+                                <div className="glass rounded-xl border border-white/5 p-5 space-y-3">
                                     <div className="flex justify-between items-center text-sm">
-                                        <span className="text-muted-foreground">Terminé :</span>
-                                        <span className="font-mono text-xs text-emerald-400">{new Date(status.finished_at).toLocaleTimeString()}</span>
+                                        <span className="text-muted-foreground">Démarré :</span>
+                                        <span className="font-mono text-xs">{new Date(status.started_at).toLocaleTimeString()}</span>
                                     </div>
-                                )}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Colonne Droite : Terminal */}
-                    <div className="lg:col-span-2">
-                        <div className="glass rounded-2xl border border-white/5 p-0 shadow-2xl overflow-hidden flex flex-col h-[500px]">
-                            <div className="px-4 py-3 border-b border-white/5 bg-black/20 flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <Terminal className="w-4 h-4 text-muted-foreground" />
-                                    <span className="text-xs font-medium text-muted-foreground">Logs en Direct</span>
+                                    {status.finished_at && (
+                                        <div className="flex justify-between items-center text-sm">
+                                            <span className="text-muted-foreground">Terminé :</span>
+                                            <span className="font-mono text-xs text-emerald-400">{new Date(status.finished_at).toLocaleTimeString()}</span>
+                                        </div>
+                                    )}
                                 </div>
-                                <div className="flex gap-1.5">
-                                    <div className="w-2.5 h-2.5 rounded-full bg-red-500/20 border border-red-500/50" />
-                                    <div className="w-2.5 h-2.5 rounded-full bg-amber-500/20 border border-amber-500/50" />
-                                    <div className="w-2.5 h-2.5 rounded-full bg-emerald-500/20 border border-emerald-500/50" />
-                                </div>
-                            </div>
-
-                            <div className="flex-1 bg-[#0a0a0a] p-4 overflow-y-auto font-mono text-xs leading-relaxed scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
-                                {status?.logs ? (
-                                    <div className="text-slate-300 whitespace-pre-wrap">
-                                        {status.logs.split('\n').map((line, i) => {
-                                            if (line.includes('[INFO]')) return <div key={i}><span className="text-blue-500">[INFO]</span> {line.replace(/.*\[INFO\]/, '')}</div>
-                                            if (line.includes('[ERROR]')) return <div key={i}><span className="text-red-500">[ERROR]</span> {line.replace(/.*\[ERROR\]/, '')}</div>
-                                            if (line.includes('✅')) return <div key={i} className="text-emerald-400">{line}</div>
-                                            if (line.includes('📊')) return <div key={i} className="text-purple-400 font-bold mt-2">{line}</div>
-                                            if (line.includes('🏒')) return <div key={i} className="text-cyan-400 font-bold">{line}</div>
-                                            return <div key={i} className="opacity-80">{line}</div>
-                                        })}
-                                        {isRunning && <span className="inline-block w-2 h-4 bg-emerald-500 animate-pulse ml-1 align-middle" />}
-                                    </div>
-                                ) : (
-                                    <div className="flex items-center justify-center h-full text-muted-foreground/50 italic">
-                                        En attente de logs...
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* ─── Automations Schedule ─── */}
-                <div className="glass rounded-2xl border border-white/5 p-6 shadow-xl">
-                    <h2 className="text-lg font-semibold flex items-center gap-2 mb-6">
-                        <Clock className="w-5 h-5 text-amber-400" />
-                        <span>Automatisations Trigger.dev</span>
-                        <span className="text-xs font-normal text-muted-foreground ml-auto">Heures en UTC → Paris</span>
-                    </h2>
-
-                    <div className="grid md:grid-cols-3 gap-6">
-                        {/* ⚽ Football Only */}
-                        <div className="space-y-3">
-                            <h3 className="text-sm font-bold text-indigo-400 flex items-center gap-1.5 mb-3">
-                                <span>⚽</span> Football
-                            </h3>
-                            {[
-                                { time: '06:00', paris: '07:00', cron: '0 6 * * *', name: 'Pipeline Quotidien', desc: 'Reflection + Fetch données + IA + Prédictions + DeepThink' },
-                                { time: '*/15 (10h-22h)', paris: '11h-23h', cron: '*/15 10-22 * * *', name: 'Fetch Lineups', desc: 'Compos probables H-1 avant kickoff' },
-                                { time: '23:30', paris: '00:30', cron: '30 23 * * *', name: 'Recap Journée', desc: 'Résumé des résultats + bilan du jour' },
-                            ].map((t, i) => (
-                                <div key={i} className="flex items-start gap-3 p-2.5 rounded-lg bg-white/5 hover:bg-white/8 transition-colors">
-                                    <div className="shrink-0 w-[85px] text-right">
-                                        <div className="text-xs font-mono font-bold text-foreground">{t.paris}</div>
-                                        <div className="text-[10px] font-mono text-muted-foreground">{t.time} UTC</div>
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <div className="text-xs font-semibold">{t.name}</div>
-                                        <div className="text-[10px] text-muted-foreground">{t.desc}</div>
-                                        <div className="text-[9px] font-mono text-muted-foreground/60 mt-0.5">{t.cron}</div>
-                                    </div>
-                                </div>
-                            ))}
+                            )}
                         </div>
 
-                        {/* ⚽🏒 Mixed (Football + NHL) */}
-                        <div className="space-y-3">
-                            <h3 className="text-sm font-bold text-amber-400 flex items-center gap-1.5 mb-3">
-                                <span>⚽🏒</span> Mixte
-                            </h3>
-                            {[
-                                { time: '08:00', paris: '09:00', cron: '0 8 * * *', name: 'Schedule Daily', desc: '⚽ Matchs du jour + halftime/70min monitors\n🏒 NHL Performance eval' },
-                                { time: '*/1 min', paris: '24/7', cron: '* * * * *', name: 'Live Tracker', desc: '⚽ Live scores (11h-23h) + momentum (*/5min)\n🏒 NHL live scores (16h-08h)' },
-                                { time: '10:00 / 15:00', paris: '11:00 / 16:00', cron: '0 10,15 * * *', name: 'Value Bets', desc: '⚽ Football value bets (10h UTC)\n🏒 NHL value bets (15h UTC)' },
-                            ].map((t, i) => (
-                                <div key={i} className="flex items-start gap-3 p-2.5 rounded-lg bg-white/5 hover:bg-white/8 transition-colors">
-                                    <div className="shrink-0 w-[85px] text-right">
-                                        <div className="text-xs font-mono font-bold text-foreground">{t.paris}</div>
-                                        <div className="text-[10px] font-mono text-muted-foreground">{t.time} UTC</div>
+                        {/* Colonne Droite : Terminal */}
+                        <div className="lg:col-span-2">
+                            <div className="glass rounded-2xl border border-white/5 p-0 shadow-2xl overflow-hidden flex flex-col h-[500px]">
+                                <div className="px-4 py-3 border-b border-white/5 bg-black/20 flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <Terminal className="w-4 h-4 text-muted-foreground" />
+                                        <span className="text-xs font-medium text-muted-foreground">Logs en Direct</span>
                                     </div>
-                                    <div className="flex-1 min-w-0">
-                                        <div className="text-xs font-semibold">{t.name}</div>
-                                        <div className="text-[10px] text-muted-foreground whitespace-pre-line">{t.desc}</div>
-                                        <div className="text-[9px] font-mono text-muted-foreground/60 mt-0.5">{t.cron}</div>
+                                    <div className="flex gap-1.5">
+                                        <div className="w-2.5 h-2.5 rounded-full bg-red-500/20 border border-red-500/50" />
+                                        <div className="w-2.5 h-2.5 rounded-full bg-amber-500/20 border border-amber-500/50" />
+                                        <div className="w-2.5 h-2.5 rounded-full bg-emerald-500/20 border border-emerald-500/50" />
                                     </div>
                                 </div>
-                            ))}
-                        </div>
 
-                        {/* 🏒 NHL + 🧠 ML */}
-                        <div className="space-y-3">
-                            <h3 className="text-sm font-bold text-cyan-400 flex items-center gap-1.5 mb-3">
-                                <span>🏒</span> NHL + <span className="text-purple-400">🧠 ML</span>
-                            </h3>
-                            {[
-                                { time: '09:00', paris: '10:00', cron: '0 9 * * *', name: '🏒 Pipeline NHL', desc: 'Schedule + Roster + Scoring + ML Blend + DeepThink' },
-                                { time: '22:00', paris: '23:00', cron: '0 22 * * *', name: '🏒 Fetch Odds NHL', desc: 'Cotes des bookmakers pour value bets' },
-                                { time: '04:00', paris: '05:00', cron: '0 4 * * *', name: '🧠 ML Évaluation', desc: '⚽ Football: Brier Score + Log Loss + ECE\n🏒 NHL: history sync' },
-                                { time: 'Ven 02:00', paris: 'Ven 03:00', cron: '0 2 * * 5', name: '🧠 Retrain XGBoost', desc: '⚽ Football Meta-Modèle + 🏒 NHL Match ML\nRetrain hebdomadaire des deux modèles' },
-                            ].map((t, i) => (
-                                <div key={i} className="flex items-start gap-3 p-2.5 rounded-lg bg-white/5 hover:bg-white/8 transition-colors">
-                                    <div className="shrink-0 w-[85px] text-right">
-                                        <div className="text-xs font-mono font-bold text-foreground">{t.paris}</div>
-                                        <div className="text-[10px] font-mono text-muted-foreground">{t.time} UTC</div>
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <div className="text-xs font-semibold">{t.name}</div>
-                                        <div className="text-[10px] text-muted-foreground">{t.desc}</div>
-                                        <div className="text-[9px] font-mono text-muted-foreground/60 mt-0.5">{t.cron}</div>
-                                    </div>
-                                </div>
-                            ))}
-
-                            {/* Leagues info */}
-                            <div className="mt-4 p-3 rounded-lg bg-indigo-500/5 border border-indigo-500/10">
-                                <div className="text-xs font-semibold flex items-center gap-1.5 mb-2">
-                                    <Calendar className="w-3.5 h-3.5 text-indigo-400" />
-                                    Ligues suivies
-                                </div>
-                                <div className="text-[10px] text-muted-foreground space-y-0.5">
-                                    <div>🇫🇷 Ligue 1 · Ligue 2 · Coupe de France</div>
-                                    <div>🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League · FA Cup</div>
-                                    <div>🇪🇸 La Liga · Copa del Rey</div>
-                                    <div>🇮🇹 Serie A · Coppa Italia</div>
-                                    <div>🇩🇪 Bundesliga · DFB-Pokal</div>
-                                    <div>🏆 Champions League · Europa League</div>
+                                <div className="flex-1 bg-[#0a0a0a] p-4 overflow-y-auto font-mono text-xs leading-relaxed scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
+                                    {status?.logs ? (
+                                        <div className="text-slate-300 whitespace-pre-wrap">
+                                            {status.logs.split('\n').map((line: string, i: number) => {
+                                                if (line.includes('[INFO]')) return <div key={i}><span className="text-blue-500">[INFO]</span> {line.replace(/.*\[INFO\]/, '')}</div>
+                                                if (line.includes('[ERROR]')) return <div key={i}><span className="text-red-500">[ERROR]</span> {line.replace(/.*\[ERROR\]/, '')}</div>
+                                                if (line.includes('✅')) return <div key={i} className="text-emerald-400">{line}</div>
+                                                if (line.includes('📊')) return <div key={i} className="text-purple-400 font-bold mt-2">{line}</div>
+                                                if (line.includes('🏒')) return <div key={i} className="text-cyan-400 font-bold">{line}</div>
+                                                return <div key={i} className="opacity-80">{line}</div>
+                                            })}
+                                            {isRunning && <span className="inline-block w-2 h-4 bg-emerald-500 animate-pulse ml-1 align-middle" />}
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center justify-center h-full text-muted-foreground/50 italic">
+                                            En attente de logs...
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
+                )}
 
-                {/* ─── User Management ─── */}
-                <AdminUsers />
+                {/* ── Tab: Automations ── */}
+                {activeTab === 'automations' && (
+                    <div className="glass rounded-2xl border border-white/5 p-6 shadow-xl">
+                        <h2 className="text-lg font-semibold flex items-center gap-2 mb-6">
+                            <Clock className="w-5 h-5 text-amber-400" />
+                            <span>Automatisations Trigger.dev</span>
+                            <span className="text-xs font-normal text-muted-foreground ml-auto">Heures en UTC → Paris</span>
+                        </h2>
+
+                        <div className="grid md:grid-cols-3 gap-6">
+                            {/* ⚽ Football Only */}
+                            <div className="space-y-3">
+                                <h3 className="text-sm font-bold text-indigo-400 flex items-center gap-1.5 mb-3">
+                                    <span>⚽</span> Football
+                                </h3>
+                                {[
+                                    { time: '06:00', paris: '07:00', cron: '0 6 * * *', name: 'Pipeline Quotidien', desc: 'Reflection + Fetch données + IA + Prédictions + DeepThink' },
+                                    { time: '*/15 (10h-22h)', paris: '11h-23h', cron: '*/15 10-22 * * *', name: 'Fetch Lineups', desc: 'Compos probables H-1 avant kickoff' },
+                                    { time: '23:30', paris: '00:30', cron: '30 23 * * *', name: 'Recap Journée', desc: 'Résumé des résultats + bilan du jour' },
+                                ].map((t, i) => (
+                                    <div key={i} className="flex items-start gap-3 p-2.5 rounded-lg bg-white/5 hover:bg-white/8 transition-colors">
+                                        <div className="shrink-0 w-[85px] text-right">
+                                            <div className="text-xs font-mono font-bold text-foreground">{t.paris}</div>
+                                            <div className="text-[10px] font-mono text-muted-foreground">{t.time} UTC</div>
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="text-xs font-semibold">{t.name}</div>
+                                            <div className="text-[10px] text-muted-foreground">{t.desc}</div>
+                                            <div className="text-[9px] font-mono text-muted-foreground/60 mt-0.5">{t.cron}</div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* ⚽🏒 Mixed */}
+                            <div className="space-y-3">
+                                <h3 className="text-sm font-bold text-amber-400 flex items-center gap-1.5 mb-3">
+                                    <span>⚽🏒</span> Mixte
+                                </h3>
+                                {[
+                                    { time: '08:00', paris: '09:00', cron: '0 8 * * *', name: 'Schedule Daily', desc: '⚽ Matchs du jour + halftime/70min monitors\n🏒 NHL Performance eval' },
+                                    { time: '*/1 min', paris: '24/7', cron: '* * * * *', name: 'Live Tracker', desc: '⚽ Live scores (11h-23h) + momentum (*/5min)\n🏒 NHL live scores (16h-08h)' },
+                                    { time: '10:00 / 15:00', paris: '11:00 / 16:00', cron: '0 10,15 * * *', name: 'Value Bets', desc: '⚽ Football value bets (10h UTC)\n🏒 NHL value bets (15h UTC)' },
+                                ].map((t, i) => (
+                                    <div key={i} className="flex items-start gap-3 p-2.5 rounded-lg bg-white/5 hover:bg-white/8 transition-colors">
+                                        <div className="shrink-0 w-[85px] text-right">
+                                            <div className="text-xs font-mono font-bold text-foreground">{t.paris}</div>
+                                            <div className="text-[10px] font-mono text-muted-foreground">{t.time} UTC</div>
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="text-xs font-semibold">{t.name}</div>
+                                            <div className="text-[10px] text-muted-foreground whitespace-pre-line">{t.desc}</div>
+                                            <div className="text-[9px] font-mono text-muted-foreground/60 mt-0.5">{t.cron}</div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* 🏒 NHL + 🧠 ML */}
+                            <div className="space-y-3">
+                                <h3 className="text-sm font-bold text-cyan-400 flex items-center gap-1.5 mb-3">
+                                    <span>🏒</span> NHL + <span className="text-purple-400">🧠 ML</span>
+                                </h3>
+                                {[
+                                    { time: '09:00', paris: '10:00', cron: '0 9 * * *', name: '🏒 Pipeline NHL', desc: 'Schedule + Roster + Scoring + ML Blend + DeepThink' },
+                                    { time: '22:00', paris: '23:00', cron: '0 22 * * *', name: '🏒 Fetch Odds NHL', desc: 'Cotes des bookmakers pour value bets' },
+                                    { time: '04:00', paris: '05:00', cron: '0 4 * * *', name: '🧠 ML Évaluation', desc: '⚽ Football: Brier Score + Log Loss + ECE\n🏒 NHL: history sync' },
+                                    { time: 'Ven 02:00', paris: 'Ven 03:00', cron: '0 2 * * 5', name: '🧠 Retrain XGBoost', desc: '⚽ Football Meta-Modèle + 🏒 NHL Match ML\nRetrain hebdomadaire des deux modèles' },
+                                ].map((t, i) => (
+                                    <div key={i} className="flex items-start gap-3 p-2.5 rounded-lg bg-white/5 hover:bg-white/8 transition-colors">
+                                        <div className="shrink-0 w-[85px] text-right">
+                                            <div className="text-xs font-mono font-bold text-foreground">{t.paris}</div>
+                                            <div className="text-[10px] font-mono text-muted-foreground">{t.time} UTC</div>
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="text-xs font-semibold">{t.name}</div>
+                                            <div className="text-[10px] text-muted-foreground">{t.desc}</div>
+                                            <div className="text-[9px] font-mono text-muted-foreground/60 mt-0.5">{t.cron}</div>
+                                        </div>
+                                    </div>
+                                ))}
+
+                                {/* Leagues info */}
+                                <div className="mt-4 p-3 rounded-lg bg-indigo-500/5 border border-indigo-500/10">
+                                    <div className="text-xs font-semibold flex items-center gap-1.5 mb-2">
+                                        <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+                                        Ligues suivies
+                                    </div>
+                                    <div className="text-[10px] text-muted-foreground space-y-0.5">
+                                        <div>🇫🇷 Ligue 1 · Ligue 2 · Coupe de France</div>
+                                        <div>🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League · FA Cup</div>
+                                        <div>🇪🇸 La Liga · Copa del Rey</div>
+                                        <div>🇮🇹 Serie A · Coppa Italia</div>
+                                        <div>🇩🇪 Bundesliga · DFB-Pokal</div>
+                                        <div>🏆 Champions League · Europa League</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     )
