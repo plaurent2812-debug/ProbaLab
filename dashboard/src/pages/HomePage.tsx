@@ -3,12 +3,14 @@ import { useNavigate } from "react-router-dom"
 import {
     Flame, BellRing, ShieldAlert,
     ChevronRight, Activity, Star, Trophy, Radio,
-    ArrowRight, Newspaper, TrendingUp
+    ArrowRight, Newspaper, TrendingUp, CheckCircle2, XCircle
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { fetchPredictions, fetchPerformance, fetchNews } from "@/lib/api"
+import { fetchPredictions, fetchNews } from "@/lib/api"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth, supabase } from "@/lib/auth"
+
+const API_BASE = import.meta.env.VITE_API_URL || ""
 
 /* ── Live Alert Banner ────────────────────────────────────────── */
 function LiveAlertBanner({ alert }) {
@@ -148,7 +150,7 @@ export default function HomePage() {
     const [fbLiveCount, setFbLiveCount] = useState(0)
     const [nhlCount, setNhlCount] = useState(0)
     const [vipSpots, setVipSpots] = useState([])
-    const [perf, setPerf] = useState(null)
+    const [betStats, setBetStats] = useState(null)
     const [news, setNews] = useState([])
     const [loading, setLoading] = useState(true)
     const [newsLoading, setNewsLoading] = useState(true)
@@ -192,7 +194,12 @@ export default function HomePage() {
 
         Promise.all([fetchFB, fetchNHL]).finally(() => setLoading(false))
 
-        fetchPerformance(30).then(setPerf).catch(() => { })
+        // Fetch bet stats (ROI, streak, etc.)
+        fetch(`${API_BASE}/api/best-bets/stats`)
+            .then(r => r.json())
+            .then(setBetStats)
+            .catch(() => { })
+
         fetchNews().then(r => setNews(r.news || [])).catch(() => { }).finally(() => setNewsLoading(false))
 
         // Live alert
@@ -207,6 +214,8 @@ export default function HomePage() {
             .catch(console.error)
     }, [])
 
+    const g = betStats?.global || {}
+
     return (
         <div className="animate-fade-in-up pb-8 max-w-3xl mx-auto">
 
@@ -220,36 +229,97 @@ export default function HomePage() {
                 </p>
             </div>
 
+            {/* ── Methodology Section ──────────────────────────────── */}
+            <div className="mx-3 mt-4 mb-4 rounded-xl border border-primary/15 bg-gradient-to-br from-primary/5 via-card to-emerald-500/5 overflow-hidden">
+                <div className="px-4 py-3 border-b border-border/30">
+                    <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-primary to-emerald-500 flex items-center justify-center">
+                            <span className="text-white text-xs">🎯</span>
+                        </div>
+                        <span className="text-sm font-bold">Notre Méthode</span>
+                    </div>
+                </div>
+                <div className="grid grid-cols-3 divide-x divide-border/20">
+                    {/* Pillar 1 */}
+                    <div className="p-3 text-center">
+                        <div className="text-lg mb-1">🤖</div>
+                        <div className="text-[10px] font-bold text-foreground mb-0.5">Sélection IA</div>
+                        <div className="text-[9px] text-muted-foreground leading-tight">
+                            Pronos quotidiens analysés par intelligence artificielle
+                        </div>
+                    </div>
+                    {/* Pillar 2 */}
+                    <div className="p-3 text-center">
+                        <div className="text-lg mb-1">📊</div>
+                        <div className="text-[10px] font-bold text-foreground mb-0.5">Cotes 1.75 – 2.20</div>
+                        <div className="text-[9px] text-muted-foreground leading-tight">
+                            Zone optimale entre rendement et sécurité
+                        </div>
+                    </div>
+                    {/* Pillar 3 */}
+                    <div className="p-3 text-center">
+                        <div className="text-lg mb-1">🏦</div>
+                        <div className="text-[10px] font-bold text-foreground mb-0.5">1% Bankroll</div>
+                        <div className="text-[9px] text-muted-foreground leading-tight">
+                            Gestion de capital prudente pour des gains durables
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             {/* Live Alert */}
             {liveAlert && <LiveAlertBanner alert={liveAlert} />}
 
-            {/* ── Performance Stats (Trust building) ──────────────── */}
+            {/* ── ROI + Streak (Trust building) ───────────────────── */}
             <div className="mx-3 mt-4 mb-4 rounded border border-border/50 bg-card overflow-hidden">
                 <div className="fs-summary-bar border-b border-border/50 bg-muted/20">
                     <TrendingUp className="w-4 h-4 text-emerald-500" />
-                    <span className="text-xs font-bold uppercase tracking-wider">Performance Globale</span>
-                    <span className="fs-summary-badge bg-muted text-muted-foreground ml-auto">30 Derniers Jours</span>
+                    <span className="text-xs font-bold uppercase tracking-wider">Track Record</span>
+                    <span className="fs-summary-badge bg-muted text-muted-foreground ml-auto">Picks IA</span>
                 </div>
+
+                {/* Main metrics */}
                 <div className="grid grid-cols-3 divide-x divide-border/30">
                     <div className="p-3 text-center bg-card hover:bg-accent/10 transition-colors">
-                        <div className="text-xs text-muted-foreground font-semibold mb-1">1X2</div>
-                        <div className="text-lg font-black text-emerald-500 tabular-nums">
-                            {perf ? `${perf.accuracy_1x2}%` : "—"}
+                        <div className="text-xs text-muted-foreground font-semibold mb-1">ROI</div>
+                        <div className={cn(
+                            "text-lg font-black tabular-nums",
+                            (g.roi_pct || 0) >= 0 ? "text-emerald-500" : "text-red-500"
+                        )}>
+                            {g.roi_pct != null ? `${g.roi_pct > 0 ? "+" : ""}${g.roi_pct}%` : "—"}
                         </div>
                     </div>
                     <div className="p-3 text-center bg-card hover:bg-accent/10 transition-colors">
-                        <div className="text-xs text-muted-foreground font-semibold mb-1">BTTS</div>
+                        <div className="text-xs text-muted-foreground font-semibold mb-1">Win Rate</div>
                         <div className="text-lg font-black text-blue-500 tabular-nums">
-                            {perf ? `${perf.accuracy_btts}%` : "—"}
+                            {g.win_rate != null ? `${g.win_rate}%` : "—"}
                         </div>
                     </div>
                     <div className="p-3 text-center bg-card hover:bg-accent/10 transition-colors">
-                        <div className="text-xs text-muted-foreground font-semibold mb-1">Over 2.5</div>
+                        <div className="text-xs text-muted-foreground font-semibold mb-1">Picks</div>
                         <div className="text-lg font-black text-purple-500 tabular-nums">
-                            {perf ? `${perf.accuracy_over_25}%` : "—"}
+                            {g.total != null ? `${g.wins}W ${g.losses}L` : "—"}
                         </div>
                     </div>
                 </div>
+
+                {/* Streak */}
+                {betStats?.last_10?.length > 0 && (
+                    <div className="px-3 py-2.5 border-t border-border/30 flex items-center gap-2">
+                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider shrink-0">Série :</span>
+                        <div className="flex items-center gap-1">
+                            {betStats.last_10.map((r, i) => (
+                                r === "WIN" ? (
+                                    <CheckCircle2 key={i} className="w-4 h-4 text-emerald-500" />
+                                ) : (
+                                    <XCircle key={i} className="w-4 h-4 text-red-500/60" />
+                                )
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+
             </div>
 
             {/* ── Main Shortcuts (Navigation) ─────────────────────── */}

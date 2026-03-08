@@ -433,7 +433,7 @@ export default function NHLMatchDetailPage() {
                                     const isHome = goal.team?.toLowerCase().includes(fixture?.home_team?.split(' ').pop()?.toLowerCase())
                                     const periodStr = periodMap[goal.period] || goal.period || ""
                                     const timeStr = goal.minute ? `${goal.minute}'` : ""
-                                    const typeLabel = goal.comment && goal.comment !== "" ? ` (${goal.comment})` : ""
+                                    const typeLabel = goal.comment && goal.comment !== "" && goal.comment.toLowerCase() !== "none" ? ` (${goal.comment})` : ""
 
                                     return (
                                         <div

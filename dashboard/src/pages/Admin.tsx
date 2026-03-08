@@ -82,64 +82,66 @@ function AdminDashboard() {
     const isRunning = status?.status === 'running'
 
     return (
-        <div className="relative min-h-[calc(100vh-4rem)] bg-background overflow-hidden p-6 md:p-10">
+        <div className="relative min-h-[calc(100vh-4rem)] bg-background overflow-hidden p-3 sm:p-6 md:p-10">
             {/* Background Effects */}
             <div className="absolute inset-0 w-full h-full bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-indigo-900/20 via-background to-background pointer-events-none" />
             <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-indigo-500/5 rounded-full blur-3xl pointer-events-none" />
 
-            <div className="relative z-10 max-w-6xl mx-auto space-y-8">
+            <div className="relative z-10 max-w-6xl mx-auto space-y-4 sm:space-y-6 md:space-y-8">
                 {/* Header */}
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div className="flex items-center gap-4">
-                        <div className="p-3 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-500/30 shadow-lg shadow-indigo-500/10">
-                            <Shield className="w-8 h-8 text-indigo-400" />
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 sm:p-3 rounded-xl sm:rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-500/30 shadow-lg shadow-indigo-500/10">
+                            <Shield className="w-5 h-5 sm:w-8 sm:h-8 text-indigo-400" />
                         </div>
                         <div>
-                            <h1 className="text-3xl font-bold tracking-tight">
+                            <h1 className="text-xl sm:text-3xl font-bold tracking-tight">
                                 <span className="gradient-text">Centre Admin</span>
                             </h1>
-                            <p className="text-muted-foreground mt-1">Pilotage des pipelines Football & NHL</p>
+                            <p className="text-muted-foreground text-xs sm:text-base mt-0.5">Pilotage des pipelines Football & NHL</p>
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 sm:gap-4">
                         {isRunning && (
                             <button
                                 onClick={handleStop}
-                                className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/30 transition-all font-semibold text-sm hover:shadow-[0_0_15px_-3px_rgba(239,68,68,0.4)]"
+                                className="flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/30 transition-all font-semibold text-xs sm:text-sm hover:shadow-[0_0_15px_-3px_rgba(239,68,68,0.4)]"
                                 title="Arrêter de force le pipeline en cours"
                             >
-                                <StopCircle className="w-4 h-4" /> Stop
+                                <StopCircle className="w-3.5 h-3.5" /> Stop
                             </button>
                         )}
-                        <div className="flex items-center gap-2 px-4 py-2 rounded-full glass border border-white/5">
-                            <div className={`w-2.5 h-2.5 rounded-full ${isRunning ? 'bg-emerald-500 animate-pulse' : 'bg-slate-500'}`} />
-                            <span className="text-sm font-medium text-muted-foreground">
-                                Système: <span className={isRunning ? 'text-emerald-400' : 'text-slate-400'}>{status?.status?.toUpperCase() || 'HORS LIGNE'}</span>
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full glass border border-white/5">
+                            <div className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full ${isRunning ? 'bg-emerald-500 animate-pulse' : 'bg-slate-500'}`} />
+                            <span className="text-xs sm:text-sm font-medium text-muted-foreground">
+                                <span className="hidden sm:inline">Système: </span><span className={isRunning ? 'text-emerald-400' : 'text-slate-400'}>{status?.status?.toUpperCase() || 'HORS LIGNE'}</span>
                             </span>
                         </div>
                     </div>
                 </div>
 
-                {/* ── Tab Navigation ── */}
-                <div className="flex gap-1 p-1 rounded-xl bg-white/5 border border-white/10 w-fit">
-                    {TABS.map(tab => {
-                        const Icon = tab.icon
-                        const isActive = activeTab === tab.id
-                        return (
-                            <button
-                                key={tab.id}
-                                onClick={() => setActiveTab(tab.id)}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${isActive
-                                    ? 'bg-primary text-primary-foreground shadow-md'
-                                    : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
-                                    }`}
-                            >
-                                <Icon className="w-4 h-4" />
-                                {tab.label}
-                            </button>
-                        )
-                    })}
+                {/* ── Tab Navigation (mobile: scrollable, icons + short labels) ── */}
+                <div className="overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0 scrollbar-none">
+                    <div className="flex gap-1 p-1 rounded-xl bg-white/5 border border-white/10 w-max sm:w-fit min-w-full sm:min-w-0">
+                        {TABS.map(tab => {
+                            const Icon = tab.icon
+                            const isActive = activeTab === tab.id
+                            return (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => setActiveTab(tab.id)}
+                                    className={`flex items-center gap-1.5 px-2.5 py-2 sm:px-4 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${isActive
+                                        ? 'bg-primary text-primary-foreground shadow-md'
+                                        : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
+                                        }`}
+                                >
+                                    <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                                    <span>{tab.label}</span>
+                                </button>
+                            )
+                        })}
+                    </div>
                 </div>
 
                 {/* ── Tab: Overview ── */}
@@ -415,7 +417,7 @@ function AdminDashboard() {
                 {/* ── Tab: Tools ── */}
                 {activeTab === 'tools' && <AdminTools />}
             </div>
-        </div>
+        </div >
     )
 }
 

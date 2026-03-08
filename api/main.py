@@ -1241,12 +1241,93 @@ def get_best_bets_stats():
                 else:
                     timeline[d]["losses"] += 1
 
+        # ── Streak (last 10 resolved) ─────────────────────────────
+        resolved_recent = [b for b in rows if b["result"] in ("WIN", "LOSS")]
+        resolved_recent.sort(key=lambda b: b.get("date", ""), reverse=True)
+        last_10 = [b["result"] for b in resolved_recent[:10]]
+
+        # ── Best pick (highest odds WIN in last 30 days) ──────────
+        wins_recent = [b for b in resolved_recent if b["result"] == "WIN"]
+        best_pick = None
+        if wins_recent:
+            best = max(wins_recent, key=lambda b: float(b.get("odds") or 0))
+            best_pick = {
+                "label": best.get("bet_label", ""),
+                "odds": float(best.get("odds") or 0),
+                "date": best.get("date", ""),
+                "market": best.get("market", ""),
+                "sport": best.get("sport", ""),
+            }
+
+        # ── Cumulative P&L timeline ───────────────────────────────
+        pl_by_date = {}
+        for b in rows:
+            if b["result"] not in ("WIN", "LOSS"):
+                continue
+            d = b["date"]
+            if d not in pl_by_date:
+                pl_by_date[d] = 0
+            if b["result"] == "WIN":
+                pl_by_date[d] += (float(b.get("odds") or 1.85) - 1)
+            else:
+                pl_by_date[d] -= 1
+
+        cumulative = []
+        running = 0
+        for d in sorted(pl_by_date.keys()):
+            running += pl_by_date[d]
+            cumulative.append({"date": d, "pl": round(running, 2)})
+
         return {
             "global": calc_stats(rows),
             "football": calc_stats(football),
             "nhl": calc_stats(nhl),
             "by_market": market_breakdown,
             "timeline": [{"date": k, **v} for k, v in sorted(timeline.items())[-30:]],
+            "last_10": last_10,
+            "best_pick": best_pick,
+            "cumulative_pl": cumulative[-60:],  # last 60 days
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/api/best-bets/history")
+def get_best_bets_history(
+    days: int = Query(30, description="Number of days to look back"),
+    sport: str | None = Query(None, description="'football' | 'nhl' | None = both"),
+):
+    """Return all resolved picks for the history table."""
+    try:
+        cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+
+        query = (
+            supabase.table("best_bets")
+            .select("id, date, sport, bet_label, market, odds, confidence, proba_model, result, player_name")
+            .gte("date", cutoff)
+            .order("date", desc=True)
+            .limit(300)
+        )
+        if sport:
+            query = query.eq("sport", sport)
+
+        resp = query.execute()
+        rows = resp.data or []
+
+        # Calculate running P&L
+        resolved = [r for r in rows if r["result"] in ("WIN", "LOSS")]
+        total_pl = 0
+        for r in resolved:
+            if r["result"] == "WIN":
+                total_pl += (float(r.get("odds") or 1.85) - 1)
+            else:
+                total_pl -= 1
+
+        return {
+            "picks": rows,
+            "total": len(rows),
+            "resolved": len(resolved),
+            "total_pl": round(total_pl, 2),
         }
     except Exception as e:
         return {"error": str(e)}

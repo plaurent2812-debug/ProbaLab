@@ -671,11 +671,17 @@ def run_brain() -> None:
 
 def _generate_football_deepthink(matches: list, league_names: dict) -> None:
     """Generate a DeepThink strategic meta-analysis across all football matches."""
-    from datetime import datetime
+    from datetime import datetime, timedelta
 
-    today = datetime.utcnow().strftime("%Y-%m-%d")
+    now = datetime.utcnow()
+    today = now.strftime("%Y-%m-%d")
+    # Cover matches from NOW until tomorrow at 18:00 UTC (19:00 Paris)
+    # This captures tonight's matches + tomorrow's daytime matches
+    cutoff = (now + timedelta(days=1)).replace(hour=18, minute=0, second=0)
+    cutoff_str = cutoff.strftime("%Y-%m-%dT%H:%M:%SZ")
+    now_str = now.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    # Fetch today's predictions for meta-analysis context
+    # Fetch predictions for meta-analysis context
     try:
         preds = (
             supabase.table("predictions")
@@ -696,7 +702,7 @@ def _generate_football_deepthink(matches: list, league_names: dict) -> None:
         logger.info("[Football] No predictions available for DeepThink.")
         return
 
-    # Enrich with fixture info
+    # Enrich with fixture info — cover next 24h window
     fixture_ids = [p["fixture_id"] for p in preds if p.get("fixture_id")]
     fixtures_map = {}
     if fixture_ids:
@@ -706,8 +712,8 @@ def _generate_football_deepthink(matches: list, league_names: dict) -> None:
                 .select("id, home_team, away_team, league_id, date, status")
                 .in_("id", fixture_ids)
                 .eq("status", "NS")
-                .gte("date", f"{today}T00:00:00Z")
-                .lt("date", f"{today}T23:59:59Z")
+                .gte("date", now_str)
+                .lt("date", cutoff_str)
                 .execute()
                 .data or []
             )
@@ -745,9 +751,17 @@ def _generate_football_deepthink(matches: list, league_names: dict) -> None:
         "Identifie les 3 MEILLEURS SPOTS (opportunités à haute value) en croisant les données.\n\n"
         "**Données fournies** : Probabilités 1X2, xG attendus, BTTS, Over/Under, "
         "paris recommandés par le modèle avec score de confiance, et l'analyse IA de chaque match.\n\n"
+        "**MARCHÉS AUTORISÉS (uniquement ceux calculés par notre modèle)** :\n"
+        "- Victoire Domicile / Victoire Extérieur / Match Nul\n"
+        "- Double Chance 1X / Double Chance X2\n"
+        "- BTTS Oui\n"
+        "- Plus de 1.5 buts / Plus de 2.5 buts / Plus de 3.5 buts\n"
+        "- 1X + Plus de 1.5 buts / X2 + Plus de 1.5 buts\n"
+        "⚠️ NE JAMAIS recommander de handicap (-1.5, -2.5) ou de marché non listé ci-dessus.\n"
+        "⚠️ Ton MARCHÉ CIBLE doit être COHÉRENT avec le pari recommandé par le modèle pour ce match.\n\n"
         "**RAISONNEMENT ATTENDU** : Pour chaque spot identifié, tu dois :\n"
         "1. Expliquer POURQUOI c'est un bon spot (croisement de plusieurs facteurs)\n"
-        "2. Identifier le MARCHÉ cible (1X2, BTTS, Over 2.5, Over 1.5, Score exact...)\n"
+        "2. Identifier le MARCHÉ cible (parmi la liste ci-dessus uniquement)\n"
         "3. Donner un niveau de CONFIANCE (⭐ à ⭐⭐⭐)\n"
         "4. Mentionner les RISQUES potentiels\n\n"
         "**FORMAT** : Rédige en français, style direct de parieur expert. "
@@ -757,8 +771,8 @@ def _generate_football_deepthink(matches: list, league_names: dict) -> None:
     )
 
     user_prompt = (
-        f"Journée Football du {datetime.utcnow().strftime('%d/%m/%Y')} — "
-        f"{len(summaries)} matchs à analyser :\n\n"
+        f"Football — {now.strftime('%d/%m/%Y %Hh%M')} UTC — "
+        f"Prochaines 24h — {len(summaries)} matchs à analyser :\n\n"
         + "\n\n".join(summaries)
     )
 

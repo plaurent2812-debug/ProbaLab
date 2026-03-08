@@ -18,12 +18,13 @@ function DateBar({ date, setDate }) {
 
     const days = Array.from({ length: 10 }, (_, i) => {
         const d = addDays(subDays(today, 5), i)
+        const dateStr = format(d, 'yyyy-MM-dd')
         return {
             date: d,
-            dateStr: d.toISOString().slice(0, 10),
+            dateStr,
             dayName: format(d, "EEE", { locale: fr }).toUpperCase().replace('.', ''),
             dayNum: format(d, "dd.MM."),
-            isToday: d.toISOString().slice(0, 10) === today.toISOString().slice(0, 10),
+            isToday: dateStr === format(today, 'yyyy-MM-dd'),
         }
     })
 
@@ -52,7 +53,7 @@ function DateBar({ date, setDate }) {
 function MetaAnalysisCard({ date }) {
     const [analysis, setAnalysis] = useState(null)
     const [loading, setLoading] = useState(true)
-    const [expanded, setExpanded] = useState(true)
+    const [expanded, setExpanded] = useState(false)
 
     useEffect(() => {
         setLoading(true)
@@ -326,13 +327,45 @@ export default function NHLPage({ date, setDate }) {
         const start = new Date(date); start.setHours(0, 0, 0, 0)
         const end = new Date(date); end.setHours(23, 59, 59, 999)
 
-        supabase
+        // Check if selected date is today
+        const now = new Date()
+        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+        const isToday = date === todayStr
+
+        const query = supabase
             .from('nhl_fixtures')
             .select('*')
-            .gte('date', start.toISOString())
-            .lte('date', end.toISOString())
+
+        if (isToday) {
+            // Today: show matches from today + any currently live matches (even from yesterday evening)
+            const yesterdayStart = new Date(start)
+            yesterdayStart.setHours(yesterdayStart.getHours() - 12)
+            query
+                .gte('date', yesterdayStart.toISOString())
+                .lte('date', end.toISOString())
+        } else {
+            query
+                .gte('date', start.toISOString())
+                .lte('date', end.toISOString())
+        }
+
+        query
             .order('date', { ascending: true })
-            .then(({ data }) => setMatches(data || []))
+            .then(({ data }) => {
+                if (isToday) {
+                    // For today: show live matches + today's matches (filter out finished yesterday matches)
+                    const liveStatuses = new Set(LIVE_STATUSES)
+                    const filtered = (data || []).filter(m => {
+                        const matchDate = new Date(m.date)
+                        const isInToday = matchDate >= start && matchDate <= end
+                        const isLive = liveStatuses.has(m.status)
+                        return isInToday || isLive
+                    })
+                    setMatches(filtered)
+                } else {
+                    setMatches(data || [])
+                }
+            })
             .catch(console.error)
             .finally(() => { if (showLoading) setLoading(false) })
     }, [date])

@@ -4,9 +4,10 @@ import { fr } from "date-fns/locale"
 import {
     ChevronLeft, ChevronRight, Target, Trophy, Lock,
     CheckCircle2, XCircle, Clock, Minus, TrendingUp,
-    BarChart3, Star, Sparkles, RefreshCw
+    BarChart3, Sparkles, RefreshCw
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/lib/auth"
 
 const API_BASE = import.meta.env.VITE_API_URL || ""
@@ -49,14 +50,31 @@ async function saveBet(bet, sport, date) {
 }
 
 // ── Result Badge ──────────────────────────────────────────────
-function ResultBadge({ result }) {
+function ResultBadge({ result, betDate }) {
     const cfg = {
         WIN: { icon: CheckCircle2, label: "WIN", cls: "text-emerald-400 bg-emerald-500/15" },
         LOSS: { icon: XCircle, label: "LOSS", cls: "text-red-400 bg-red-500/15" },
         VOID: { icon: Minus, label: "NUL", cls: "text-slate-400 bg-slate-500/15" },
         PENDING: { icon: Clock, label: "En cours", cls: "text-amber-400 bg-amber-500/15" },
     }
-    const { icon: Icon, label, cls } = cfg[result] || cfg.PENDING
+    let effectiveResult = result || "PENDING"
+    // If PENDING but match date is in the past → show "Terminé" instead of "En cours"
+    if (effectiveResult === "PENDING" && betDate) {
+        const now = new Date()
+        const matchDay = new Date(betDate + "T23:30:00")
+        if (now > matchDay) {
+            effectiveResult = "_DONE"
+        }
+    }
+    if (effectiveResult === "_DONE") {
+        return (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold text-blue-400 bg-blue-500/15">
+                <Clock className="w-3 h-3" />
+                Terminé ⏳
+            </span>
+        )
+    }
+    const { icon: Icon, label, cls } = cfg[effectiveResult] || cfg.PENDING
     return (
         <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold", cls)}>
             <Icon className="w-3 h-3" />
@@ -165,7 +183,7 @@ function BetCard({ bet, sport, date, isAdmin, onResultUpdate }) {
                         )}
                     </div>
                 </div>
-                <ResultBadge result={localResult} />
+                <ResultBadge result={localResult} betDate={date} />
             </div>
 
             <div className="flex items-center justify-between mt-3">
@@ -390,7 +408,7 @@ function PremiumLock() {
             </div>
             <h2 className="text-lg font-bold mb-2">Accès Premium requis</h2>
             <p className="text-muted-foreground text-sm max-w-sm mb-6">
-                Les <strong>Paris du Soir</strong> — sélection quotidienne des 5 meilleurs paris ⚽ + 🏒 —
+                Les <strong>Pronos du Jour</strong> — sélection quotidienne des 5 meilleurs pronos ⚽ + 🏒 —
                 sont réservés aux abonnés Premium.
             </p>
             <a
@@ -413,6 +431,9 @@ export default function ParisDuSoir() {
     const [stats, setStats] = useState(null)
     const [loading, setLoading] = useState(false)
     const [refreshKey, setRefreshKey] = useState(0)
+    const [showHistory, setShowHistory] = useState(false)
+    const [history, setHistory] = useState(null)
+    const [historyLoading, setHistoryLoading] = useState(false)
 
     const canAccess = hasAccess("premium")
 
@@ -430,6 +451,18 @@ export default function ParisDuSoir() {
         fetchBestBetsStats().then(setStats)
     }, [canAccess, refreshKey])
 
+    // Fetch history when toggled on
+    useEffect(() => {
+        if (!showHistory || !canAccess) return
+        setHistoryLoading(true)
+        const sportParam = sportFilter === "both" ? "" : `&sport=${sportFilter}`
+        fetch(`${API_BASE}/api/best-bets/history?days=60${sportParam}`)
+            .then(r => r.json())
+            .then(setHistory)
+            .catch(() => { })
+            .finally(() => setHistoryLoading(false))
+    }, [showHistory, sportFilter, canAccess])
+
     if (!canAccess) return <PremiumLock />
 
     const dateObj = new Date(date + "T12:00:00")
@@ -444,28 +477,23 @@ export default function ParisDuSoir() {
                 <div className="flex items-center gap-2 mb-3">
                     <span className="text-base">{emoji}</span>
                     <h2 className={cn("text-sm font-bold", accentColor)}>{label}</h2>
-                    <span className="text-xs text-muted-foreground">— 5 meilleurs paris</span>
+                    <span className="text-xs text-muted-foreground">— 5 meilleurs pronos</span>
                     {isAdmin && betsArr.length > 0 && (
                         <span className="ml-auto text-[9px] text-muted-foreground">
                             Boutons WIN/LOSS visibles (admin)
                         </span>
                     )}
                 </div>
+
                 {loading ? (
-                    <div className="space-y-3">
-                        {[...Array(3)].map((_, i) => (
-                            <div key={i} className="h-24 rounded-xl bg-card border border-border/40 animate-pulse" />
-                        ))}
+                    <div className="space-y-2">
+                        {[1, 2, 3].map(i => <Skeleton key={i} className="h-20 w-full rounded-xl" />)}
                     </div>
-                ) : betsArr.length === 0 ? (
-                    <div className="rounded-xl border border-border/40 bg-card p-6 text-center text-sm text-muted-foreground">
-                        Aucun pari sélectionné pour cette date / ce filtre.
-                    </div>
-                ) : (
-                    <div className="space-y-3">
+                ) : betsArr.length > 0 ? (
+                    <div className="space-y-2.5">
                         {betsArr.map((bet, i) => (
                             <BetCard
-                                key={i}
+                                key={bet.fixture_id || i}
                                 bet={bet}
                                 sport={sport}
                                 date={date}
@@ -474,76 +502,57 @@ export default function ParisDuSoir() {
                             />
                         ))}
                     </div>
+                ) : (
+                    <div className="text-center py-8 text-xs text-muted-foreground border border-dashed border-border/50 rounded-xl">
+                        Aucun prono {label} détecté pour cette date.
+                    </div>
                 )}
             </div>
         )
     }
 
+    async function resolveBet(id, result) {
+        if (!id) return
+        try {
+            await fetch(`${API_BASE}/api/best-bets/${id}/result`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ result }),
+            })
+            setRefreshKey(k => k + 1)
+        } catch { }
+    }
+
     return (
-        <div className="max-w-2xl mx-auto px-3 pb-24 pt-4">
+        <div className="animate-fade-in-up px-3 pt-4 pb-8 max-w-3xl mx-auto">
             {/* Header */}
-            <div className="mb-5">
-                <div className="flex items-center gap-2 mb-1">
-                    <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center">
-                        <Target className="w-3.5 h-3.5 text-white" />
-                    </div>
-                    <h1 className="text-base font-black">Paris du Soir</h1>
-                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 uppercase tracking-wider">
-                        Premium
-                    </span>
+            <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                    <Target className="w-5 h-5 text-primary" />
+                    <h1 className="text-base font-black capitalize">{formattedDate}</h1>
                 </div>
-                <p className="text-xs text-muted-foreground pl-9">
-                    Sélection quotidienne · cotes cibles 1.75 – 2.20 · gestion 1% bankroll
-                </p>
-            </div>
-
-            {/* Date bar */}
-            <div className="flex items-center justify-between bg-card border border-border/60 rounded-xl px-4 py-2.5 mb-4">
-                <button
-                    onClick={() => setDate(subDays(dateObj, 1).toISOString().slice(0, 10))}
-                    className="p-1 rounded hover:bg-accent/60 transition-colors"
-                >
-                    <ChevronLeft className="w-4 h-4" />
-                </button>
-                <div className="text-center">
-                    <p className="text-xs font-bold capitalize">{formattedDate}</p>
-                    <p className="text-[10px] text-muted-foreground font-mono">{date}</p>
-                </div>
-                <button
-                    onClick={() => setDate(addDays(dateObj, 1).toISOString().slice(0, 10))}
-                    className="p-1 rounded hover:bg-accent/60 transition-colors"
-                >
-                    <ChevronRight className="w-4 h-4" />
-                </button>
-            </div>
-
-            {/* Sport filter */}
-            <div className="flex gap-1.5 mb-5">
-                {[
-                    { v: "both", label: "Tous" },
-                    { v: "football", label: "⚽ Football" },
-                    { v: "nhl", label: "🏒 NHL" },
-                ].map(({ v, label }) => (
+                <div className="flex items-center gap-1.5">
+                    {/* Date nav */}
                     <button
-                        key={v}
-                        onClick={() => setSportFilter(v)}
-                        className={cn(
-                            "px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors",
-                            sportFilter === v
-                                ? "bg-primary text-primary-foreground"
-                                : "bg-card border border-border/60 text-muted-foreground hover:text-foreground"
-                        )}
+                        onClick={() => setDate(subDays(dateObj, 1).toISOString().slice(0, 10))}
+                        className="p-1.5 rounded-lg hover:bg-accent transition-colors"
                     >
-                        {label}
+                        <ChevronLeft className="w-4 h-4" />
                     </button>
-                ))}
-                <button
-                    onClick={() => setRefreshKey(k => k + 1)}
-                    className="ml-auto p-1.5 rounded-lg bg-card border border-border/60 text-muted-foreground hover:text-foreground transition-colors"
-                    title="Rafraîchir"
-                >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                </button>
+                    <button
+                        onClick={() => setDate(addDays(dateObj, 1).toISOString().slice(0, 10))}
+                        className="p-1.5 rounded-lg hover:bg-accent transition-colors"
+                    >
+                        <ChevronRight className="w-4 h-4" />
+                    </button>
+                    <button
+                        onClick={() => setRefreshKey(k => k + 1)}
+                        className="p-1.5 rounded-lg hover:bg-accent transition-colors text-muted-foreground"
+                        title="Rafraîchir"
+                    >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                    </button>
+                </div>
             </div>
 
             {/* Strategy reminder */}
@@ -555,38 +564,169 @@ export default function ParisDuSoir() {
                 </p>
             </div>
 
-            {/* Football bets */}
-            {(sportFilter === "both" || sportFilter === "football") && (
-                <BetSection
-                    sport="football"
-                    betsArr={footballBets}
-                    emoji="⚽"
-                    label="Football"
-                    accentColor="text-emerald-400"
-                />
-            )}
+            {/* View toggle: Aujourd'hui / Historique */}
+            <div className="flex gap-1 mb-5 p-0.5 rounded-lg bg-muted/50">
+                <button
+                    onClick={() => setShowHistory(false)}
+                    className={cn(
+                        "flex-1 py-2 rounded-md text-xs font-bold transition-all",
+                        !showHistory ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+                    )}
+                >
+                    📋 Picks du Jour
+                </button>
+                <button
+                    onClick={() => setShowHistory(true)}
+                    className={cn(
+                        "flex-1 py-2 rounded-md text-xs font-bold transition-all",
+                        showHistory ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+                    )}
+                >
+                    📊 Historique complet
+                </button>
+            </div>
 
-            {/* NHL bets */}
-            {(sportFilter === "both" || sportFilter === "nhl") && (
-                <BetSection
-                    sport="nhl"
-                    betsArr={nhlBets}
-                    emoji="🏒"
-                    label="NHL"
-                    accentColor="text-cyan-400"
-                />
-            )}
+            {/* Sport filter */}
+            <div className="flex gap-1.5 mb-5">
+                {[
+                    { v: "both", label: "🌍 Tous" },
+                    { v: "football", label: "⚽ Football" },
+                    { v: "nhl", label: "🏒 NHL" },
+                ].map(f => (
+                    <button
+                        key={f.v}
+                        onClick={() => setSportFilter(f.v)}
+                        className={cn(
+                            "px-3 py-1.5 rounded-full text-xs font-semibold transition-colors",
+                            sportFilter === f.v
+                                ? "bg-primary/15 text-primary"
+                                : "bg-muted/40 text-muted-foreground hover:bg-muted"
+                        )}
+                    >
+                        {f.label}
+                    </button>
+                ))}
+            </div>
 
-            {/* NHL fallback note */}
-            {bets?.nhl_note && (
-                <div className="rounded-lg border border-amber-500/20 bg-amber-500/8 px-3 py-2 mb-3 flex items-start gap-2">
-                    <span className="text-amber-400 text-xs shrink-0">⚠️</span>
-                    <p className="text-[10px] text-amber-400/80">{bets.nhl_note}</p>
+            {!showHistory ? (
+                <>
+                    {/* Football bets */}
+                    {(sportFilter === "both" || sportFilter === "football") && (
+                        <BetSection
+                            sport="football"
+                            betsArr={footballBets}
+                            emoji="⚽"
+                            label="Football"
+                            accentColor="text-emerald-400"
+                        />
+                    )}
+
+                    {/* NHL bets */}
+                    {(sportFilter === "both" || sportFilter === "nhl") && (
+                        <BetSection
+                            sport="nhl"
+                            betsArr={nhlBets}
+                            emoji="🏒"
+                            label="NHL"
+                            accentColor="text-cyan-400"
+                        />
+                    )}
+
+                    {/* NHL fallback note */}
+                    {bets?.nhl_note && (
+                        <div className="rounded-lg border border-amber-500/20 bg-amber-500/8 px-3 py-2 mb-3 flex items-start gap-2">
+                            <span className="text-amber-400 text-xs shrink-0">⚠️</span>
+                            <p className="text-[10px] text-amber-400/80">{bets.nhl_note}</p>
+                        </div>
+                    )}
+
+                    {/* Stats — admin only */}
+                    <StatsDashboard stats={stats} isAdmin={isAdmin} />
+                </>
+            ) : (
+                /* ── History Table ──────────────────────────────────── */
+                <div className="space-y-3">
+                    {historyLoading ? (
+                        <div className="space-y-2">
+                            {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-12 w-full rounded-lg" />)}
+                        </div>
+                    ) : history?.picks?.length > 0 ? (
+                        <>
+                            {/* Summary header */}
+                            <div className="flex items-center justify-between px-3 py-2.5 rounded-xl border border-border/50 bg-card">
+                                <div className="flex items-center gap-4 text-xs">
+                                    <span className="text-muted-foreground">{history.resolved} résolus / {history.total} total</span>
+                                </div>
+                                <span className={cn(
+                                    "text-sm font-black",
+                                    history.total_pl >= 0 ? "text-emerald-500" : "text-red-500"
+                                )}>
+                                    P&L : {history.total_pl >= 0 ? "+" : ""}{history.total_pl} u
+                                </span>
+                            </div>
+
+                            {/* Picks table */}
+                            <div className="rounded-xl border border-border/50 bg-card overflow-hidden">
+                                <div className="divide-y divide-border/30">
+                                    {history.picks.map((pick) => {
+                                        const isWin = pick.result === "WIN"
+                                        const isLoss = pick.result === "LOSS"
+                                        const isPending = pick.result === "PENDING"
+                                        return (
+                                            <div key={pick.id} className="flex items-center gap-2 px-3 py-2.5">
+                                                {/* Result icon */}
+                                                <div className="shrink-0">
+                                                    {isWin ? (
+                                                        <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                                                    ) : isLoss ? (
+                                                        <XCircle className="w-4 h-4 text-red-500" />
+                                                    ) : (
+                                                        <Clock className="w-4 h-4 text-amber-500" />
+                                                    )}
+                                                </div>
+
+                                                {/* Match + market */}
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="text-xs font-medium truncate">
+                                                        {pick.bet_label || pick.player_name || "—"}
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                                        <span className="text-[9px] text-muted-foreground">{pick.date}</span>
+                                                        <span className="text-[9px] px-1 py-0.5 rounded bg-muted text-muted-foreground">
+                                                            {pick.sport === "nhl" ? "🏒" : "⚽"} {pick.market || "—"}
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                {/* Odds + P&L */}
+                                                <div className="shrink-0 text-right">
+                                                    <div className="text-xs font-bold tabular-nums">
+                                                        @{parseFloat(pick.odds || 0).toFixed(2)}
+                                                    </div>
+                                                    <div className={cn(
+                                                        "text-[10px] font-semibold tabular-nums",
+                                                        isWin ? "text-emerald-500" :
+                                                            isLoss ? "text-red-500" :
+                                                                "text-muted-foreground"
+                                                    )}>
+                                                        {isWin ? `+${(parseFloat(pick.odds || 0) - 1).toFixed(2)}u` :
+                                                            isLoss ? "-1.00u" :
+                                                                isPending ? "⏳" : "—"}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+                            </div>
+                        </>
+                    ) : (
+                        <div className="text-center py-12 text-xs text-muted-foreground border border-dashed border-border/50 rounded-xl">
+                            Aucun historique disponible.
+                        </div>
+                    )}
                 </div>
             )}
-
-            {/* Stats — admin only */}
-            <StatsDashboard stats={stats} isAdmin={isAdmin} />
         </div>
     )
 }

@@ -91,8 +91,8 @@ function Header() {
             </span>
           </NavLink>
 
-          {/* Center: Sport tabs */}
-          <nav className="flex items-center gap-0">
+          {/* Center: Sport tabs (hidden on mobile, bottom nav replaces) */}
+          <nav className="hidden md:flex items-center gap-0">
             <NavLink
               to="/football"
               className={cn(
@@ -123,7 +123,7 @@ function Header() {
                   isActive ? "text-amber-400 border-amber-400" : "text-muted-foreground border-transparent hover:text-foreground"
                 )}
               >
-                <Target className="w-3 h-3" />Paris du Soir
+                <Target className="w-3 h-3" />Pronos
               </NavLink>
             )}
             {isAdmin && (
@@ -131,7 +131,7 @@ function Header() {
                 <NavLink
                   to="/performance"
                   className={({ isActive }) => cn(
-                    "px-3 py-2 text-xs font-bold transition-colors border-b-2 hidden md:block",
+                    "px-3 py-2 text-xs font-bold transition-colors border-b-2",
                     isActive ? "text-primary border-primary" : "text-muted-foreground border-transparent hover:text-foreground"
                   )}
                 >
@@ -140,7 +140,7 @@ function Header() {
                 <NavLink
                   to="/admin"
                   className={({ isActive }) => cn(
-                    "px-3 py-2 text-xs font-bold transition-colors border-b-2 hidden md:block",
+                    "px-3 py-2 text-xs font-bold transition-colors border-b-2",
                     isActive ? "text-primary border-primary" : "text-muted-foreground border-transparent hover:text-foreground"
                   )}
                 >
@@ -198,16 +198,21 @@ function BottomNav() {
   const location = useLocation()
   const { isPremium, isAdmin } = useAuth()
 
+  // Emoji icon components for sports
+  const FootballIcon = () => <span className="text-base leading-none">⚽</span>
+  const NHLIcon = () => <span className="text-base leading-none">🏒</span>
+
   const tabs = isPremium || isAdmin
     ? [
       { to: "/", label: "Tous", icon: LayoutGrid, exact: true },
-      { to: "/football", label: "Football", icon: Radio },
-      { to: "/nhl", label: "NHL", icon: Target },
-      { to: "/paris-du-soir", label: "Paris", icon: Trophy },
+      { to: "/football", label: "Football", icon: FootballIcon },
+      { to: "/nhl", label: "NHL", icon: NHLIcon },
+      { to: "/paris-du-soir", label: "Pronos", icon: Trophy },
+      ...(isAdmin ? [{ to: "/admin", label: "Admin", icon: Shield }] : []),
     ]
     : [
       { to: "/", label: "Tous", icon: LayoutGrid, exact: true },
-      { to: "/football", label: "Direct", icon: Radio },
+      { to: "/football", label: "Direct", icon: FootballIcon },
       { to: "/watchlist", label: "Favoris", icon: Star },
       { to: "/premium", label: "Premium", icon: Trophy },
     ]
@@ -287,7 +292,10 @@ function LoginRedirect() {
 
 // ── Main App ──────────────────────────────────────────────────
 function AppContent() {
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
+  const [date, setDate] = useState(() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  })
   const [selectedLeague, setSelectedLeague] = useState(null)
 
   return (

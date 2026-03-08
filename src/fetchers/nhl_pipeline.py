@@ -635,7 +635,8 @@ def get_ai_game_context(games: list[dict], standings: dict) -> dict:
 
 
 def get_gemini_nhl_analysis(
-    home_team: str, away_team: str, top_players: list[dict], ai_factors: dict
+    home_team: str, away_team: str, top_players: list[dict], ai_factors: dict,
+    injured_info: dict | None = None,
 ) -> str:
     """Use Gemini to generate a detailed, player-centric NHL match analysis."""
     try:
@@ -689,9 +690,17 @@ def get_gemini_nhl_analysis(
 Ta mission est de fournir une synthèse narrative très courte et percutante (- de 60 mots) qui explique le contexte du match et justifie les notes (sur 10) des joueurs calculées par notre modèle.
 {learnings_block}"""
 
+    # Build injury block for prompt
+    injury_block = ""
+    if injured_info:
+        injury_lines = []
+        for team_name, names in injured_info.items():
+            injury_lines.append(f"  {team_name}: {', '.join(names)} (absent(s))")
+        injury_block = "\nJoueurs blessés/absents :\n" + "\n".join(injury_lines) + "\n"
+
     user_prompt = f"""Match : {home_team} vs {away_team}
 Contexte IA d'équipe (Fatigue/Statuts) : Domicile={h_ai:.2f}, Extérieur={a_ai:.2f} (1.0 = Neutre. >1.0 = Avantage, <1.0 = Désavantage)
-
+{injury_block}
 Top joueurs (selon modèle) :
 {players_str}
 
@@ -1351,6 +1360,7 @@ def run_nhl_pipeline() -> dict:
 
         # ─── PASS 3: Injury detection (absent from last 10 days) ───
         injured = set()
+        injured_by_team = {home_abbrev: [], away_abbrev: []}
         for p in match_players:
             l5 = p.get("l5_form", {})
             pid = p["player_id"]
@@ -1359,8 +1369,9 @@ def run_nhl_pipeline() -> dict:
 
             # If we fetched game logs, check `days_since_last_game`
             if l5 and "days_since_last_game" in l5:
-                if l5["days_since_last_game"] > 30:
+                if l5["days_since_last_game"] > 10:
                     injured.add(pid)
+                    injured_by_team.setdefault(p["team"], []).append(p["player_name"])
                     logger.info(
                         f"[NHL]   🏥 {p['player_name']} enlevé (absent depuis {l5['days_since_last_game']}j)"
                     )
@@ -1391,8 +1402,9 @@ def run_nhl_pipeline() -> dict:
                         if last_game_date:
                             last_dt = datetime.strptime(last_game_date, "%Y-%m-%d")
                             days_since = (datetime.utcnow() - last_dt).days
-                            if days_since > 30:
+                            if days_since > 10:
                                 injured.add(pid)
+                                injured_by_team.setdefault(team, []).append(p["player_name"])
                                 logger.info(
                                     f"[NHL]   🏥 {p['player_name']} ({team}) enlevé (absent depuis {days_since}j)"
                                 )
@@ -1454,6 +1466,28 @@ def run_nhl_pipeline() -> dict:
         pa = win_prob["away"]
         po55 = win_prob.get("over_55", 50)
 
+        # ─── Injury-adjusted probabilities ───
+        home_injured_count = len(injured_by_team.get(home_abbrev, []))
+        away_injured_count = len(injured_by_team.get(away_abbrev, []))
+        if home_injured_count > 0 or away_injured_count > 0:
+            # Each injured star reduces team win% by ~3pts (capped at 15pts)
+            home_penalty = min(15, home_injured_count * 3)
+            away_penalty = min(15, away_injured_count * 3)
+            # Transfer from injured team to opponent
+            ph = max(15, ph - home_penalty + away_penalty)
+            pa = max(15, pa - away_penalty + home_penalty)
+            # Normalize to 100%
+            total = ph + pa
+            ph = round(ph * 100 / total)
+            pa = 100 - ph
+            # Reduce Over 5.5 if key players are out
+            total_injuries = home_injured_count + away_injured_count
+            po55 = max(20, po55 - total_injuries * 2)
+            logger.info(
+                f"[NHL]   🏥 Injury-adjusted: {home_abbrev}={ph}% ({home_injured_count} out), "
+                f"{away_abbrev}={pa}% ({away_injured_count} out), O5.5={po55}%"
+            )
+
         # ─── ML Blend (60% Poisson + 40% XGBoost) ───
         try:
             if nhl_ml_available():
@@ -1508,7 +1542,16 @@ def run_nhl_pipeline() -> dict:
         logger.info(
             f"[NHL]   🧠 Génération analyse détaillée pour {home_abbrev} vs {away_abbrev}..."
         )
-        analysis_text = get_gemini_nhl_analysis(home_name, away_name, match_players, ai_factors)
+        # Build injury context for Gemini
+        injury_context = {}
+        for team_abbr in [home_abbrev, away_abbrev]:
+            names = injured_by_team.get(team_abbr, [])
+            if names:
+                team_full = TEAM_NAMES.get(team_abbr, team_abbr)
+                injury_context[team_full] = names
+        analysis_text = get_gemini_nhl_analysis(
+            home_name, away_name, match_players, ai_factors, injured_info=injury_context
+        )
 
         # Win probabilities for fixtures_data (saved to Supabase)
 
@@ -1628,10 +1671,50 @@ def run_nhl_pipeline() -> dict:
     logger.info(f"[NHL] ✅ {len(fixtures_data)} matchs insérés dans nhl_fixtures")
 
     # 9. 🧠 DeepThink Strategic Meta-Analysis (ONE call per pipeline run)
+    #    Cover next 24h: today's fixtures + tomorrow until 20:00 UTC (21:00 Paris)
     if fixtures_data and all_players:
+        # Fetch tomorrow's already-stored fixtures from DB to include in DeepThink
+        extended_fixtures = list(fixtures_data)
+        try:
+            from datetime import datetime as dt, timedelta
+            tomorrow = (dt.utcnow() + timedelta(days=1)).strftime("%Y-%m-%d")
+            cutoff_str = (dt.utcnow() + timedelta(days=1)).replace(hour=20, minute=0, second=0).strftime("%Y-%m-%dT%H:%M:%SZ")
+            tmrw_data = (
+                supabase.table("nhl_fixtures")
+                .select("*")
+                .eq("status", "NS")
+                .gte("date", f"{tomorrow}T00:00:00Z")
+                .lt("date", cutoff_str)
+                .execute()
+                .data or []
+            )
+            if tmrw_data:
+                for tf in tmrw_data:
+                    # Only add if not already in today's fixtures
+                    existing_ids = {f.get("api_fixture_id") for f in extended_fixtures}
+                    if tf.get("api_fixture_id") not in existing_ids:
+                        extended_fixtures.append({
+                            "home_team": tf["home_team"],
+                            "away_team": tf["away_team"],
+                            "date": tf["date"],
+                            "status": tf["status"],
+                            "proba_home": tf.get("proba_home", 50),
+                            "proba_away": tf.get("proba_away", 50),
+                            "proba_over_55": tf.get("proba_over_55", 50),
+                            "ai_home_factor": tf.get("ai_home_factor", 1.0),
+                            "ai_away_factor": tf.get("ai_away_factor", 1.0),
+                            "recommended_bet": tf.get("recommended_bet", ""),
+                            "confidence_score": tf.get("confidence_score", 5),
+                            "api_fixture_id": tf.get("api_fixture_id"),
+                            "stats_json": tf.get("stats_json", {}),
+                        })
+                logger.info(f"[NHL] DeepThink: added {len(tmrw_data)} tomorrow fixtures (total: {len(extended_fixtures)})")
+        except Exception as e:
+            logger.warning(f"[NHL] Could not fetch tomorrow's fixtures for DeepThink: {e}")
+
         try:
             meta_analysis = generate_deepthink_meta_analysis(
-                fixtures_data, all_players, standings, fatigue_dict, special_teams
+                extended_fixtures, all_players, standings, fatigue_dict, special_teams
             )
             if meta_analysis:
                 # Store as special row in nhl_data_lake
@@ -1791,9 +1874,16 @@ def generate_deepthink_meta_analysis(
         "**Données fournies** : Probabilités calculées par le modèle Poisson, "
         "PP%/PK% des équipes, fatigue B2B, PK L10 estimé, pénalités concédées adverses, "
         "Tirs concédés, forme récente (L5), PP share des joueurs.\n\n"
+        "**MARCHÉS AUTORISÉS (uniquement ceux calculés par notre modèle)** :\n"
+        "- Joueur But O/U 0.5 (Buteur)\n"
+        "- Joueur Point O/U 0.5 (+0.5 Point)\n"
+        "- Joueur Assist O/U 0.5 (Passeur décisif)\n"
+        "- Victoire équipe (incl. OT)\n"
+        "- Over/Under 5.5 buts\n"
+        "⚠️ NE JAMAIS recommander de handicap, de tirs O/U, ou de marché non listé ci-dessus.\n\n"
         "**RAISONNEMENT ATTENDU** : Pour chaque spot identifié, tu dois :\n"
         "1. Expliquer POURQUOI c'est un bon spot (croisement de plusieurs facteurs)\n"
-        "2. Identifier le MARCHÉ cible (But O/U 0.5, Point O/U 0.5, Tirs O/U 2.5)\n"
+        "2. Identifier le MARCHÉ cible (parmi la liste ci-dessus uniquement)\n"
         "3. Donner un niveau de CONFIANCE (⭐ à ⭐⭐⭐)\n"
         "4. Mentionner les RISQUES potentiels\n\n"
         "**FORMAT** : Rédige en français, style direct de parieur expert. "
