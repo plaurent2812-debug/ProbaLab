@@ -71,7 +71,7 @@ def parse_winamax_screenshot(image_bytes: bytes, caption: str = "") -> dict:
             user_text += f"\n\nNote de l'expert : {caption}"
 
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-2.5-flash",
             contents=[
                 types.Content(
                     role="user",
