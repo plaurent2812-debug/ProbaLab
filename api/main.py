@@ -44,7 +44,7 @@ from src.config import supabase
 from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routers import nhl, players, stripe_webhook, trigger
+from api.routers import nhl, players, stripe_webhook, telegram as telegram_router, trigger
 
 
 # ── Scheduler ────────────────────────────────────────────────
@@ -213,6 +213,7 @@ app = FastAPI(title="ProbaLab API", version="1.0.0", lifespan=lifespan)
 app.include_router(stripe_webhook.router)
 app.include_router(nhl.router)
 app.include_router(trigger.router)
+app.include_router(telegram_router.router)
 app.include_router(players.router, prefix="/api/players", tags=["Players"])
 
 origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:4173").split(",")
@@ -1325,6 +1326,29 @@ def get_best_bets_history(
         }
     except Exception as e:
         return {"error": str(e)}
+
+
+@app.get("/api/expert-picks")
+def get_expert_picks(
+    date: str | None = Query(None, description="ISO date YYYY-MM-DD"),
+    sport: str | None = Query(None, description="'nhl' | 'football' | None = all"),
+):
+    """Return expert picks (submitted via Telegram bot) for a given date."""
+    if not date:
+        date = datetime.now().strftime("%Y-%m-%d")
+    try:
+        query = (
+            supabase.table("expert_picks")
+            .select("id, date, sport, player_name, market, match_label, odds, confidence, expert_note, result, created_at")
+            .eq("date", date)
+            .order("created_at", desc=False)
+        )
+        if sport:
+            query = query.eq("sport", sport)
+        resp = query.execute()
+        return {"date": date, "picks": resp.data or []}
+    except Exception as e:
+        return {"date": date, "picks": [], "error": str(e)}
 
 
 @app.get("/api/predictions")

@@ -49,6 +49,17 @@ async function saveBet(bet, sport, date) {
     return res.json()
 }
 
+async function fetchExpertPicks(date, sport = null) {
+    const params = new URLSearchParams({ date })
+    if (sport && sport !== "both") params.set("sport", sport)
+    try {
+        const res = await fetch(`${API_BASE}/api/expert-picks?${params}`)
+        if (!res.ok) return []
+        const data = await res.json()
+        return data.picks || []
+    } catch { return [] }
+}
+
 // ── Result Badge ──────────────────────────────────────────────
 function ResultBadge({ result, betDate }) {
     const cfg = {
@@ -399,6 +410,66 @@ function StatsDashboard({ stats, isAdmin }) {
     )
 }
 
+// ── Expert Pick Card ──────────────────────────────────────────
+function ExpertPickCard({ pick }) {
+    const resultCfg = {
+        WIN: { icon: CheckCircle2, label: "WIN", cls: "text-emerald-400 bg-emerald-500/15" },
+        LOSS: { icon: XCircle, label: "LOSS", cls: "text-red-400 bg-red-500/15" },
+        VOID: { icon: Minus, label: "NUL", cls: "text-slate-400 bg-slate-500/15" },
+        PENDING: { icon: Clock, label: "En cours", cls: "text-amber-400 bg-amber-500/15" },
+    }
+    const { icon: Icon, label, cls } = resultCfg[pick.result || "PENDING"] || resultCfg.PENDING
+    const sportEmoji = pick.sport === "nhl" ? "🏒" : "⚽"
+
+    return (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 transition-all duration-200">
+            <div className="flex items-start justify-between gap-3 mb-2">
+                <div className="flex-1 min-w-0">
+                    {/* Expert badge */}
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                        <span className="px-2 py-0.5 rounded text-[9px] font-black bg-amber-500/20 text-amber-400 uppercase tracking-wider border border-amber-500/30">
+                            🎯 Expert
+                        </span>
+                        {pick.player_name && (
+                            <span className="text-[10px] text-muted-foreground">{sportEmoji} {pick.sport?.toUpperCase()}</span>
+                        )}
+                    </div>
+                    {/* Label */}
+                    <p className="text-sm font-semibold text-foreground leading-tight">
+                        {pick.player_name
+                            ? `${pick.player_name} — ${pick.market}`
+                            : pick.market || pick.match_label || "Pick Expert"}
+                    </p>
+                    {pick.match_label && (
+                        <p className="text-[11px] text-muted-foreground mt-0.5">{pick.match_label}</p>
+                    )}
+                    {pick.expert_note && (
+                        <p className="text-[11px] text-amber-300/70 mt-1 italic">&ldquo;{pick.expert_note}&rdquo;</p>
+                    )}
+                </div>
+                <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0", cls)}>
+                    <Icon className="w-3 h-3" />
+                    {label}
+                </span>
+            </div>
+
+            <div className="flex items-center gap-4 mt-3 text-xs">
+                {pick.odds && (
+                    <span className="font-mono font-bold text-foreground text-base">
+                        {Number(pick.odds).toFixed(2)}
+                    </span>
+                )}
+                {pick.confidence && (
+                    <span className="text-amber-400">{"⭐".repeat(pick.confidence >= 8 ? 3 : pick.confidence >= 6 ? 2 : 1)}</span>
+                )}
+                <span className="text-[10px] text-muted-foreground ml-auto">
+                    {new Date(pick.created_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                </span>
+            </div>
+        </div>
+    )
+}
+
 // ── Premium Lock Screen ───────────────────────────────────────
 function PremiumLock() {
     return (
@@ -434,6 +505,7 @@ export default function ParisDuSoir() {
     const [showHistory, setShowHistory] = useState(false)
     const [history, setHistory] = useState(null)
     const [historyLoading, setHistoryLoading] = useState(false)
+    const [expertPicks, setExpertPicks] = useState([])
 
     const canAccess = hasAccess("premium")
 
@@ -450,6 +522,12 @@ export default function ParisDuSoir() {
         if (!canAccess) return
         fetchBestBetsStats().then(setStats)
     }, [canAccess, refreshKey])
+
+    // Fetch expert picks (Telegram bot)
+    useEffect(() => {
+        if (!canAccess) return
+        fetchExpertPicks(date, sportFilter).then(setExpertPicks)
+    }, [date, sportFilter, canAccess, refreshKey])
 
     // Fetch history when toggled on
     useEffect(() => {
@@ -563,6 +641,22 @@ export default function ParisDuSoir() {
                     Simples 90% (cotes 1.75–2.20) · Doubles 10% (~2.00) · Mise 1% bankroll · Max 5 paris/soir
                 </p>
             </div>
+
+            {/* Expert Picks section */}
+            {!showHistory && expertPicks.length > 0 && (
+                <div className="mb-5">
+                    <div className="flex items-center gap-2 mb-3">
+                        <span className="text-base">🎯</span>
+                        <h2 className="text-sm font-bold text-amber-400">Paris de l'Expert</h2>
+                        <span className="text-xs text-muted-foreground">— sélection personnelle</span>
+                    </div>
+                    <div className="space-y-2.5">
+                        {expertPicks.map((pick) => (
+                            <ExpertPickCard key={pick.id} pick={pick} />
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {/* View toggle: Aujourd'hui / Historique */}
             <div className="flex gap-1 mb-5 p-0.5 rounded-lg bg-muted/50">
