@@ -764,27 +764,33 @@ export default function ParisDuSoir() {
                 <Sparkles className="w-4 h-4 text-primary shrink-0" />
                 <p className="text-xs text-muted-foreground">
                     <strong className="text-foreground">Stratégie :</strong>{" "}
-                    Simples 90% (cotes 1.75–2.20) · Doubles 10% (~2.00) · Mise 1% bankroll · Max 5 paris/soir
+                    Simples 90% (cotes 1.75–2.20) · Doubles 10% (~2.00) · Mise 1% bankroll · Max 5 paris/soir · 1 Fun/jour si opportunité
                 </p>
             </div>
 
             {/* Expert Picks section */}
-            {!showHistory && expertPicks.length > 0 && (
+            {!showHistory && (
                 <div className="mb-5">
                     <div className="flex items-center gap-2 mb-3">
                         <span className="text-base">🎯</span>
                         <h2 className="text-sm font-bold text-amber-400">Paris de l'Expert</h2>
                     </div>
-                    <div className="space-y-2.5">
-                        {expertPicks.map((pick) => (
-                            <ExpertPickCard
-                                key={pick.id}
-                                pick={pick}
-                                isAdmin={isAdmin}
-                                onDelete={(id) => setExpertPicks(prev => prev.filter(p => p.id !== id))}
-                            />
-                        ))}
-                    </div>
+                    {expertPicks.length > 0 ? (
+                        <div className="space-y-2.5">
+                            {expertPicks.map((pick) => (
+                                <ExpertPickCard
+                                    key={pick.id}
+                                    pick={pick}
+                                    isAdmin={isAdmin}
+                                    onDelete={(id) => setExpertPicks(prev => prev.filter(p => p.id !== id))}
+                                />
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="rounded-xl border border-dashed border-border/50 bg-muted/20 px-4 py-6 text-center">
+                            <p className="text-xs text-muted-foreground">😴 Rien d'intéressant aujourd'hui</p>
+                        </div>
+                    )}
                 </div>
             )}
 
