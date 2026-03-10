@@ -1185,6 +1185,9 @@ def get_best_bets_stats():
     """Return win rate and ROI stats for both model predictions (best_bets) and expert picks."""
     try:
         from collections import defaultdict
+        from datetime import datetime, timedelta
+
+        cutoff_30d = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
 
         def calc_stats(bets):
             resolved = [b for b in bets if b["result"] in ("WIN", "LOSS")]
@@ -1211,7 +1214,8 @@ def get_best_bets_stats():
             .limit(500)
             .execute()
         )
-        expert_rows = expert_resp.data or []
+        expert_all_time = expert_resp.data or []
+        expert_rows = [b for b in expert_all_time if b.get("date", "") >= cutoff_30d]
 
         expert_football = [b for b in expert_rows if b["sport"] == "football"]
         expert_nhl = [b for b in expert_rows if b["sport"] == "nhl"]
@@ -1281,7 +1285,8 @@ def get_best_bets_stats():
             .limit(500)
             .execute()
         )
-        model_rows = model_resp.data or []
+        model_all_time = model_resp.data or []
+        model_rows = [b for b in model_all_time if b.get("date", "") >= cutoff_30d]
 
         model_football = [b for b in model_rows if b["sport"] == "football"]
         model_nhl = [b for b in model_rows if b["sport"] == "nhl"]

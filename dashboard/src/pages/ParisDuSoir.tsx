@@ -417,13 +417,11 @@ function StatsDashboard({ stats, isAdmin }) {
             {stats.model_by_market && Object.keys(stats.model_by_market).length > 0 && (
                 <div className="mt-5">
                     <div className="flex items-center gap-2 mb-3">
-                        <span className="text-sm">🤖</span>
-                        <h3 className="text-sm font-bold">Précision IA ProbaLab</h3>
-                        {stats.model_global && (
-                            <span className="text-[10px] text-muted-foreground">
-                                ({stats.model_global.total} prédictions)
-                            </span>
-                        )}
+                        <TrendingUp className="w-4 h-4 text-emerald-500" />
+                        <span className="text-xs font-bold uppercase tracking-wider">Performance (30 J)</span>
+                        <div className="ml-auto flex items-center gap-1.5">
+                            <span className="text-[10px] font-bold text-muted-foreground uppercase bg-muted px-1.5 py-0.5 rounded">Experts + IA</span>
+                        </div>
                     </div>
 
                     {/* Model global cards */}

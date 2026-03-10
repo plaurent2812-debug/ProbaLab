@@ -282,8 +282,8 @@ export default function HomePage() {
             <div className="mx-3 mt-4 mb-4 rounded border border-border/50 bg-card overflow-hidden">
                 <div className="fs-summary-bar border-b border-border/50 bg-muted/20">
                     <TrendingUp className="w-4 h-4 text-emerald-500" />
-                    <span className="text-xs font-bold uppercase tracking-wider">Track Record</span>
-                    <span className="fs-summary-badge bg-muted text-muted-foreground ml-auto">Picks Expert</span>
+                    <span className="text-xs font-bold uppercase tracking-wider">Performance Globale</span>
+                    <span className="fs-summary-badge bg-muted text-muted-foreground ml-auto">30 Jours</span>
                 </div>
 
                 {/* Main metrics */}
