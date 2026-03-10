@@ -1377,6 +1377,7 @@ def resolve_expert_picks(body: dict, authorization: str = Header(None)):
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     date = body.get("date")
+    sport = body.get("sport")  # optional: "football" or "nhl"
     if not date:
         raise HTTPException(status_code=400, detail="date required (YYYY-MM-DD)")
 
@@ -1384,13 +1385,15 @@ def resolve_expert_picks(body: dict, authorization: str = Header(None)):
     errors = []
 
     # ── 1. Load pending expert picks ──────────────────────────────
-    pending = (
+    query = (
         supabase.table("expert_picks")
         .select("*")
         .eq("date", date)
         .eq("result", "PENDING")
-        .execute()
     )
+    if sport:
+        query = query.eq("sport", sport)
+    pending = query.execute()
     picks = pending.data or []
 
     if not picks:

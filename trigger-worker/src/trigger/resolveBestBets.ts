@@ -112,20 +112,18 @@ export const resolveNHLBets = schedules.task({
 });
 
 /**
- * ── Resolve Expert Picks (Telegram) ────────────────────────────────
- * Runs at 07:00 UTC (08:00 Paris). Matches expert picks to finished
- * fixtures and uses Gemini to evaluate WIN/LOSS from free-text bets.
+ * ── Resolve Expert Picks: Football ─────────────────────────────────
+ * Runs at 22:59 UTC (23:59 Paris) — same day, all European matches
+ * are finished by then. Resolves today's football expert picks.
  */
-export const resolveExpertPicks = schedules.task({
-    id: "resolve-expert-picks",
-    cron: "0 7 * * *",   // 07:00 UTC = 08:00 Paris
+export const resolveExpertPicksFootball = schedules.task({
+    id: "resolve-expert-picks-football",
+    cron: "59 22 * * *",   // 22:59 UTC = 23:59 Paris
     retry: standardRetry,
     run: async (payload) => {
-        const yesterday = new Date(payload.timestamp);
-        yesterday.setDate(yesterday.getDate() - 1);
-        const date = yesterday.toISOString().slice(0, 10);
+        const today = new Date(payload.timestamp).toISOString().slice(0, 10);
 
-        console.log(`[Expert Resolve] Checking picks for ${date}`);
+        console.log(`[Expert Resolve Football] Checking picks for ${today}`);
 
         const res = await fetch(`${API_URL}/api/expert-picks/resolve`, {
             method: "POST",
@@ -133,16 +131,53 @@ export const resolveExpertPicks = schedules.task({
                 "Content-Type": "application/json",
                 "Authorization": `Bearer ${CRON_SECRET}`,
             },
-            body: JSON.stringify({ date }),
+            body: JSON.stringify({ date: today, sport: "football" }),
         });
 
         if (!res.ok) {
             const text = await res.text();
-            throw new Error(`Expert resolve failed (${res.status}): ${text}`);
+            throw new Error(`Football expert resolve failed (${res.status}): ${text}`);
         }
 
         const result = await res.json();
-        console.log(`[Expert Resolve] Done:`, result);
+        console.log(`[Expert Resolve Football] Done:`, result);
         return result;
     },
 });
+
+/**
+ * ── Resolve Expert Picks: NHL ──────────────────────────────────────
+ * Runs at 07:00 UTC (08:00 Paris) — next morning, all NHL games from
+ * the prior night are finished. Resolves yesterday's NHL expert picks.
+ */
+export const resolveExpertPicksNHL = schedules.task({
+    id: "resolve-expert-picks-nhl",
+    cron: "0 7 * * *",   // 07:00 UTC = 08:00 Paris
+    retry: standardRetry,
+    run: async (payload) => {
+        const yesterday = new Date(payload.timestamp);
+        yesterday.setDate(yesterday.getDate() - 1);
+        const date = yesterday.toISOString().slice(0, 10);
+
+        console.log(`[Expert Resolve NHL] Checking picks for ${date}`);
+
+        const res = await fetch(`${API_URL}/api/expert-picks/resolve`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${CRON_SECRET}`,
+            },
+            body: JSON.stringify({ date, sport: "nhl" }),
+        });
+
+        if (!res.ok) {
+            const text = await res.text();
+            throw new Error(`NHL expert resolve failed (${res.status}): ${text}`);
+        }
+
+        const result = await res.json();
+        console.log(`[Expert Resolve NHL] Done:`, result);
+        return result;
+    },
+});
+
