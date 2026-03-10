@@ -27,6 +27,8 @@ from src.constants import (
     AVG_ATTACKER_FOULS_DRAWN_PER_90,
     AVG_DEFENDER_FOULS_PER_90,
     BASE_PENALTY_RATE,
+    COMPETITION_XG_FACTOR,
+    CROSS_LEAGUE_IDS,
     DEFAULT_ELO,
     DIXON_COLES_RHO,
     DRAW_FACTOR,
@@ -365,6 +367,27 @@ def calculate_team_strengths(league_id: int) -> dict | None:
     }
 
 
+def _get_domestic_league_id(team_api_id: int) -> int | None:
+    """Look up a team's domestic league from the teams table.
+
+    Used for cross-league competitions (Champions League, Europa League,
+    national cups) where teams come from different domestic leagues.
+
+    Returns:
+        The domestic league_id, or None if not found.
+    """
+    resp = (
+        supabase.table("teams")
+        .select("league_id")
+        .eq("api_id", team_api_id)
+        .limit(1)
+        .execute()
+    )
+    if resp.data:
+        return resp.data[0].get("league_id")
+    return None
+
+
 def calculate_xg(
     home_team_id: int,
     away_team_id: int,
@@ -375,6 +398,10 @@ def calculate_xg(
 
     Formula:
         ``xG_home = home_attack * away_defense * league_avg * home_bonus * adjustments``
+
+    When teams are not found in the league's strength data (e.g. in
+    Champions League), falls back to each team's domestic league strengths
+    and cross-references them to produce unique xG per match.
 
     Args:
         home_team_id: API identifier of the home team.
@@ -387,6 +414,8 @@ def calculate_xg(
         Tuple ``(xg_home, xg_away)`` clamped between ``XG_FLOOR`` and
         ``XG_CEIL``.
     """
+    from src.config import logger
+
     if not league_data:
         from src.constants import XG_FALLBACK_AWAY, XG_FALLBACK_HOME
 
@@ -396,18 +425,53 @@ def calculate_xg(
     home_s = strengths.get(home_team_id)
     away_s = strengths.get(away_team_id)
 
+    # ── Cross-league fallback: use domestic league strengths ──────
     if not home_s or not away_s:
-        from src.constants import XG_FALLBACK_AWAY, XG_FALLBACK_HOME
+        home_league_data = None
+        away_league_data = None
 
-        return XG_FALLBACK_HOME, XG_FALLBACK_AWAY
+        if not home_s and home_team_id:
+            domestic_lid = _get_domestic_league_id(home_team_id)
+            if domestic_lid:
+                home_league_data = calculate_team_strengths(domestic_lid)
+                if home_league_data:
+                    home_s = home_league_data["strengths"].get(home_team_id)
+                    logger.info(f"  ↪ Fallback domestique {home_team_id}: league {domestic_lid}")
+
+        if not away_s and away_team_id:
+            domestic_lid = _get_domestic_league_id(away_team_id)
+            if domestic_lid:
+                away_league_data = calculate_team_strengths(domestic_lid)
+                if away_league_data:
+                    away_s = away_league_data["strengths"].get(away_team_id)
+                    logger.info(f"  ↪ Fallback domestique {away_team_id}: league {domestic_lid}")
+
+        # If still missing after fallback, use true fallback
+        if not home_s or not away_s:
+            from src.constants import XG_FALLBACK_AWAY, XG_FALLBACK_HOME
+            return XG_FALLBACK_HOME, XG_FALLBACK_AWAY
+
+        # Cross-league xG: use average of both leagues' averages
+        avg_home_league = (
+            (home_league_data or league_data)["league_avg_home"]
+        )
+        avg_away_league = (
+            (away_league_data or league_data)["league_avg_away"]
+        )
+        # Average the league contexts for a neutral baseline
+        league_avg_home = (avg_home_league + league_data["league_avg_home"]) / 2.0
+        league_avg_away = (avg_away_league + league_data["league_avg_away"]) / 2.0
+    else:
+        league_avg_home = league_data["league_avg_home"]
+        league_avg_away = league_data["league_avg_away"]
 
     # Avantage domicile spécifique à l'équipe, ou la moyenne de la ligue si manquant
     home_bonus = home_s.get("home_advantage", HOME_XG_BONUS)
 
     xg_home = (
-        home_s["home_attack"] * away_s["away_defense"] * league_data["league_avg_home"] * home_bonus
+        home_s["home_attack"] * away_s["away_defense"] * league_avg_home * home_bonus
     )
-    xg_away = away_s["away_attack"] * home_s["home_defense"] * league_data["league_avg_away"]
+    xg_away = away_s["away_attack"] * home_s["home_defense"] * league_avg_away
 
     # Appliquer les ajustements (forme, repos, etc.)
     if adjustments:
@@ -1483,6 +1547,15 @@ def analyze_match(fixture: dict[str, Any]) -> dict[str, Any]:
     # ── 1. Poisson de base ───────────────────────────────────────
     league_data = calculate_team_strengths(league_id)
     xg_home, xg_away = calculate_xg(home_id or 0, away_id or 0, league_data)
+
+    # ── Competition factor (CL/EL/Cup matches are less high-scoring) ──
+    comp_factor = COMPETITION_XG_FACTOR.get(league_id, 1.0)
+    if comp_factor != 1.0:
+        xg_home *= comp_factor
+        xg_away *= comp_factor
+        context["competition_xg_factor"] = comp_factor
+        from src.config import logger
+        logger.info(f"  🏆 Facteur compétition ({league_id}): ×{comp_factor} → xG {xg_home:.2f}/{xg_away:.2f}")
 
     # ── ELO Préalable (requis pour le calcul de forme SOS) ───────
     elos = supabase.table("team_elo").select("team_api_id, elo_rating").execute().data

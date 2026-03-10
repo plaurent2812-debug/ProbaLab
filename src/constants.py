@@ -189,6 +189,34 @@ XG_CEIL: float = 4.0
 XG_FALLBACK_HOME: float = 1.3
 XG_FALLBACK_AWAY: float = 1.1
 
+# ═══════════════════════════════════════════════════════════════════
+#  COMPÉTITIONS CROSS-LEAGUE
+# ═══════════════════════════════════════════════════════════════════
+
+# Leagues where teams come from different domestic leagues
+# → need fallback to domestic league strengths
+CROSS_LEAGUE_IDS: set[int] = {
+    2,    # Champions League
+    3,    # Europa League
+    66,   # Coupe de France
+    45,   # FA Cup
+    143,  # Copa del Rey
+    137,  # Coppa Italia
+    81,   # DFB-Pokal
+}
+
+# xG scaling factors by competition type
+# CL matches are more tactical/defensive → fewer goals
+COMPETITION_XG_FACTOR: dict[int, float] = {
+    2: 0.92,    # Champions League — ~8% fewer goals
+    3: 0.95,    # Europa League — ~5% fewer goals
+    66: 0.97,   # Coupe de France
+    45: 0.97,   # FA Cup
+    143: 0.97,  # Copa del Rey
+    137: 0.97,  # Coppa Italia
+    81: 0.97,   # DFB-Pokal
+}
+
 
 # ═══════════════════════════════════════════════════════════════════
 #  CALIBRATION
