@@ -4,13 +4,10 @@ import os
 import requests
 from src.config import logger
 
-# Config with fallbacks from trigger.py
-TELEGRAM_BOT_TOKEN = os.getenv(
-    "TELEGRAM_BOT_TOKEN", "8313502721:AAFOlAmD3zyiz8P143Kc16XcArBg-4g3AzY"
-)
+# Config — requires env vars (no hardcoded fallbacks for security)
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 # Support single ID or comma-separated list
-DEFAULT_CHATS = "5721158019,7003371099"
-raw_ids = os.getenv("TELEGRAM_CHAT_IDS") or os.getenv("TELEGRAM_CHANNEL_ID") or DEFAULT_CHATS
+raw_ids = os.getenv("TELEGRAM_CHAT_IDS") or os.getenv("TELEGRAM_CHANNEL_ID") or ""
 TELEGRAM_CHAT_IDS = [cid.strip() for cid in raw_ids.split(",") if cid.strip()]
 
 

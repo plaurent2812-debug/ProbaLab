@@ -209,10 +209,18 @@ def train_model(df: pd.DataFrame, target: str, model_name: str) -> dict | None:
         "training_date": datetime.now().isoformat(),
     }
 
+    # Save as "latest" (backward compatible)
     with open(output_path, "wb") as f:
         pickle.dump(metadata, f)
 
+    # Timestamped snapshot for versioning / rollback
+    date_tag = datetime.now().strftime("%Y%m%d")
+    versioned_path = str(output_path).replace(".pkl", f"_{date_tag}.pkl")
+    with open(versioned_path, "wb") as f:
+        pickle.dump(metadata, f)
+
     logger.info(f"  💾 Modèle sauvegardé: {output_path}")
+    logger.info(f"  📦 Snapshot: {versioned_path}")
     return metadata["metrics"]
 
 

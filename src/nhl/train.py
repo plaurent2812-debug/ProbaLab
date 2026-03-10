@@ -117,12 +117,22 @@ def train_market_model(df: pd.DataFrame, market: str, label_col: str, output_pat
         "feature_names": FEATURES,
         "metrics": {"market": market, "accuracy": acc, "brier_score": brier, "roc_auc": auc},
         "training_date": datetime.now().isoformat(),
+        "training_samples": len(X_train),
+        "test_samples": len(X_test),
     }
 
+    # Save as the "latest" model (backward compatible)
     with open(output_path, "wb") as f:
         pickle.dump(metadata, f)
 
+    # Save a timestamped snapshot for versioning / rollback
+    date_tag = datetime.now().strftime("%Y%m%d")
+    versioned_path = output_path.replace(".pkl", f"_{date_tag}.pkl")
+    with open(versioned_path, "wb") as f:
+        pickle.dump(metadata, f)
+
     print(f"💾 Modèle sauvegardé dans {output_path}")
+    print(f"📦 Snapshot versionné: {versioned_path}")
 
 
 def train_all():

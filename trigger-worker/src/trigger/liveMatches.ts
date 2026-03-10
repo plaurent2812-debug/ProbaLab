@@ -1,6 +1,6 @@
 import { task, wait, schedules } from "@trigger.dev/sdk/v3";
 
-const CRON_SECRET = process.env.CRON_SECRET || "super_secret_probalab_2026";
+const CRON_SECRET = process.env.CRON_SECRET || "";
 const API_URL = process.env.API_URL || "https://web-production-ff663.up.railway.app";
 
 const standardRetry = {

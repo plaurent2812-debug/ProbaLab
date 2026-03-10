@@ -250,18 +250,29 @@ def calculate_team_strengths(league_id: int) -> dict | None:
         
     fixture_ids = [f["api_fixture_id"] for f in fixtures_resp.data]
     
-    # Supabase a une limite sur in_() (~100-200 elems max généralement), 
-    # mais match_team_stats peut simplement être récupéré globalement puis on filtre localement
-    
-    mts_resp = supabase.table("match_team_stats").select("fixture_api_id, team_api_id, expected_goals").execute()
-    if not mts_resp.data:
+    # Fetch only relevant match_team_stats rows using chunked in_() queries
+    # (Supabase has a ~100-200 element limit on in_(), so we chunk)
+    CHUNK_SIZE = 100
+    all_mts = []
+    for i in range(0, len(fixture_ids), CHUNK_SIZE):
+        chunk = fixture_ids[i:i + CHUNK_SIZE]
+        chunk_resp = (
+            supabase.table("match_team_stats")
+            .select("fixture_api_id, team_api_id, expected_goals")
+            .in_("fixture_api_id", chunk)
+            .execute()
+        )
+        if chunk_resp.data:
+            all_mts.extend(chunk_resp.data)
+
+    if not all_mts:
         return None
         
     # Grouper par match
     matches = {}
-    for row in mts_resp.data:
+    for row in all_mts:
         fid = row["fixture_api_id"]
-        if fid in fixture_ids and row["expected_goals"] is not None:
+        if row["expected_goals"] is not None:
             if fid not in matches:
                 matches[fid] = []
             matches[fid].append(row)

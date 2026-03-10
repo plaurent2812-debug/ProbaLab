@@ -497,21 +497,28 @@ def get_matches_to_predict(force: bool = False) -> list[dict]:
         logger.info(f"Mode FORCE activé : {len(fixtures)} matchs à re-analyser.")
         return fixtures
 
-    to_process = []
-    for fix in fixtures:
-        existing = (
-            supabase.table("predictions")
-            .select("id, model_version")
-            .eq("fixture_id", fix["id"])
-            .execute()
-            .data
-        )
+    # Batch query: fetch all existing predictions for these fixtures at once
+    # instead of N individual queries (N+1 → 1 query)
+    fixture_ids = [fix["id"] for fix in fixtures]
+    if not fixture_ids:
+        return []
 
-        # Re-prédire si l'ancienne version n'est pas hybrid_v3
-        has_v3 = any(p.get("model_version") == "hybrid_v3" for p in existing)
-        if not has_v3:
-            to_process.append(fix)
+    existing_predictions = (
+        supabase.table("predictions")
+        .select("fixture_id, model_version")
+        .in_("fixture_id", fixture_ids)
+        .execute()
+        .data or []
+    )
 
+    # Build set of fixture_ids that already have a hybrid_v3 prediction
+    v3_fixture_ids = {
+        p["fixture_id"] for p in existing_predictions
+        if p.get("model_version") == "hybrid_v3"
+    }
+
+    to_process = [fix for fix in fixtures if fix["id"] not in v3_fixture_ids]
+    logger.info(f"{len(to_process)} matchs à analyser (sur {len(fixtures)} NS, {len(v3_fixture_ids)} déjà v3).")
     return to_process
 
 

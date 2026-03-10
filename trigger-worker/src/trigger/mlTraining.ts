@@ -8,7 +8,7 @@ export const retrainMetaModelTask = schedules.task({
         console.log(`🚀 Déclenchement de l'entraînement XGBoost Méta-Modèle à ${payload.timestamp}`);
 
         const API_URL = process.env.API_URL || "http://localhost:8000";
-        const CRON_SECRET = process.env.CRON_SECRET || "super_secret_probalab_2026";
+        const CRON_SECRET = process.env.CRON_SECRET || "";
 
         try {
             // 1. Football Meta-Model Retrain

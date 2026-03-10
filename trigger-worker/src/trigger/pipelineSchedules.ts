@@ -1,7 +1,7 @@
 import { schedules } from "@trigger.dev/sdk";
 
 const API_URL = process.env.API_URL || "https://web-production-ff663.up.railway.app";
-const CRON_SECRET = process.env.CRON_SECRET || "super_secret_probalab_2026";
+const CRON_SECRET = process.env.CRON_SECRET || "";
 
 const standardRetry = {
     maxAttempts: 3,

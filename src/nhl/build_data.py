@@ -75,13 +75,13 @@ def build_nhl_dataset(output_file="nhl_dataset.csv"):
                 for skater in team_data.get(role, []):
                     name_parts = skater.get("name", {}).get("default", "").lower().split(" ")
                     full_name = " ".join(name_parts)
-                    pid = skater.get("playerId")
+                    pid = str(skater.get("playerId", ""))
 
                     real_stats[pid] = {
                         "goals": skater.get("goals", 0),
                         "assists": skater.get("assists", 0),
                         "points": skater.get("points", 0),
-                        "shots": skater.get("shots", 0),
+                        "shots": skater.get("sog", 0),
                     }
                     real_stats[full_name] = real_stats[pid]  # Alias par nom au cas où
 
@@ -106,7 +106,7 @@ def build_nhl_dataset(output_file="nhl_dataset.csv"):
         # Dédoublonner par player_id
         unique_players = {}
         for p in players_to_parse:
-            pid = p.get("player_id")
+            pid = str(p.get("player_id", ""))
             if pid and pid not in unique_players:
                 unique_players[pid] = p
 
@@ -155,7 +155,7 @@ def build_nhl_dataset(output_file="nhl_dataset.csv"):
 
     output_path = Path(__file__).parent.parent / output_file
     df.to_csv(output_path, index=False)
-    logger.info(f"✅ Dataset généré: {len(dataframe_rows)} lignes enregistrées dans {output_path}")
+    logger.info(f"✅ Dataset généré: {len(dataset_rows)} lignes enregistrées dans {output_path}")
 
 
 if __name__ == "__main__":

@@ -20,10 +20,8 @@ except ImportError:
     HTTPX_AVAILABLE = False
 
 # ─── Telegram Config ────────────────────────────────────────────
-TELEGRAM_BOT_TOKEN = os.getenv(
-    "TELEGRAM_BOT_TOKEN", "8313502721:AAFOlAmD3zyiz8P143Kc16XcArBg-4g3AzY"
-)
-TELEGRAM_CHAT_IDS = os.getenv("TELEGRAM_CHAT_IDS", "5721158019,7003371099").split(",")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_IDS = os.getenv("TELEGRAM_CHAT_IDS", "").split(",")
 
 
 def _send_telegram_alert(home: str, away: str, analysis: str, bet: str, confidence: int) -> bool:
@@ -67,7 +65,7 @@ def _send_telegram_alert(home: str, away: str, analysis: str, bet: str, confiden
 
 from fastapi import Depends, Header
 
-CRON_SECRET = os.getenv("CRON_SECRET", "super_secret_probalab_2026")
+CRON_SECRET = os.getenv("CRON_SECRET", "")
 
 
 def verify_trigger_auth(authorization: str = Header(None)):
@@ -717,11 +715,11 @@ def update_live_scores(detail: bool = Query(False, description="Fetch events & s
             logger.error(f"[Live Scores] Error finishing {sf_api_id}: {e}")
 
     logger.info(
-        f"[Live Scores] ✅ {updated} live mis à jour, {finished_count} terminés, {errors} erreurs"
+        f"[Live Scores] ✅ {updated_count} live mis à jour, {finished_count} terminés, {errors} erreurs"
     )
     return {
         "status": "ok",
-        "updated": updated,
+        "updated": updated_count,
         "finished": finished_count,
         "errors": errors,
         "total_live": len(live_fixtures),

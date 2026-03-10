@@ -41,10 +41,27 @@ RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
 RESEND_FROM = os.getenv("RESEND_FROM", "ProbaLab <noreply@probalab.fr>")
 
 from src.config import supabase
-from fastapi import FastAPI, Header, HTTPException, Query
+from src.nhl.constants import NHL_TEAM_NAMES, NHL_NAME_TO_ABBREV as _NHL_NAME_TO_ABBREV
+from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 
+# Rate limiting — graceful fallback if slowapi not installed
+try:
+    from slowapi import Limiter, _rate_limit_exceeded_handler
+    from slowapi.util import get_remote_address
+    from slowapi.errors import RateLimitExceeded
+
+    limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
+    RATE_LIMITING = True
+except ImportError:
+    RATE_LIMITING = False
+    limiter = None
+
 from api.routers import nhl, players, stripe_webhook, telegram as telegram_router, trigger
+from api.schemas import (
+    EmailPayload, SaveBetRequest, UpdateBetResultRequest,
+    DateRequest, ResolveBetsRequest, ResolveExpertPicksRequest, RunPipelineRequest,
+)
 
 
 # ── Scheduler ────────────────────────────────────────────────
@@ -210,6 +227,11 @@ async def lifespan(app_instance):
 
 app = FastAPI(title="ProbaLab API", version="1.0.0", lifespan=lifespan)
 
+# ─── Rate Limiting ──────────────────────────────────────────────
+if RATE_LIMITING:
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 app.include_router(stripe_webhook.router)
 app.include_router(nhl.router)
 app.include_router(trigger.router)
@@ -221,9 +243,45 @@ origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:4
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "stripe-signature"],
+    allow_credentials=True,
 )
+
+# ─── Centralized Auth Helpers ────────────────────────────────────
+CRON_SECRET = os.getenv("CRON_SECRET", "")
+
+
+def _verify_cron_auth(authorization: str | None) -> None:
+    """Verify Bearer token matches CRON_SECRET. Raises 401 on failure."""
+    if not CRON_SECRET:
+        raise HTTPException(status_code=500, detail="CRON_SECRET not configured")
+    expected = f"Bearer {CRON_SECRET}"
+    if authorization != expected:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+
+def _verify_internal_auth(authorization: str | None) -> None:
+    """Verify request comes from CRON_SECRET or an admin JWT."""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing Authorization header")
+    token = authorization.replace("Bearer ", "").strip()
+    # Check CRON secret first
+    if CRON_SECRET and token == CRON_SECRET:
+        return
+    # Fall back to admin JWT
+    try:
+        user_res = supabase.auth.get_user(token)
+        if not user_res or not user_res.user:
+            raise ValueError("Invalid JWT")
+        user_id = user_res.user.id
+        db_user = supabase.table("profiles").select("role").eq("id", user_id).execute().data
+        if not db_user or db_user[0].get("role") != "admin":
+            raise HTTPException(status_code=403, detail="Forbidden: Admin only")
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid token")
 
 
 @app.get("/health")
@@ -275,7 +333,7 @@ def _fetch_rss_news() -> list:
 
 
 @app.get("/api/news")
-def get_news():
+def get_news(request: Request):
     """Get latest sports news from RSS feeds (cached 1h)."""
     global _news_cache
     now = time.time()
@@ -308,9 +366,10 @@ def _send_resend_email(to: str, subject: str, html: str) -> bool:
 
 
 @app.post("/api/resend/welcome")
-def send_welcome_email(payload: dict):
-    """Send welcome email after registration."""
-    email = payload.get("email", "")
+def send_welcome_email(payload: EmailPayload, authorization: str = Header(None)):
+    """Send welcome email after registration (internal/admin only)."""
+    _verify_internal_auth(authorization)
+    email = payload.email
     if not email:
         raise HTTPException(status_code=400, detail="Email required")
     html = """
@@ -345,9 +404,10 @@ def send_welcome_email(payload: dict):
 
 
 @app.post("/api/resend/premium-confirm")
-def send_premium_confirm_email(payload: dict):
-    """Send premium confirmation email after payment."""
-    email = payload.get("email", "")
+def send_premium_confirm_email(payload: EmailPayload, authorization: str = Header(None)):
+    """Send premium confirmation email after payment (internal/admin only)."""
+    _verify_internal_auth(authorization)
+    email = payload.email
     if not email:
         raise HTTPException(status_code=400, detail="Email required")
     html = """
@@ -511,6 +571,7 @@ def get_football_meta_analysis(
 
 @app.get("/api/best-bets")
 def get_best_bets(
+    request: Request,
     date: str | None = Query(None, description="ISO date YYYY-MM-DD"),
     sport: str | None = Query(None, description="'football' | 'nhl' | None = both"),
 ):
@@ -734,20 +795,7 @@ def get_best_bets(
                     ht = model_data.get("home_team") or odds_data.get("home_team", "")
                     at = model_data.get("away_team") or odds_data.get("away_team", "")
                     team_abbrev = model_data.get("team", "")
-                    NHL_ABBREV_TO_NAME_LOCAL = {
-                        "ANA": "Anaheim Ducks", "BOS": "Boston Bruins", "BUF": "Buffalo Sabres",
-                        "CGY": "Calgary Flames", "CAR": "Carolina Hurricanes", "CHI": "Chicago Blackhawks",
-                        "COL": "Colorado Avalanche", "CBJ": "Columbus Blue Jackets", "DAL": "Dallas Stars",
-                        "DET": "Detroit Red Wings", "EDM": "Edmonton Oilers", "FLA": "Florida Panthers",
-                        "LAK": "Los Angeles Kings", "MIN": "Minnesota Wild", "MTL": "Montréal Canadiens",
-                        "NSH": "Nashville Predators", "NJD": "New Jersey Devils", "NYI": "New York Islanders",
-                        "NYR": "New York Rangers", "OTT": "Ottawa Senators", "PHI": "Philadelphia Flyers",
-                        "PIT": "Pittsburgh Penguins", "SJS": "San Jose Sharks", "SEA": "Seattle Kraken",
-                        "STL": "St. Louis Blues", "TBL": "Tampa Bay Lightning", "TOR": "Toronto Maple Leafs",
-                        "UTA": "Utah Hockey Club", "VAN": "Vancouver Canucks", "VGK": "Vegas Golden Knights",
-                        "WSH": "Washington Capitals", "WPG": "Winnipeg Jets",
-                    }
-                    team_name = NHL_ABBREV_TO_NAME_LOCAL.get(team_abbrev, team_abbrev)
+                    team_name = NHL_TEAM_NAMES.get(team_abbrev, team_abbrev)
                     is_home = model_data.get("is_home", False)
                     if ht and at:
                         label = f"{player_name} Over 0.5 Points — {ht} vs {at}"
@@ -827,12 +875,13 @@ def get_best_bets(
 @app.patch("/api/best-bets/{bet_id}/result")
 def update_bet_result(
     bet_id: int,
-    body: dict,
+    body: UpdateBetResultRequest,
+    authorization: str = Header(None),
 ):
-    """Update the result of a tracked bet (admin only — secured by API key)."""
-    result_val = body.get("result", "").upper()
+    """Update the result of a tracked bet (admin only)."""
+    _verify_internal_auth(authorization)
+    result_val = body.result.upper()
     if result_val not in ("WIN", "LOSS", "VOID", "PENDING"):
-        from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="result must be WIN, LOSS, VOID or PENDING")
 
     try:
@@ -840,7 +889,7 @@ def update_bet_result(
             supabase.table("best_bets")
             .update({
                 "result": result_val,
-                "notes": body.get("notes", ""),
+                "notes": body.notes,
                 "updated_at": datetime.now().isoformat(),
             })
             .eq("id", bet_id)
@@ -853,19 +902,20 @@ def update_bet_result(
 
 
 @app.post("/api/best-bets/save")
-def save_best_bets(body: dict):
-    """Save a best bet to the tracking table."""
+def save_best_bets(body: SaveBetRequest, authorization: str = Header(None)):
+    """Save a best bet to the tracking table (admin only)."""
+    _verify_internal_auth(authorization)
     try:
         bet_data = {
-            "date": body.get("date"),
-            "sport": body.get("sport"),
-            "bet_label": body.get("label"),
-            "market": body.get("market"),
-            "odds": body.get("odds"),
-            "confidence": body.get("confidence"),
-            "proba_model": body.get("proba_model"),
-            "fixture_id": body.get("fixture_id"),
-            "player_name": body.get("player_name"),
+            "date": body.date,
+            "sport": body.sport,
+            "bet_label": body.label,
+            "market": body.market,
+            "odds": body.odds,
+            "confidence": body.confidence,
+            "proba_model": body.proba_model,
+            "fixture_id": body.fixture_id,
+            "player_name": body.player_name,
             "result": "PENDING",
         }
         resp = supabase.table("best_bets").insert(bet_data).execute()
@@ -882,10 +932,7 @@ def nhl_fetch_game_stats(body: dict, authorization: str = Header(None)):
     Called by Trigger.dev before resolve: fetches actual player stats
     from the NHL API boxscore and stores them in nhl_player_game_stats.
     """
-    expected = f"Bearer {os.getenv('CRON_SECRET', 'super_secret_probalab_2026')}"
-    if authorization != expected:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=401, detail="Unauthorized")
+    _verify_cron_auth(authorization)
 
     date = body.get("date")
     if not date:
@@ -907,10 +954,7 @@ def nhl_fetch_odds(body: dict, authorization: str = Header(None)):
     Called by the NHL pipeline (schedule-nhl-pipeline or admin trigger).
     Requires ODDS_API_KEY env var to be set.
     """
-    expected = f"Bearer {os.getenv('CRON_SECRET', 'super_secret_probalab_2026')}"
-    if authorization != expected:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=401, detail="Unauthorized")
+    _verify_cron_auth(authorization)
 
     date = body.get("date") or datetime.now().strftime("%Y-%m-%d")
 
@@ -925,19 +969,15 @@ def nhl_fetch_odds(body: dict, authorization: str = Header(None)):
 
 
 @app.post("/api/best-bets/resolve")
-def resolve_best_bets(body: dict, authorization: str = Header(None)):
+def resolve_best_bets(body: ResolveBetsRequest, authorization: str = Header(None)):
     """
     Called by Trigger.dev scheduled tasks to auto-resolve PENDING bets.
     Checks match results and updates best_bets table with WIN/LOSS/VOID.
     """
-    # Simple auth check
-    expected = f"Bearer {os.getenv('CRON_SECRET', 'super_secret_probalab_2026')}"
-    if authorization != expected:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=401, detail="Unauthorized")
+    _verify_cron_auth(authorization)
 
-    date = body.get("date")
-    sport = body.get("sport")  # "football" or "nhl"
+    date = body.date
+    sport = body.sport
 
     if not date or sport not in ("football", "nhl"):
         from fastapi import HTTPException
@@ -1051,19 +1091,7 @@ def resolve_best_bets(body: dict, authorization: str = Header(None)):
     elif sport == "nhl":
         next_day = (datetime.fromisoformat(date) + timedelta(days=1)).strftime("%Y-%m-%d")
 
-        NHL_NAME_TO_ABBREV = {
-            "Anaheim Ducks": "ANA", "Boston Bruins": "BOS", "Buffalo Sabres": "BUF",
-            "Calgary Flames": "CGY", "Carolina Hurricanes": "CAR", "Chicago Blackhawks": "CHI",
-            "Colorado Avalanche": "COL", "Columbus Blue Jackets": "CBJ", "Dallas Stars": "DAL",
-            "Detroit Red Wings": "DET", "Edmonton Oilers": "EDM", "Florida Panthers": "FLA",
-            "Los Angeles Kings": "LAK", "Minnesota Wild": "MIN", "Montreal Canadiens": "MTL",
-            "Montréal Canadiens": "MTL", "Nashville Predators": "NSH", "New Jersey Devils": "NJD",
-            "New York Islanders": "NYI", "New York Rangers": "NYR", "Ottawa Senators": "OTT",
-            "Philadelphia Flyers": "PHI", "Pittsburgh Penguins": "PIT", "San Jose Sharks": "SJS",
-            "Seattle Kraken": "SEA", "St. Louis Blues": "STL", "Tampa Bay Lightning": "TBL",
-            "Toronto Maple Leafs": "TOR", "Utah Hockey Club": "UTA", "Vancouver Canucks": "VAN",
-            "Vegas Golden Knights": "VGK", "Washington Capitals": "WSH", "Winnipeg Jets": "WPG",
-        }
+        NHL_NAME_TO_ABBREV = _NHL_NAME_TO_ABBREV
 
         # Fetch finished NHL fixtures for that game date
         # NHL games listed for date D start between 1h-4h Paris = previous UTC day
@@ -1181,7 +1209,7 @@ def resolve_best_bets(body: dict, authorization: str = Header(None)):
 
 
 @app.get("/api/best-bets/stats")
-def get_best_bets_stats():
+def get_best_bets_stats(request: Request):
     """Return win rate and ROI stats for both model predictions (best_bets) and expert picks."""
     try:
         from collections import defaultdict
@@ -1491,18 +1519,16 @@ def delete_expert_pick(pick_id: int):
 
 
 @app.post("/api/expert-picks/resolve")
-def resolve_expert_picks(body: dict, authorization: str = Header(None)):
+def resolve_expert_picks(body: ResolveExpertPicksRequest, authorization: str = Header(None)):
     """
     Auto-resolve PENDING expert picks by matching to finished fixtures
     and using Gemini to evaluate WIN/LOSS from free-text bet descriptions.
     Called by Trigger.dev cron each morning.
     """
-    expected = f"Bearer {os.getenv('CRON_SECRET', 'super_secret_probalab_2026')}"
-    if authorization != expected:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+    _verify_cron_auth(authorization)
 
-    date = body.get("date")
-    sport = body.get("sport")  # optional: "football" or "nhl"
+    date = body.date
+    sport = body.sport
     if not date:
         raise HTTPException(status_code=400, detail="date required (YYYY-MM-DD)")
 
@@ -1724,6 +1750,7 @@ Réponds UNIQUEMENT par un JSON: {{"result": "WIN"}} ou {{"result": "LOSS"}}
 
 @app.get("/api/predictions")
 def get_predictions(
+    request: Request,
     date: str | None = Query(None, description="ISO date YYYY-MM-DD"),
 ):
     """Get predictions for a given date (defaults to today)."""
@@ -2496,20 +2523,15 @@ def _run_pipeline_background(mode: str):
 
 
 @app.post("/api/cron/run-pipeline")
-def cron_run_pipeline(body: dict, authorization: str = Header(None)):
+def cron_run_pipeline(body: RunPipelineRequest, authorization: str = Header(None)):
     """
     Trigger the pipeline via Trigger.dev scheduled tasks.
     Authenticated via CRON_SECRET (not Supabase JWT).
-    Body: { "mode": "nhl" | "full" | "analyze" | "data" | "results" }
     """
-    expected = f"Bearer {os.getenv('CRON_SECRET', 'super_secret_probalab_2026')}"
-    if authorization != expected:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=401, detail="Unauthorized")
+    _verify_cron_auth(authorization)
 
-    mode = body.get("mode", "full")
+    mode = body.mode
     if mode not in ("full", "data", "analyze", "results", "nhl"):
-        from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="Invalid mode")
 
     with _pipeline_lock:

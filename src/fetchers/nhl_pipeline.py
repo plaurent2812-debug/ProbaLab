@@ -24,6 +24,7 @@ import httpx
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.config import logger, supabase
+from src.nhl.constants import NHL_TEAM_NAMES as TEAM_NAMES, get_nhl_season_id
 
 try:
     from src.nhl.ml_models import load_all_models
@@ -36,42 +37,6 @@ except ImportError:
     def nhl_ml_available(): return False
 
 NHL_API = "https://api-web.nhle.com/v1"
-
-TEAM_NAMES = {
-    "ANA": "Anaheim Ducks",
-    "BOS": "Boston Bruins",
-    "BUF": "Buffalo Sabres",
-    "CGY": "Calgary Flames",
-    "CAR": "Carolina Hurricanes",
-    "CHI": "Chicago Blackhawks",
-    "COL": "Colorado Avalanche",
-    "CBJ": "Columbus Blue Jackets",
-    "DAL": "Dallas Stars",
-    "DET": "Detroit Red Wings",
-    "EDM": "Edmonton Oilers",
-    "FLA": "Florida Panthers",
-    "LAK": "Los Angeles Kings",
-    "MIN": "Minnesota Wild",
-    "MTL": "Montréal Canadiens",
-    "NSH": "Nashville Predators",
-    "NJD": "New Jersey Devils",
-    "NYI": "New York Islanders",
-    "NYR": "New York Rangers",
-    "OTT": "Ottawa Senators",
-    "PHI": "Philadelphia Flyers",
-    "PIT": "Pittsburgh Penguins",
-    "SJS": "San Jose Sharks",
-    "SEA": "Seattle Kraken",
-    "STL": "St. Louis Blues",
-    "TBL": "Tampa Bay Lightning",
-    "TOR": "Toronto Maple Leafs",
-    "UTA": "Utah Hockey Club",
-    "VAN": "Vancouver Canucks",
-    "VGK": "Vegas Golden Knights",
-    "WSH": "Washington Capitals",
-    "WPG": "Winnipeg Jets",
-}
-
 
 # ─── HTTP helpers ────────────────────────────────────────────────
 
@@ -170,7 +135,7 @@ def fetch_team_special_teams() -> dict[str, dict]:
     try:
         resp = httpx.get(
             f"{NHL_STATS_API}/team/penaltykill",
-            params={"cayenneExp": "seasonId=20252026 and gameTypeId=2"},
+            params={"cayenneExp": f"seasonId={get_nhl_season_id()} and gameTypeId=2"},
             timeout=15.0,
             follow_redirects=True,
         )
@@ -189,7 +154,7 @@ def fetch_team_special_teams() -> dict[str, dict]:
     try:
         resp = httpx.get(
             f"{NHL_STATS_API}/team/powerplay",
-            params={"cayenneExp": "seasonId=20252026 and gameTypeId=2"},
+            params={"cayenneExp": f"seasonId={get_nhl_season_id()} and gameTypeId=2"},
             timeout=15.0,
             follow_redirects=True,
         )
@@ -210,7 +175,7 @@ def fetch_team_special_teams() -> dict[str, dict]:
     try:
         resp = httpx.get(
             f"{NHL_STATS_API}/team/summary",
-            params={"cayenneExp": "seasonId=20252026 and gameTypeId=2"},
+            params={"cayenneExp": f"seasonId={get_nhl_season_id()} and gameTypeId=2"},
             timeout=15.0,
             follow_redirects=True,
         )
