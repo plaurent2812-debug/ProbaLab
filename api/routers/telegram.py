@@ -78,7 +78,7 @@ def _save_expert_pick(pick: dict, chat_id: int) -> bool:
 
         # Build market label
         if is_combine:
-            market = " + ".join(s.get("bet", "") for s in selections)
+            market = f"Combiné ({len(selections)} sélections)"
             match_label = pick.get("match_label") or "; ".join(
                 s.get("match", "") for s in selections if s.get("match")
             )
