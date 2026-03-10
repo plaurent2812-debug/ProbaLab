@@ -462,19 +462,14 @@ function ExpertPickCard({ pick, isAdmin = false, onDelete }) {
 
                         if (selections.length > 1) {
                             return (
-                                <>
-                                    <p className="text-sm font-semibold text-foreground leading-tight mb-1">
-                                        🔗 Combiné ({selections.length} sélections)
-                                    </p>
-                                    <div className="space-y-1 mt-1">
-                                        {selections.map((sel, i) => (
-                                            <div key={i} className="text-xs">
-                                                <span className="font-medium text-foreground">• {sel.bet}</span>
-                                                {sel.match && <span className="text-muted-foreground ml-1">({sel.match})</span>}
-                                            </div>
-                                        ))}
-                                    </div>
-                                </>
+                                <div className="space-y-1">
+                                    {selections.map((sel, i) => (
+                                        <div key={i} className="text-xs">
+                                            <span className="font-medium text-foreground">• {sel.bet}</span>
+                                            {sel.match && <span className="text-muted-foreground ml-1">({sel.match})</span>}
+                                        </div>
+                                    ))}
+                                </div>
                             )
                         }
                         return (
