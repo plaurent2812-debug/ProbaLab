@@ -7,6 +7,12 @@ Flow:
 3. Bot répond avec un résumé formaté et demande confirmation (👍 / ❌)
 4. Si 👍 → le pick est inséré en DB (expert_picks)
 5. Si ❌ → pick annulé
+
+Flow Combiné (multi-screenshots):
+1. /combo → démarre le mode combiné
+2. Chaque screenshot est analysé et les sélections sont accumulées
+3. /done <cote> → fusionne tout en un combiné et demande confirmation
+4. 👍 / ❌ pour confirmer/annuler
 """
 from __future__ import annotations
 
@@ -30,6 +36,10 @@ TELEGRAM_API = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 # In-memory store: chat_id → pending pick dict
 # (simple dict, ok for single-instance Railway deployment)
 _pending_picks: dict[int, dict] = {}
+
+# In-memory store: chat_id → combo state
+# Each entry: {"selections": [...], "sport": "football", "date": "..."}
+_combo_state: dict[int, dict] = {}
 
 
 def _send_message(chat_id: int, text: str, parse_mode: str = "Markdown") -> None:
@@ -121,6 +131,78 @@ def _handle_update(update: dict) -> None:
     chat_id: int = message["chat"]["id"]
     text: str = (message.get("text") or message.get("caption") or "").strip()
 
+    # ── Cas 0 : /combo → démarre le mode multi-screenshots ──────
+    if text.lower() == "/combo":
+        _combo_state[chat_id] = {
+            "selections": [],
+            "sport": "football",
+            "date": datetime.utcnow().strftime("%Y-%m-%d"),
+        }
+        _send_message(
+            chat_id,
+            "🔗 *Mode Combiné activé !*\n\n"
+            "Envoie tes screenshots un par un.\n"
+            "Quand tu as fini :\n"
+            "  `/done 3.45` (avec la cote totale)\n\n"
+            "Pour annuler : `/reset`",
+        )
+        return
+
+    # ── Cas 0b : /done <odds> → finaliser le combiné ────────────
+    if text.lower().startswith("/done"):
+        combo = _combo_state.get(chat_id)
+        if not combo or not combo["selections"]:
+            _send_message(chat_id, "⚠️ Pas de combiné en cours. Utilise `/combo` d'abord.")
+            return
+
+        # Parse odds from /done command
+        parts = text.split()
+        odds = None
+        if len(parts) >= 2:
+            try:
+                odds = float(parts[1].replace(",", "."))
+            except ValueError:
+                pass
+
+        if not odds:
+            _send_message(chat_id, "⚠️ Indique la cote totale : `/done 3.45`")
+            return
+
+        # Build combined pick
+        all_selections = combo["selections"]
+        match_labels = []
+        for s in all_selections:
+            if s.get("match"):
+                match_labels.append(s["match"])
+
+        combined_pick = {
+            "selections": all_selections,
+            "odds": odds,
+            "sport": combo["sport"],
+            "date": combo["date"],
+            "match_label": "; ".join(match_labels),
+            "market": f"Combiné ({len(all_selections)} sélections)",
+            "expert_note": "",
+        }
+
+        # Clear combo state, store as pending pick
+        del _combo_state[chat_id]
+        _pending_picks[chat_id] = combined_pick
+
+        confirmation = format_confirmation_message(combined_pick)
+        _send_message(chat_id, confirmation)
+        return
+
+    # ── Cas 0c : /reset → annuler le combiné ────────────────────
+    if text.lower() == "/reset":
+        if chat_id in _combo_state:
+            n = len(_combo_state[chat_id]["selections"])
+            del _combo_state[chat_id]
+            _send_message(chat_id, f"❌ Combiné annulé ({n} sélections supprimées).")
+        else:
+            _send_message(chat_id, "Aucun combiné en cours.")
+        return
+
     # ── Cas 1 : Photo reçue ──────────────────────────────────────
     if "photo" in message:
         # Pick the largest photo (best quality)
@@ -128,7 +210,12 @@ def _handle_update(update: dict) -> None:
         best_photo = max(photos, key=lambda p: p.get("file_size", 0))
         file_id = best_photo["file_id"]
 
-        _send_message(chat_id, "📸 Screenshot reçu, analyse en cours... ⏳")
+        in_combo = chat_id in _combo_state
+
+        if in_combo:
+            _send_message(chat_id, "📸 Screenshot reçu, extraction des sélections... ⏳")
+        else:
+            _send_message(chat_id, "📸 Screenshot reçu, analyse en cours... ⏳")
 
         image_bytes = _download_telegram_file(file_id)
         if not image_bytes:
@@ -144,10 +231,40 @@ def _handle_update(update: dict) -> None:
             )
             return
 
-        # Store pending pick
-        _pending_picks[chat_id] = pick
+        # ── Mode Combiné : accumuler les sélections ──────────
+        if in_combo:
+            combo = _combo_state[chat_id]
+            new_selections = pick.get("selections") or []
+            if not new_selections:
+                # Fallback: create a selection from market/match_label
+                new_selections = [{
+                    "bet": pick.get("market", ""),
+                    "match": pick.get("match_label", ""),
+                }]
 
-        # Send confirmation message
+            combo["selections"].extend(new_selections)
+
+            # Update sport if detected
+            if pick.get("sport"):
+                combo["sport"] = pick["sport"]
+
+            n = len(combo["selections"])
+            sel_summary = "\n".join(
+                f"  {i+1}. {s.get('bet', '?')} ({s.get('match', '?')})"
+                for i, s in enumerate(combo["selections"])
+            )
+            _send_message(
+                chat_id,
+                f"✅ *{len(new_selections)} sélection(s) ajoutée(s) !*\n\n"
+                f"📋 *Combiné en cours ({n} sélections) :*\n{sel_summary}\n\n"
+                f"📸 Envoie le screenshot suivant\n"
+                f"✅ `/done 3.45` pour finaliser\n"
+                f"❌ `/reset` pour annuler",
+            )
+            return
+
+        # ── Mode normal : pari simple ────────────────────────
+        _pending_picks[chat_id] = pick
         confirmation = format_confirmation_message(pick)
         _send_message(chat_id, confirmation)
 
@@ -170,12 +287,26 @@ def _handle_update(update: dict) -> None:
     # ── Cas 3 : Annulation ❌ ────────────────────────────────────
     elif text in ("❌", "non", "no", "annuler", "cancel"):
         _pending_picks.pop(chat_id, None)
+        _combo_state.pop(chat_id, None)
         _send_message(chat_id, "❌ Pick annulé.")
 
     # ── Cas 4 : Commande /status ─────────────────────────────────
     elif text == "/status":
+        combo = _combo_state.get(chat_id)
         pending = _pending_picks.get(chat_id)
-        if pending:
+        if combo:
+            n = len(combo["selections"])
+            sel_summary = "\n".join(
+                f"  {i+1}. {s.get('bet', '?')} ({s.get('match', '?')})"
+                for i, s in enumerate(combo["selections"])
+            )
+            _send_message(
+                chat_id,
+                f"🔗 *Combiné en cours ({n} sélections) :*\n{sel_summary}\n\n"
+                f"📸 Envoie le screenshot suivant\n"
+                f"✅ `/done 3.45` pour finaliser",
+            )
+        elif pending:
             _send_message(chat_id, f"Pick en attente :\n{format_confirmation_message(pending)}")
         else:
             _send_message(chat_id, "Aucun pick en attente. Envoie un screenshot Winamax 📸")
@@ -190,6 +321,10 @@ def _handle_update(update: dict) -> None:
             "1. Envoie une capture d'écran de ton pari\n"
             "2. Je te montre le récap du pick détecté\n"
             "3. Réponds *👍* pour publier ou *❌* pour annuler\n\n"
+            "🔗 *Pour un combiné multi-screenshots :*\n"
+            "1. `/combo` → démarre le mode combiné\n"
+            "2. Envoie tes screenshots un par un\n"
+            "3. `/done 3.45` → finalise avec la cote totale\n\n"
             "Tu peux aussi ajouter une note dans la légende de la photo.",
         )
 
@@ -204,3 +339,4 @@ async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
     except Exception as e:
         logger.error("Webhook error: %s", e)
         return Response(content="ok", status_code=200)  # Always 200 to Telegram
+
