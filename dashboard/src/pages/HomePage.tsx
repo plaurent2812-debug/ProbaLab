@@ -279,56 +279,89 @@ export default function HomePage() {
             {liveAlert && <LiveAlertBanner alert={liveAlert} />}
 
             {/* ── ROI + Streak (Trust building) ───────────────────── */}
-            <div className="mx-3 mt-4 mb-4 rounded border border-border/50 bg-card overflow-hidden">
-                <div className="fs-summary-bar border-b border-border/50 bg-muted/20">
-                    <TrendingUp className="w-4 h-4 text-emerald-500" />
-                    <span className="text-xs font-bold uppercase tracking-wider">Performance Globale</span>
-                    <span className="fs-summary-badge bg-muted text-muted-foreground ml-auto">30 Jours</span>
-                </div>
+            {(() => {
+                const monthNames = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"]
+                const currentMonth = monthNames[new Date().getMonth()]
+                const roiIsGood = (g.roi_pct || 0) >= -2
+                const bestOdds = betStats?.best_pick?.odds
+                const maxStreak = betStats?.max_streak || 0
 
-                {/* Main metrics */}
-                <div className="grid grid-cols-3 divide-x divide-border/30">
-                    <div className="p-3 text-center bg-card hover:bg-accent/10 transition-colors">
-                        <div className="text-xs text-muted-foreground font-semibold mb-1">ROI</div>
-                        <div className={cn(
-                            "text-lg font-black tabular-nums",
-                            (g.roi_pct || 0) >= 0 ? "text-emerald-500" : "text-red-500"
-                        )}>
-                            {g.roi_pct != null ? `${g.roi_pct > 0 ? "+" : ""}${g.roi_pct}%` : "—"}
+                return (
+                    <div className="mx-3 mt-4 mb-4 rounded border border-border/50 bg-card overflow-hidden">
+                        <div className="fs-summary-bar border-b border-border/50 bg-muted/20">
+                            <TrendingUp className="w-4 h-4 text-emerald-500" />
+                            <span className="text-xs font-bold uppercase tracking-wider">Bilan de {currentMonth}</span>
+                            <span className="fs-summary-badge bg-muted text-muted-foreground ml-auto">Experts + IA</span>
                         </div>
-                    </div>
-                    <div className="p-3 text-center bg-card hover:bg-accent/10 transition-colors">
-                        <div className="text-xs text-muted-foreground font-semibold mb-1">Win Rate</div>
-                        <div className="text-lg font-black text-blue-500 tabular-nums">
-                            {g.win_rate != null ? `${g.win_rate}%` : "—"}
-                        </div>
-                    </div>
-                    <div className="p-3 text-center bg-card hover:bg-accent/10 transition-colors">
-                        <div className="text-xs text-muted-foreground font-semibold mb-1">Picks</div>
-                        <div className="text-lg font-black text-purple-500 tabular-nums">
-                            {g.total != null ? `${g.wins}W ${g.losses}L` : "—"}
-                        </div>
-                    </div>
-                </div>
 
-                {/* Streak */}
-                {betStats?.last_10?.length > 0 && (
-                    <div className="px-3 py-2.5 border-t border-border/30 flex items-center gap-2">
-                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider shrink-0">Série :</span>
-                        <div className="flex items-center gap-1">
-                            {betStats.last_10.map((r, i) => (
-                                r === "WIN" ? (
-                                    <CheckCircle2 key={i} className="w-4 h-4 text-emerald-500" />
+                        {/* Main metrics */}
+                        <div className="grid grid-cols-3 divide-x divide-border/30">
+                            <div className="p-3 text-center bg-card hover:bg-accent/10 transition-colors">
+                                {roiIsGood ? (
+                                    <>
+                                        <div className="text-xs text-muted-foreground font-semibold mb-1">ROI</div>
+                                        <div className={cn(
+                                            "text-lg font-black tabular-nums",
+                                            (g.roi_pct || 0) >= 0 ? "text-emerald-500" : "text-amber-500"
+                                        )}>
+                                            {g.roi_pct != null ? `${g.roi_pct > 0 ? "+" : ""}${g.roi_pct}%` : "—"}
+                                        </div>
+                                    </>
+                                ) : bestOdds ? (
+                                    <>
+                                        <div className="text-xs text-muted-foreground font-semibold mb-1">Best Win</div>
+                                        <div className="text-lg font-black text-amber-500 tabular-nums">
+                                            @{bestOdds.toFixed(2)}
+                                        </div>
+                                    </>
+                                ) : maxStreak > 0 ? (
+                                    <>
+                                        <div className="text-xs text-muted-foreground font-semibold mb-1">Série Max</div>
+                                        <div className="text-lg font-black text-emerald-500 tabular-nums">
+                                            🔥 {maxStreak}W
+                                        </div>
+                                    </>
                                 ) : (
-                                    <XCircle key={i} className="w-4 h-4 text-red-500/60" />
-                                )
-                            ))}
+                                    <>
+                                        <div className="text-xs text-muted-foreground font-semibold mb-1">ROI</div>
+                                        <div className="text-lg font-black text-muted-foreground">—</div>
+                                    </>
+                                )}
+                            </div>
+                            <div className="p-3 text-center bg-card hover:bg-accent/10 transition-colors">
+                                <div className="text-xs text-muted-foreground font-semibold mb-1">Win Rate</div>
+                                <div className="text-lg font-black text-blue-500 tabular-nums">
+                                    {g.win_rate != null ? `${g.win_rate}%` : "—"}
+                                </div>
+                            </div>
+                            <div className="p-3 text-center bg-card hover:bg-accent/10 transition-colors">
+                                <div className="text-xs text-muted-foreground font-semibold mb-1">Picks</div>
+                                <div className="text-lg font-black text-purple-500 tabular-nums">
+                                    {g.total != null ? `${g.wins}W ${g.losses}L` : "—"}
+                                </div>
+                            </div>
                         </div>
+
+                        {/* Streak */}
+                        {betStats?.last_10?.length > 0 && (
+                            <div className="px-3 py-2.5 border-t border-border/30 flex items-center gap-2">
+                                <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider shrink-0">Série :</span>
+                                <div className="flex items-center gap-1">
+                                    {betStats.last_10.map((r, i) => (
+                                        r === "WIN" ? (
+                                            <CheckCircle2 key={i} className="w-4 h-4 text-emerald-500" />
+                                        ) : (
+                                            <XCircle key={i} className="w-4 h-4 text-red-500/60" />
+                                        )
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+
                     </div>
-                )}
-
-
-            </div>
+                )
+            })()}
 
             {/* ── Main Shortcuts (Navigation) ─────────────────────── */}
             <div className="px-3 mb-6 grid grid-cols-2 gap-3">

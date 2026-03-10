@@ -1361,15 +1361,26 @@ def get_best_bets_stats():
                 "sport": best.get("sport", ""),
             }
 
+        # Max winning streak
+        max_streak = 0
+        current_streak = 0
+        for b in all_resolved:
+            if b["result"] == "WIN":
+                current_streak += 1
+                max_streak = max(max_streak, current_streak)
+            else:
+                current_streak = 0
+
         return {
             # Combined stats (all sources)
             "global": calc_stats(all_rows),
             "football": calc_stats(all_football),
             "nhl": calc_stats(all_nhl),
             "by_market": combined_market_breakdown,
-            "timeline": [{"date": k, **v} for k, v in sorted(combined_timeline.items())[-30:]],
+            "timeline": [{"date": k, **v} for k, v in sorted(combined_timeline.items())][-30:],
             "last_10": combined_last_10,
             "best_pick": combined_best_pick,
+            "max_streak": max_streak,
             "cumulative_pl": combined_cumulative[-60:],
             # Model predictions only (ProbaLab IA accuracy)
             "model_global": calc_stats(model_rows),
