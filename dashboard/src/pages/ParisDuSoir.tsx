@@ -412,6 +412,79 @@ function StatsDashboard({ stats, isAdmin }) {
                     </div>
                 </div>
             )}
+
+            {/* ── Model Prediction Accuracy (ProbaLab IA) ──────── */}
+            {stats.model_by_market && Object.keys(stats.model_by_market).length > 0 && (
+                <div className="mt-5">
+                    <div className="flex items-center gap-2 mb-3">
+                        <span className="text-sm">🤖</span>
+                        <h3 className="text-sm font-bold">Précision IA ProbaLab</h3>
+                        {stats.model_global && (
+                            <span className="text-[10px] text-muted-foreground">
+                                ({stats.model_global.total} prédictions)
+                            </span>
+                        )}
+                    </div>
+
+                    {/* Model global cards */}
+                    <div className="grid grid-cols-2 gap-3 mb-3">
+                        {stats.model_football?.total > 0 && (
+                            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 overflow-hidden">
+                                <p className="text-[10px] text-muted-foreground mb-1">⚽ Football IA</p>
+                                <div className="flex items-end gap-1">
+                                    <span className="text-xl font-black leading-tight">{stats.model_football.win_rate}%</span>
+                                    <span className="text-[9px] text-muted-foreground mb-0.5">réussite</span>
+                                </div>
+                                <div className="flex items-center gap-1.5 mt-1 text-[10px] text-muted-foreground">
+                                    <span className="text-emerald-400 font-semibold">{stats.model_football.wins}W</span>
+                                    <span className="text-red-400 font-semibold">{stats.model_football.losses}L</span>
+                                </div>
+                            </div>
+                        )}
+                        {stats.model_nhl?.total > 0 && (
+                            <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3 overflow-hidden">
+                                <p className="text-[10px] text-muted-foreground mb-1">🏒 NHL IA</p>
+                                <div className="flex items-end gap-1">
+                                    <span className="text-xl font-black leading-tight">{stats.model_nhl.win_rate}%</span>
+                                    <span className="text-[9px] text-muted-foreground mb-0.5">réussite</span>
+                                </div>
+                                <div className="flex items-center gap-1.5 mt-1 text-[10px] text-muted-foreground">
+                                    <span className="text-emerald-400 font-semibold">{stats.model_nhl.wins}W</span>
+                                    <span className="text-red-400 font-semibold">{stats.model_nhl.losses}L</span>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Model market breakdown */}
+                    <div className="rounded-xl border border-border/60 bg-card overflow-hidden">
+                        <div className="px-4 py-2.5 border-b border-border/40">
+                            <p className="text-xs font-semibold">Précision par type de prédiction</p>
+                        </div>
+                        <div className="divide-y divide-border/30">
+                            {Object.entries(stats.model_by_market)
+                                .sort(([, a], [, b]) => b.total - a.total)
+                                .map(([market, data]) => (
+                                    <div key={market} className="flex items-center justify-between px-4 py-2.5">
+                                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                                            <span className="text-xs text-foreground font-medium truncate">
+                                                {marketLabels[market] || market}
+                                            </span>
+                                            <span className="text-[10px] text-muted-foreground shrink-0">
+                                                {data.total} paris
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-3 shrink-0">
+                                            <span className="text-xs font-bold">{data.win_rate}%</span>
+                                            <span className="text-[10px] text-emerald-400">{data.wins}W</span>
+                                            <span className="text-[10px] text-red-400">{data.losses}L</span>
+                                        </div>
+                                    </div>
+                                ))}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

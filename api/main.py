@@ -1182,20 +1182,11 @@ def resolve_best_bets(body: dict, authorization: str = Header(None)):
 
 @app.get("/api/best-bets/stats")
 def get_best_bets_stats():
-    """Return win rate and ROI stats from expert_picks for the performance dashboard."""
+    """Return win rate and ROI stats for both model predictions (best_bets) and expert picks."""
     try:
-        resp = (
-            supabase.table("expert_picks")
-            .select("sport, result, date, odds, market")
-            .neq("result", "PENDING")
-            .order("date", desc=True)
-            .limit(500)
-            .execute()
-        )
-        rows = resp.data or []
+        from collections import defaultdict
 
         def calc_stats(bets):
-            # Exclude VOID from win rate calc
             resolved = [b for b in bets if b["result"] in ("WIN", "LOSS")]
             wins = sum(1 for b in resolved if b["result"] == "WIN")
             losses = sum(1 for b in resolved if b["result"] == "LOSS")
@@ -1211,77 +1202,115 @@ def get_best_bets_stats():
             roi_pct = round(roi / total * 100, 1) if total else 0
             return {"wins": wins, "losses": losses, "voids": voids, "total": total, "win_rate": win_rate, "roi_pct": roi_pct}
 
-        football = [b for b in rows if b["sport"] == "football"]
-        nhl = [b for b in rows if b["sport"] == "nhl"]
+        # ── 1. Expert picks stats (Paris de l'Expert) ─────────────
+        expert_resp = (
+            supabase.table("expert_picks")
+            .select("sport, result, date, odds, market")
+            .neq("result", "PENDING")
+            .order("date", desc=True)
+            .limit(500)
+            .execute()
+        )
+        expert_rows = expert_resp.data or []
 
-        # ── Market breakdown ──────────────────────────────────────
-        from collections import defaultdict
-        market_stats = defaultdict(list)
-        for b in rows:
-            market_stats[b.get("market", "unknown")].append(b)
+        expert_football = [b for b in expert_rows if b["sport"] == "football"]
+        expert_nhl = [b for b in expert_rows if b["sport"] == "nhl"]
 
-        market_breakdown = {}
-        for market, bets in market_stats.items():
+        # Expert market breakdown
+        expert_market_stats = defaultdict(list)
+        for b in expert_rows:
+            expert_market_stats[b.get("market", "unknown")].append(b)
+        expert_market_breakdown = {}
+        for market, bets in expert_market_stats.items():
             s = calc_stats(bets)
             if s["total"] > 0:
-                market_breakdown[market] = s
+                expert_market_breakdown[market] = s
 
-        # 30-day timeline
-        timeline = defaultdict(lambda: {"wins": 0, "losses": 0})
-        for b in rows:
-            if b["result"] in ("WIN", "LOSS"):
-                d = b["date"]
-                if b["result"] == "WIN":
-                    timeline[d]["wins"] += 1
-                else:
-                    timeline[d]["losses"] += 1
+        # Expert streak (last 10)
+        expert_resolved = [b for b in expert_rows if b["result"] in ("WIN", "LOSS")]
+        expert_resolved.sort(key=lambda b: b.get("date", ""), reverse=True)
+        expert_last_10 = [b["result"] for b in expert_resolved[:10]]
 
-        # ── Streak (last 10 resolved) ─────────────────────────────
-        resolved_recent = [b for b in rows if b["result"] in ("WIN", "LOSS")]
-        resolved_recent.sort(key=lambda b: b.get("date", ""), reverse=True)
-        last_10 = [b["result"] for b in resolved_recent[:10]]
-
-        # ── Best pick (highest odds WIN in last 30 days) ──────────
-        wins_recent = [b for b in resolved_recent if b["result"] == "WIN"]
-        best_pick = None
-        if wins_recent:
-            best = max(wins_recent, key=lambda b: float(b.get("odds") or 0))
-            best_pick = {
-                "label": best.get("bet_label", ""),
+        # Expert best pick
+        expert_wins = [b for b in expert_resolved if b["result"] == "WIN"]
+        expert_best_pick = None
+        if expert_wins:
+            best = max(expert_wins, key=lambda b: float(b.get("odds") or 0))
+            expert_best_pick = {
+                "label": best.get("market", ""),
                 "odds": float(best.get("odds") or 0),
                 "date": best.get("date", ""),
                 "market": best.get("market", ""),
                 "sport": best.get("sport", ""),
             }
 
-        # ── Cumulative P&L timeline ───────────────────────────────
-        pl_by_date = {}
-        for b in rows:
+        # Expert cumulative P&L
+        expert_pl = {}
+        for b in expert_rows:
             if b["result"] not in ("WIN", "LOSS"):
                 continue
             d = b["date"]
-            if d not in pl_by_date:
-                pl_by_date[d] = 0
+            if d not in expert_pl:
+                expert_pl[d] = 0
             if b["result"] == "WIN":
-                pl_by_date[d] += (float(b.get("odds") or 1.85) - 1)
+                expert_pl[d] += (float(b.get("odds") or 1.85) - 1)
             else:
-                pl_by_date[d] -= 1
-
-        cumulative = []
+                expert_pl[d] -= 1
+        expert_cumulative = []
         running = 0
-        for d in sorted(pl_by_date.keys()):
-            running += pl_by_date[d]
-            cumulative.append({"date": d, "pl": round(running, 2)})
+        for d in sorted(expert_pl.keys()):
+            running += expert_pl[d]
+            expert_cumulative.append({"date": d, "pl": round(running, 2)})
+
+        # Expert timeline
+        expert_timeline = defaultdict(lambda: {"wins": 0, "losses": 0})
+        for b in expert_rows:
+            if b["result"] in ("WIN", "LOSS"):
+                d = b["date"]
+                if b["result"] == "WIN":
+                    expert_timeline[d]["wins"] += 1
+                else:
+                    expert_timeline[d]["losses"] += 1
+
+        # ── 2. Model predictions stats (best_bets — ProbaLab IA) ──
+        model_resp = (
+            supabase.table("best_bets")
+            .select("sport, result, date, odds, market")
+            .neq("result", "PENDING")
+            .order("date", desc=True)
+            .limit(500)
+            .execute()
+        )
+        model_rows = model_resp.data or []
+
+        model_football = [b for b in model_rows if b["sport"] == "football"]
+        model_nhl = [b for b in model_rows if b["sport"] == "nhl"]
+
+        # Model market breakdown (BTTS, Over 2.5, player_points, etc.)
+        model_market_stats = defaultdict(list)
+        for b in model_rows:
+            model_market_stats[b.get("market", "unknown")].append(b)
+        model_market_breakdown = {}
+        for market, bets in model_market_stats.items():
+            s = calc_stats(bets)
+            if s["total"] > 0:
+                model_market_breakdown[market] = s
 
         return {
-            "global": calc_stats(rows),
-            "football": calc_stats(football),
-            "nhl": calc_stats(nhl),
-            "by_market": market_breakdown,
-            "timeline": [{"date": k, **v} for k, v in sorted(timeline.items())[-30:]],
-            "last_10": last_10,
-            "best_pick": best_pick,
-            "cumulative_pl": cumulative[-60:],  # last 60 days
+            # Expert picks (Paris de l'Expert)
+            "global": calc_stats(expert_rows),
+            "football": calc_stats(expert_football),
+            "nhl": calc_stats(expert_nhl),
+            "by_market": expert_market_breakdown,
+            "timeline": [{"date": k, **v} for k, v in sorted(expert_timeline.items())[-30:]],
+            "last_10": expert_last_10,
+            "best_pick": expert_best_pick,
+            "cumulative_pl": expert_cumulative[-60:],
+            # Model predictions (ProbaLab IA accuracy)
+            "model_global": calc_stats(model_rows),
+            "model_football": calc_stats(model_football),
+            "model_nhl": calc_stats(model_nhl),
+            "model_by_market": model_market_breakdown,
         }
     except Exception as e:
         return {"error": str(e)}
