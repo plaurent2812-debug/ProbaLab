@@ -4,7 +4,7 @@ import { fr } from "date-fns/locale"
 import {
     ChevronLeft, ChevronRight, Target, Trophy, Lock,
     CheckCircle2, XCircle, Clock, Minus, TrendingUp,
-    BarChart3, Sparkles, RefreshCw
+    BarChart3, Sparkles, RefreshCw, Trash2
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -58,6 +58,13 @@ async function fetchExpertPicks(date, sport = null) {
         const data = await res.json()
         return data.picks || []
     } catch { return [] }
+}
+
+async function deleteExpertPick(id) {
+    try {
+        const res = await fetch(`${API_BASE}/api/expert-picks/${id}`, { method: "DELETE" })
+        return res.ok
+    } catch { return false }
 }
 
 // ── Result Badge ──────────────────────────────────────────────
@@ -411,7 +418,8 @@ function StatsDashboard({ stats, isAdmin }) {
 }
 
 // ── Expert Pick Card ──────────────────────────────────────────
-function ExpertPickCard({ pick }) {
+function ExpertPickCard({ pick, isAdmin = false, onDelete }) {
+    const [deleting, setDeleting] = useState(false)
     const resultCfg = {
         WIN: { icon: CheckCircle2, label: "WIN", cls: "text-emerald-400 bg-emerald-500/15" },
         LOSS: { icon: XCircle, label: "LOSS", cls: "text-red-400 bg-red-500/15" },
@@ -420,6 +428,14 @@ function ExpertPickCard({ pick }) {
     }
     const { icon: Icon, label, cls } = resultCfg[pick.result || "PENDING"] || resultCfg.PENDING
     const sportEmoji = pick.sport === "nhl" ? "🏒" : "⚽"
+
+    async function handleDelete() {
+        if (!confirm("Supprimer ce pick expert ?")) return
+        setDeleting(true)
+        const ok = await deleteExpertPick(pick.id)
+        if (ok) onDelete?.(pick.id)
+        else setDeleting(false)
+    }
 
     return (
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 transition-all duration-200">
@@ -435,22 +451,65 @@ function ExpertPickCard({ pick }) {
                         )}
                     </div>
                     {/* Label */}
-                    <p className="text-sm font-semibold text-foreground leading-tight">
-                        {pick.player_name
-                            ? `${pick.player_name} — ${pick.market}`
-                            : pick.market || pick.match_label || "Pick Expert"}
-                    </p>
-                    {pick.match_label && (
-                        <p className="text-[11px] text-muted-foreground mt-0.5">{pick.match_label}</p>
-                    )}
-                    {pick.expert_note && (
+                    {(() => {
+                        // Pour les combinés, les selections sont stockées en JSON dans expert_note
+                        let selections: { bet: string, match: string }[] = []
+                        try {
+                            if (pick.expert_note && pick.expert_note.startsWith("[")) {
+                                selections = JSON.parse(pick.expert_note)
+                            }
+                        } catch { }
+
+                        if (selections.length > 1) {
+                            return (
+                                <>
+                                    <p className="text-sm font-semibold text-foreground leading-tight mb-1">
+                                        🔗 Combiné ({selections.length} sélections)
+                                    </p>
+                                    <div className="space-y-1 mt-1">
+                                        {selections.map((sel, i) => (
+                                            <div key={i} className="text-xs">
+                                                <span className="font-medium text-foreground">• {sel.bet}</span>
+                                                {sel.match && <span className="text-muted-foreground ml-1">({sel.match})</span>}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </>
+                            )
+                        }
+                        return (
+                            <>
+                                <p className="text-sm font-semibold text-foreground leading-tight">
+                                    {pick.player_name
+                                        ? `${pick.player_name} — ${pick.market}`
+                                        : pick.market || pick.match_label || "Pick Expert"}
+                                </p>
+                                {pick.match_label && (
+                                    <p className="text-[11px] text-muted-foreground mt-0.5">{pick.match_label}</p>
+                                )}
+                            </>
+                        )
+                    })()}
+                    {pick.expert_note && !pick.expert_note.startsWith("[") && (
                         <p className="text-[11px] text-amber-300/70 mt-1 italic">&ldquo;{pick.expert_note}&rdquo;</p>
                     )}
                 </div>
-                <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0", cls)}>
-                    <Icon className="w-3 h-3" />
-                    {label}
-                </span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                    <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold", cls)}>
+                        <Icon className="w-3 h-3" />
+                        {label}
+                    </span>
+                    {isAdmin && (
+                        <button
+                            onClick={handleDelete}
+                            disabled={deleting}
+                            className="w-6 h-6 rounded flex items-center justify-center bg-red-500/15 hover:bg-red-500/30 transition-colors text-red-400 disabled:opacity-40"
+                            title="Supprimer ce pick"
+                        >
+                            <Trash2 className="w-3 h-3" />
+                        </button>
+                    )}
+                </div>
             </div>
 
             <div className="flex items-center gap-4 mt-3 text-xs">
@@ -648,11 +707,15 @@ export default function ParisDuSoir() {
                     <div className="flex items-center gap-2 mb-3">
                         <span className="text-base">🎯</span>
                         <h2 className="text-sm font-bold text-amber-400">Paris de l'Expert</h2>
-                        <span className="text-xs text-muted-foreground">— sélection personnelle</span>
                     </div>
                     <div className="space-y-2.5">
                         {expertPicks.map((pick) => (
-                            <ExpertPickCard key={pick.id} pick={pick} />
+                            <ExpertPickCard
+                                key={pick.id}
+                                pick={pick}
+                                isAdmin={isAdmin}
+                                onDelete={(id) => setExpertPicks(prev => prev.filter(p => p.id !== id))}
+                            />
                         ))}
                     </div>
                 </div>
@@ -680,60 +743,10 @@ export default function ParisDuSoir() {
                 </button>
             </div>
 
-            {/* Sport filter */}
-            <div className="flex gap-1.5 mb-5">
-                {[
-                    { v: "both", label: "🌍 Tous" },
-                    { v: "football", label: "⚽ Football" },
-                    { v: "nhl", label: "🏒 NHL" },
-                ].map(f => (
-                    <button
-                        key={f.v}
-                        onClick={() => setSportFilter(f.v)}
-                        className={cn(
-                            "px-3 py-1.5 rounded-full text-xs font-semibold transition-colors",
-                            sportFilter === f.v
-                                ? "bg-primary/15 text-primary"
-                                : "bg-muted/40 text-muted-foreground hover:bg-muted"
-                        )}
-                    >
-                        {f.label}
-                    </button>
-                ))}
-            </div>
+
 
             {!showHistory ? (
                 <>
-                    {/* Football bets */}
-                    {(sportFilter === "both" || sportFilter === "football") && (
-                        <BetSection
-                            sport="football"
-                            betsArr={footballBets}
-                            emoji="⚽"
-                            label="Football"
-                            accentColor="text-emerald-400"
-                        />
-                    )}
-
-                    {/* NHL bets */}
-                    {(sportFilter === "both" || sportFilter === "nhl") && (
-                        <BetSection
-                            sport="nhl"
-                            betsArr={nhlBets}
-                            emoji="🏒"
-                            label="NHL"
-                            accentColor="text-cyan-400"
-                        />
-                    )}
-
-                    {/* NHL fallback note */}
-                    {bets?.nhl_note && (
-                        <div className="rounded-lg border border-amber-500/20 bg-amber-500/8 px-3 py-2 mb-3 flex items-start gap-2">
-                            <span className="text-amber-400 text-xs shrink-0">⚠️</span>
-                            <p className="text-[10px] text-amber-400/80">{bets.nhl_note}</p>
-                        </div>
-                    )}
-
                     {/* Stats — admin only */}
                     <StatsDashboard stats={stats} isAdmin={isAdmin} />
                 </>

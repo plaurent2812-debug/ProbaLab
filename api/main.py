@@ -1351,6 +1351,16 @@ def get_expert_picks(
         return {"date": date, "picks": [], "error": str(e)}
 
 
+@app.delete("/api/expert-picks/{pick_id}")
+def delete_expert_pick(pick_id: int):
+    """Delete an expert pick by ID — admin only (enforced in UI)."""
+    try:
+        supabase.table("expert_picks").delete().eq("id", pick_id).execute()
+        return {"deleted": True, "id": pick_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/predictions")
 def get_predictions(
     date: str | None = Query(None, description="ISO date YYYY-MM-DD"),

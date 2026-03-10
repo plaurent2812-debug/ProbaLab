@@ -24,20 +24,30 @@ logger = logging.getLogger("telegram_parser")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
 SYSTEM_PROMPT = """Tu es un assistant expert en paris sportifs.
-On te donne une capture d'écran de l'application Winamax (ou un bookmaker similaire).
-Tu dois extraire les informations du pari visible et répondre UNIQUEMENT en JSON valide.
+On te donne une capture d'écran d'un bookmaker (Winamax, Unibet, etc.).
+Extrait les informations du pari et réponds UNIQUEMENT en JSON valide.
 
-Champs à extraire :
-- player_name (string | null) : nom complet du joueur si c'est un pari joueur
-- market (string) : type de pari. Exemples: "Over 0.5 Points", "Buteur", "Victoire domicile", "Over 2.5 buts"
-- odds (number | null) : cote décimale (ex: 2.45). null si non visible.
-- match_label (string | null) : "Équipe A vs Équipe B" si visible
-- sport (string) : "nhl" ou "football" selon le sport détecté
-- date (string | null) : date du match au format YYYY-MM-DD si visible, sinon null
+Règles importantes :
+- Ne jamais inclure "MyMatch:" dans le champ market. Si tu vois "MyMatch:", ignore ce préfixe.
+- Si c'est un combiné (plusieurs sélections), liste chaque sélection dans le tableau "selections".
+- Pour un pari simple, "selections" contient une seule entrée.
 
+Format JSON attendu :
+{
+  "match_label": "Équipe A vs Équipe B",
+  "market": "description du pari sans préfixe MyMatch (ex: Double chance X2 + BTTS)",
+  "selections": [
+    {"bet": "description sélection 1", "match": "Équipe A vs Équipe B"},
+    {"bet": "description sélection 2", "match": "Équipe C vs Équipe D"}
+  ],
+  "odds": 1.86,
+  "date": "YYYY-MM-DD ou null",
+  "sport": "football ou nhl",
+  "player_name": null
+}
+
+Pour un pari simple, "selections" = [{"bet": "<le pari>", "match": "<le match>"}].
 Réponds UNIQUEMENT avec le JSON, sans markdown, sans explication.
-Exemple:
-{"player_name":"Mikael Backlund","market":"Over 0.5 Points","odds":2.45,"match_label":"Washington Capitals vs Calgary Flames","sport":"nhl","date":null}
 """
 
 
@@ -138,10 +148,21 @@ def format_confirmation_message(pick: dict) -> str:
 
     if pick.get("player_name"):
         lines.append(f"👤 {pick['player_name']}")
-    if pick.get("market"):
-        lines.append(f"{sport_emoji} {pick['market']}")
-    if pick.get("match_label"):
-        lines.append(f"🏟 {pick['match_label']}")
+
+    # Combiné : liste chaque sélection
+    selections = pick.get("selections") or []
+    if len(selections) > 1:
+        lines.append(f"{sport_emoji} *Combiné ({len(selections)} sélections) :*")
+        for sel in selections:
+            bet = sel.get("bet", "")
+            match = sel.get("match", "")
+            lines.append(f"  • {bet}" + (f" ({match})" if match else ""))
+    else:
+        if pick.get("market"):
+            lines.append(f"{sport_emoji} {pick['market']}")
+        if pick.get("match_label"):
+            lines.append(f"🏟 {pick['match_label']}")
+
     if pick.get("odds"):
         lines.append(f"💰 @{pick['odds']}")
     if pick.get("date"):

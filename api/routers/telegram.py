@@ -70,16 +70,37 @@ def _download_telegram_file(file_id: str) -> bytes | None:
 
 def _save_expert_pick(pick: dict, chat_id: int) -> bool:
     """Insert le pick validé dans Supabase."""
+    import json as _json
+
     try:
+        selections = pick.get("selections") or []
+        is_combine = len(selections) > 1
+
+        # Build market label
+        if is_combine:
+            market = " + ".join(s.get("bet", "") for s in selections)
+            match_label = pick.get("match_label") or "; ".join(
+                s.get("match", "") for s in selections if s.get("match")
+            )
+        else:
+            market = pick.get("market") or (selections[0].get("bet") if selections else "")
+            match_label = pick.get("match_label") or (selections[0].get("match") if selections else None)
+
+        # Store selections as JSON in expert_note for combinés; otherwise caption
+        if is_combine:
+            expert_note = _json.dumps(selections, ensure_ascii=False)
+        else:
+            expert_note = pick.get("expert_note", "")
+
         record = {
             "date": pick.get("date") or datetime.utcnow().strftime("%Y-%m-%d"),
-            "sport": pick.get("sport", "nhl"),
+            "sport": pick.get("sport", "football"),
             "player_name": pick.get("player_name"),
-            "market": pick.get("market"),
-            "match_label": pick.get("match_label"),
+            "market": market,
+            "match_label": match_label,
             "odds": pick.get("odds"),
             "confidence": pick.get("confidence", 7),
-            "expert_note": pick.get("expert_note", ""),
+            "expert_note": expert_note,
             "result": "PENDING",
             "telegram_msg_id": str(chat_id),
         }
