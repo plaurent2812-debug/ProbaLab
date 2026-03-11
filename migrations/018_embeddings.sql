@@ -1,8 +1,6 @@
 -- ═══════════════════════════════════════════════════════════════════
 --  018 — Gemini Embedding 2 / pgvector setup
---  Adds vector columns + RPC functions for semantic search
---
---  USAGE: Run this in the Supabase SQL Editor.
+--  ALREADY EXECUTED on 2026-03-11.
 --  Safe to re-run (all operations are idempotent).
 -- ═══════════════════════════════════════════════════════════════════
 
@@ -37,8 +35,6 @@ CREATE INDEX IF NOT EXISTS idx_ai_learnings_sport ON public.ai_learnings(sport, 
 CREATE EXTENSION IF NOT EXISTS vector;
 
 -- 2. Add embedding columns (768-dim Matryoshka)
---    predictions column added conditionally in case the table
---    was created elsewhere or doesn't exist yet.
 ALTER TABLE public.ai_learnings
   ADD COLUMN IF NOT EXISTS embedding vector(768);
 
@@ -47,11 +43,11 @@ BEGIN
     IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'predictions') THEN
         EXECUTE 'ALTER TABLE public.predictions ADD COLUMN IF NOT EXISTS embedding vector(768)';
     ELSE
-        RAISE NOTICE 'Table predictions does not exist — skipping embedding column. Create it first, then re-run.';
+        RAISE NOTICE 'Table predictions does not exist — skipping embedding column.';
     END IF;
 END $$;
 
--- 3. Indexes for fast similarity search (IVFFlat, good for < 1M rows)
+-- 3. Indexes for fast similarity search
 CREATE INDEX IF NOT EXISTS idx_ai_learnings_embedding
   ON public.ai_learnings
   USING ivfflat (embedding vector_cosine_ops)
@@ -73,61 +69,34 @@ CREATE OR REPLACE FUNCTION match_learnings(
   match_limit int DEFAULT 5,
   match_threshold float DEFAULT 0.3
 )
-RETURNS TABLE (
-  id uuid,
-  learning_text text,
-  context_tags jsonb,
-  similarity float
-)
+RETURNS TABLE (id uuid, learning_text text, context_tags jsonb, similarity float)
 LANGUAGE plpgsql AS $$
 BEGIN
   RETURN QUERY
-  SELECT
-    al.id,
-    al.learning_text,
-    al.context_tags,
+  SELECT al.id, al.learning_text, al.context_tags,
     (1 - (al.embedding <=> query_embedding))::float AS similarity
   FROM public.ai_learnings al
-  WHERE al.is_active = TRUE
-    AND al.sport = match_sport
-    AND al.embedding IS NOT NULL
+  WHERE al.is_active = TRUE AND al.sport = match_sport AND al.embedding IS NOT NULL
     AND (1 - (al.embedding <=> query_embedding)) >= match_threshold
   ORDER BY al.embedding <=> query_embedding
   LIMIT match_limit;
 END;
 $$;
 
--- 5. RPC: Semantic search on predictions (created even if table
---    is missing — function will simply return 0 rows until table exists)
+-- 5. RPC: Semantic search on predictions
 CREATE OR REPLACE FUNCTION match_predictions(
   query_embedding vector(768),
   match_limit int DEFAULT 10,
   match_threshold float DEFAULT 0.3
 )
-RETURNS TABLE (
-  id uuid,
-  fixture_id uuid,
-  analysis_text text,
-  proba_home float,
-  proba_draw float,
-  proba_away float,
-  similarity float
-)
+RETURNS TABLE (id uuid, fixture_id uuid, analysis_text text, proba_home float, proba_draw float, proba_away float, similarity float)
 LANGUAGE plpgsql AS $$
 BEGIN
-  -- Guard: return empty if predictions table doesn't exist yet
   IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'predictions') THEN
     RETURN;
   END IF;
-
   RETURN QUERY
-  SELECT
-    p.id,
-    p.fixture_id,
-    p.analysis_text,
-    p.proba_home::float,
-    p.proba_draw::float,
-    p.proba_away::float,
+  SELECT p.id, p.fixture_id, p.analysis_text, p.proba_home::float, p.proba_draw::float, p.proba_away::float,
     (1 - (p.embedding <=> query_embedding))::float AS similarity
   FROM public.predictions p
   WHERE p.embedding IS NOT NULL
