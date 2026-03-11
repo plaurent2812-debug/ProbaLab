@@ -116,8 +116,44 @@ def _format_injuries(side: str, details: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def get_active_learnings(sport: str, limit: int = 5) -> list[str]:
-    """Fetch recent active learnings from the AI memory."""
+def get_active_learnings(
+    sport: str, limit: int = 5, match_context: str | None = None
+) -> list[str]:
+    """Fetch learnings from AI memory, using semantic search when possible.
+
+    If match_context is provided, uses Gemini Embedding 2 to find the
+    most relevant learnings via pgvector similarity search. Falls back
+    to date-based ordering if semantic search is unavailable.
+
+    Args:
+        sport: Sport filter ('football' or 'nhl').
+        limit: Max number of learnings to return.
+        match_context: Optional text describing the current match for
+            semantic matching (e.g. "PSG vs OM, Ligue 1, ELO gap 200").
+
+    Returns:
+        List of learning text strings.
+    """
+    # Strategy 1: Semantic search (if context provided)
+    if match_context:
+        try:
+            from src.embeddings import search_learnings
+
+            results = search_learnings(
+                query_text=match_context,
+                sport=sport,
+                limit=limit,
+            )
+            if results:
+                logger.info(
+                    f"[Brain] Semantic learnings: {len(results)} found "
+                    f"(top sim: {results[0].get('similarity', '?'):.3f})"
+                )
+                return [r["learning_text"] for r in results]
+        except Exception as e:
+            logger.warning(f"[Brain] Semantic search failed, falling back: {e}")
+
+    # Strategy 2: Fallback — date-based ordering
     try:
         response = (
             supabase.table("ai_learnings")
@@ -230,12 +266,40 @@ Marché →  Dom: {market.get("market_home", "?")}%  |  Nul: {market.get("market
                     pen = " ⚽ Tireur de pen." if s.get("penalty_taker") else ""
                     data_block += f"\n  - {s['name']} ({s['position']}) : {s['goals_90']} buts/90, {s['total_goals']} buts saison{pen}{syn}"
 
-    learnings = get_active_learnings("football")
+    # Build match context for semantic learning retrieval
+    match_context = (
+        f"{fixture['home_team']} vs {fixture['away_team']}, "
+        f"Ligue {fixture['league_id']}, "
+        f"xG {stats.get('xg_home', '?')}-{stats.get('xg_away', '?')}, "
+        f"ELO {ctx.get('elo_home', '?')} vs {ctx.get('elo_away', '?')}, "
+        f"Form home={ctx.get('form_home', '?')} away={ctx.get('form_away', '?')}"
+    )
+    learnings = get_active_learnings("football", match_context=match_context)
     learnings_block = ""
     if learnings:
         learnings_block = "\n\n--- LEÇONS D'AUTO-CORRECTION (MÉMOIRE DU MODÈLE) ---\nPrends particulièrement en compte ces enseignements tirés de tes erreurs passées :\n"
         for i, l in enumerate(learnings, 1):
             learnings_block += f"{i}. {l}\n"
+
+    # Inject similar historical matches for context enrichment
+    similar_block = ""
+    try:
+        from src.embeddings import find_similar_matches
+
+        similar = find_similar_matches(fixture, stats, limit=3)
+        if similar:
+            similar_block = "\n\n--- MATCHS HISTORIQUES SIMILAIRES ---\n"
+            for sm in similar:
+                sim_score = sm.get('similarity', 0)
+                sm_text = (sm.get('analysis_text') or '')[:150]
+                ph = sm.get('proba_home', '?')
+                pd_ = sm.get('proba_draw', '?')
+                pa = sm.get('proba_away', '?')
+                similar_block += (
+                    f"  • [{sim_score:.0%} similaire] {ph}-{pd_}-{pa} — {sm_text}...\n"
+                )
+    except Exception as e:
+        logger.debug(f"[Brain] Similar matches unavailable: {e}")
 
     system_prompt = f"""Tu es un expert en paris sportifs renommé et un analyste tactique de haut niveau.
 Tu reçois des données statistiques avancées issues de nos modèles.
@@ -263,7 +327,7 @@ IMPORTANT : Réponds UNIQUEMENT avec un objet JSON valide respectant SCRUPULEUSE
   "likely_scorer_reason": "Explication EN FRANÇAIS de pourquoi ce joueur, ou null"
 }}"""
 
-    user_prompt = f"""{data_block}
+    user_prompt = f"""{data_block}{similar_block}
 
 En te basant sur ces données statistiques ET ton expertise football, extrais tes évaluations sous forme de features JSON quantifiées entre -1.0 et 1.0. 
 Concentre-toi sur l'intangible que les chiffres purs (xG, cotes) montrent mal : la pression mentale, la désorganisation tactique liée aux blessés, ou l'urgence de résultat."""
@@ -699,6 +763,24 @@ def run_brain() -> None:
                 "stats_json": final.get("stats_json"),
                 "ai_features": final.get("ai_features", {}),  # Nouveau champ
             }
+
+            # Generate semantic embedding for prediction search
+            try:
+                from src.embeddings import get_embedding, build_match_profile_text
+
+                embed_text = final.get("analysis_text", "")
+                # Enrich with match profile for better similarity
+                profile = build_match_profile_text(fix, stats_result)
+                if embed_text:
+                    embed_text = f"{profile} | {embed_text}"
+                else:
+                    embed_text = profile
+
+                pred_embedding = get_embedding(embed_text)
+                if pred_embedding:
+                    insert_data["embedding"] = pred_embedding
+            except Exception as emb_err:
+                logger.debug(f"Embedding skipped: {emb_err}")
 
             # Vérifier si une prédiction existe déjà pour ce match et ce modèle
             existing = (

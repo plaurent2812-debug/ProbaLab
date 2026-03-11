@@ -261,6 +261,44 @@ def build_fun_ticket(predictions: list, fixture_map: dict, odds_map: dict) -> di
         target_count = len(candidates)
 
     matches = candidates[:target_count]
+
+    # De-correlate: remove matches that are too similar (embedding similarity > 0.85)
+    try:
+        from src.embeddings import get_embedding, cosine_similarity
+
+        embeddings = {}
+        for m in matches:
+            emb = get_embedding(m.get("match", "") + " " + m.get("pick", ""))
+            if emb:
+                embeddings[m["match"]] = emb
+
+        if len(embeddings) >= 2:
+            to_remove = set()
+            match_list = list(embeddings.keys())
+            for i in range(len(match_list)):
+                if match_list[i] in to_remove:
+                    continue
+                for j in range(i + 1, len(match_list)):
+                    if match_list[j] in to_remove:
+                        continue
+                    sim = cosine_similarity(embeddings[match_list[i]], embeddings[match_list[j]])
+                    if sim > 0.85:
+                        # Remove the second (less probable) match
+                        to_remove.add(match_list[j])
+                        logger.info(
+                            f"[Ticket] De-correlated: {match_list[j]} "
+                            f"(sim={sim:.2f} with {match_list[i]})"
+                        )
+
+            if to_remove:
+                matches = [m for m in matches if m["match"] not in to_remove]
+                # Backfill from remaining candidates
+                remaining = [c for c in candidates if c not in matches and c["match"] not in to_remove]
+                while len(matches) < target_count and remaining:
+                    matches.append(remaining.pop(0))
+    except Exception as e:
+        logger.debug(f"[Ticket] De-correlation skipped: {e}")
+
     total_odds = 1.0
     for m in matches:
         total_odds *= m["odds"]

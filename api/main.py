@@ -516,6 +516,88 @@ def _get_ev_edges(pred: dict, odds: dict) -> dict:
     return {k: v for k, v in edges.items() if v is not None and v > 2.0}
 
 
+# ─── Semantic Search (Gemini Embedding 2) ────────────────────────
+
+
+@app.get("/api/search/semantic")
+def semantic_search(
+    request: Request,
+    q: str = Query(..., description="Natural language search query"),
+    limit: int = Query(10, ge=1, le=50, description="Max results"),
+    sport: str = Query("all", description="'football' | 'nhl' | 'all'"),
+):
+    """Search predictions and learnings using Gemini Embedding 2 semantic similarity.
+
+    Examples:
+        /api/search/semantic?q=derby match with high stakes
+        /api/search/semantic?q=upset away win with low xG
+        /api/search/semantic?q=defensive match few goals
+    """
+    try:
+        from src.embeddings import search_predictions, search_learnings
+    except ImportError:
+        raise HTTPException(status_code=500, detail="Embedding module not available")
+
+    results = {"query": q, "predictions": [], "learnings": []}
+
+    # Search predictions
+    if sport in ("all", "football"):
+        try:
+            pred_results = search_predictions(q, limit=limit)
+            if pred_results:
+                # Enrich with fixture info
+                fixture_ids = [r["fixture_id"] for r in pred_results if r.get("fixture_id")]
+                fixtures_map = {}
+                if fixture_ids:
+                    try:
+                        fx_resp = (
+                            supabase.table("fixtures")
+                            .select("id, home_team, away_team, date, league_id, status")
+                            .in_("id", fixture_ids)
+                            .execute()
+                        )
+                        fixtures_map = {f["id"]: f for f in (fx_resp.data or [])}
+                    except Exception:
+                        pass
+
+                league_map = _get_league_map()
+
+                for r in pred_results:
+                    fix = fixtures_map.get(r.get("fixture_id"), {})
+                    league_name = league_map.get(str(fix.get("league_id", "")), "")
+                    results["predictions"].append({
+                        "fixture_id": r.get("fixture_id"),
+                        "home_team": fix.get("home_team", "?"),
+                        "away_team": fix.get("away_team", "?"),
+                        "date": fix.get("date"),
+                        "league": league_name,
+                        "analysis_text": (r.get("analysis_text") or "")[:300],
+                        "proba_home": r.get("proba_home"),
+                        "proba_draw": r.get("proba_draw"),
+                        "proba_away": r.get("proba_away"),
+                        "similarity": round(r.get("similarity", 0), 4),
+                    })
+        except Exception as e:
+            results["predictions_error"] = str(e)
+
+    # Search learnings
+    if sport in ("all", "football"):
+        try:
+            learning_results = search_learnings(q, sport="football", limit=min(limit, 5))
+            results["learnings"] = [
+                {
+                    "learning_text": r.get("learning_text"),
+                    "tags": r.get("context_tags"),
+                    "similarity": round(r.get("similarity", 0), 4),
+                }
+                for r in learning_results
+            ]
+        except Exception as e:
+            results["learnings_error"] = str(e)
+
+    return results
+
+
 # ─── Football DeepThink Meta-Analysis ───────────────────────────
 
 

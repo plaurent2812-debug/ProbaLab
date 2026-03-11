@@ -92,18 +92,26 @@ Génère ton analyse et ta leçon (learning_text) au format JSON.
             if sport not in tags:
                 tags.append(sport)
 
+            # Generate semantic embedding for future retrieval
+            from src.embeddings import get_embedding
+
+            embedding = get_embedding(learning_text)
+
             try:
-                supabase.table("ai_learnings").insert(
-                    {
-                        "sport": sport,
-                        "context_tags": tags,
-                        "learning_text": learning_text,
-                        "source_match_id": row["fixture_id"],
-                        "confidence": row["pred_confidence"],
-                    }
-                ).execute()
+                insert_data = {
+                    "sport": sport,
+                    "context_tags": tags,
+                    "learning_text": learning_text,
+                    "source_match_id": row["fixture_id"],
+                    "confidence": row["pred_confidence"],
+                }
+                if embedding:
+                    insert_data["embedding"] = embedding
+
+                supabase.table("ai_learnings").insert(insert_data).execute()
                 new_learnings += 1
-                logger.info(f"   💡 Leçon apprise : {learning_text}")
+                emb_status = "✅" if embedding else "⚠️ sans embedding"
+                logger.info(f"   💡 Leçon apprise ({emb_status}) : {learning_text}")
             except Exception as e:
                 logger.error(f"   ❌ Erreur d'insertion DB: {e}")
         else:
