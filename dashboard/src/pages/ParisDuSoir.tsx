@@ -499,6 +499,33 @@ function ExpertPickCard({ pick, isAdmin = false, onDelete }) {
     const { icon: Icon, label, cls } = resultCfg[pick.result || "PENDING"] || resultCfg.PENDING
     const sportEmoji = pick.sport === "nhl" ? "🏒" : "⚽"
 
+    // Bet type styling
+    const betTypeCfg = {
+        SAFE: { label: "🛡 SAFE", cls: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" },
+        FUN: { label: "🎲 FUN", cls: "bg-purple-500/20 text-purple-400 border-purple-500/30" },
+        EXPERT: { label: "🎯 Expert", cls: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
+    }
+    const betType = betTypeCfg[pick.bet_type] || betTypeCfg.EXPERT
+
+    // Use enriched selections from API, fallback to parsing expert_note
+    let selections = pick.selections || []
+    if (selections.length === 0) {
+        try {
+            if (pick.expert_note && pick.expert_note.startsWith("[")) {
+                const parsed = JSON.parse(pick.expert_note)
+                if (Array.isArray(parsed)) {
+                    selections = parsed.map(s => ({
+                        match: s.match || "",
+                        market: s.bet || "",
+                        player_name: null,
+                        bet_raw: s.bet || "",
+                        is_mymatch: false,
+                    }))
+                }
+            }
+        } catch { }
+    }
+
     async function handleDelete() {
         if (!confirm("Supprimer ce pick expert ?")) return
         setDeleting(true)
@@ -507,56 +534,78 @@ function ExpertPickCard({ pick, isAdmin = false, onDelete }) {
         else setDeleting(false)
     }
 
+    // Card border color based on bet type
+    const cardBorderCls =
+        pick.bet_type === "SAFE" ? "border-emerald-500/30 bg-emerald-500/5" :
+        pick.bet_type === "FUN" ? "border-purple-500/30 bg-purple-500/5" :
+        "border-amber-500/30 bg-amber-500/5"
+
     return (
-        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 transition-all duration-200">
+        <div className={cn("rounded-xl border p-4 transition-all duration-200", cardBorderCls)}>
             <div className="flex items-start justify-between gap-3 mb-2">
                 <div className="flex-1 min-w-0">
-                    {/* Expert badge */}
-                    <div className="flex items-center gap-1.5 mb-1.5">
-                        <span className="px-2 py-0.5 rounded text-[9px] font-black bg-amber-500/20 text-amber-400 uppercase tracking-wider border border-amber-500/30">
-                            🎯 Expert
+                    {/* Bet type + sport badge */}
+                    <div className="flex items-center gap-1.5 mb-2">
+                        <span className={cn("px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border", betType.cls)}>
+                            {betType.label}
                         </span>
-                        {pick.player_name && (
-                            <span className="text-[10px] text-muted-foreground">{sportEmoji} {pick.sport?.toUpperCase()}</span>
+                        <span className="text-[10px] text-muted-foreground">{sportEmoji} {pick.sport?.toUpperCase()}</span>
+                        {pick.is_combine && (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-500/15 text-blue-400">
+                                Combiné {selections.length}
+                            </span>
+                        )}
+                        {pick.has_mymatch && (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-pink-500/15 text-pink-400 border border-pink-500/20">
+                                MyMatch
+                            </span>
                         )}
                     </div>
-                    {/* Label */}
-                    {(() => {
-                        // Pour les combinés, les selections sont stockées en JSON dans expert_note
-                        let selections: { bet: string, match: string }[] = []
-                        try {
-                            if (pick.expert_note && pick.expert_note.startsWith("[")) {
-                                selections = JSON.parse(pick.expert_note)
-                            }
-                        } catch { }
 
-                        if (selections.length > 1) {
-                            return (
-                                <div className="space-y-1">
-                                    {selections.map((sel, i) => (
-                                        <div key={i} className="text-xs">
-                                            <span className="font-medium text-foreground">• {sel.bet}</span>
-                                            {sel.match && <span className="text-muted-foreground ml-1">({sel.match})</span>}
-                                        </div>
-                                    ))}
+                    {/* Selections display */}
+                    {selections.length > 0 ? (
+                        <div className="space-y-1.5">
+                            {selections.map((sel, i) => (
+                                <div key={i} className="rounded-lg bg-background/40 px-3 py-1.5">
+                                    {/* Match name */}
+                                    <p className="text-[11px] text-muted-foreground leading-tight">
+                                        {sel.match || pick.match_label || ""}
+                                    </p>
+                                    {/* Market type */}
+                                    <p className="text-xs text-foreground/80 mt-0.5">
+                                        {sel.market || sel.bet_raw || pick.market || ""}
+                                    </p>
+                                    {/* Player name in bold */}
+                                    {sel.player_name && (
+                                        <p className="text-sm font-bold text-foreground mt-0.5">
+                                            {sel.player_name}
+                                        </p>
+                                    )}
+                                    {/* MyMatch badge per selection */}
+                                    {sel.is_mymatch && (
+                                        <span className="inline-block mt-1 px-1 py-0.5 rounded text-[8px] font-bold bg-pink-500/10 text-pink-400">
+                                            MYMATCH
+                                        </span>
+                                    )}
                                 </div>
-                            )
-                        }
-                        return (
-                            <>
-                                <p className="text-sm font-semibold text-foreground leading-tight">
-                                    {pick.player_name
-                                        ? `${pick.player_name} — ${pick.market}`
-                                        : pick.market || pick.match_label || "Pick Expert"}
-                                </p>
-                                {pick.match_label && (
-                                    <p className="text-[11px] text-muted-foreground mt-0.5">{pick.match_label}</p>
-                                )}
-                            </>
-                        )
-                    })()}
-                    {pick.expert_note && !pick.expert_note.startsWith("[") && (
-                        <p className="text-[11px] text-amber-300/70 mt-1 italic">&ldquo;{pick.expert_note}&rdquo;</p>
+                            ))}
+                        </div>
+                    ) : (
+                        <>
+                            <p className="text-sm font-semibold text-foreground leading-tight">
+                                {pick.player_name
+                                    ? `${pick.player_name} — ${pick.market}`
+                                    : pick.market || pick.match_label || "Pick Expert"}
+                            </p>
+                            {pick.match_label && (
+                                <p className="text-[11px] text-muted-foreground mt-0.5">{pick.match_label}</p>
+                            )}
+                        </>
+                    )}
+
+                    {/* Expert note (if not JSON) */}
+                    {pick.expert_note && !pick.expert_note.startsWith("[") && !pick.expert_note.startsWith("[odds=") && (
+                        <p className="text-[11px] text-amber-300/70 mt-1.5 italic">&ldquo;{pick.expert_note}&rdquo;</p>
                     )}
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
@@ -587,7 +636,7 @@ function ExpertPickCard({ pick, isAdmin = false, onDelete }) {
                     <span className="text-amber-400">{"⭐".repeat(pick.confidence >= 8 ? 3 : pick.confidence >= 6 ? 2 : 1)}</span>
                 )}
                 <span className="text-[10px] text-muted-foreground ml-auto">
-                    {new Date(pick.created_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                    📅 {pick.date}
                 </span>
             </div>
         </div>
