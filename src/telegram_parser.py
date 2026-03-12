@@ -108,67 +108,76 @@ def parse_winamax_screenshot(image_bytes: bytes, caption: str = "") -> dict:
         logger.error("GEMINI_API_KEY non définie")
         return {"error": "GEMINI_API_KEY manquante"}
 
+    raw_text = ""
+
     try:
         from google import genai
         from google.genai import types
 
         client = genai.Client(api_key=GEMINI_API_KEY)
 
-        # Encode image en base64 pour Gemini
-        image_b64 = base64.b64encode(image_bytes).decode("utf-8")
-
-        user_text = "Analyse ce screenshot de pari Winamax."
+        user_text = "Analyse ce screenshot de pari sportif. Extrait les matchs, paris et cotes."
         if caption:
             user_text += f"\n\nNote de l'expert : {caption}"
 
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=[
-                types.Content(
-                    role="user",
-                    parts=[
-                        types.Part.from_bytes(
-                            data=image_bytes,
-                            mime_type="image/jpeg",
-                        ),
-                        types.Part.from_text(text=user_text),
-                    ],
-                )
-            ],
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_PROMPT,
-                temperature=0.1,
-                max_output_tokens=2048,
-            ),
-        )
+        # Use gemini-2.0-flash (non-thinking, fast, reliable for JSON)
+        # NOT 2.5-flash which has thinking mode that causes empty responses
+        models_to_try = ["gemini-2.0-flash", "gemini-2.0-flash-lite"]
 
-        raw_text = ""
-        if response and response.candidates:
-            for part in response.candidates[0].content.parts:
-                # Skip 'thought' parts from thinking models (2.5-flash)
-                if getattr(part, "thought", False):
-                    continue
-                if hasattr(part, "text") and part.text:
-                    raw_text += part.text
-
-        # Fallback: try response.text property
-        if not raw_text:
+        for model_name in models_to_try:
             try:
-                raw_text = response.text or ""
-            except Exception:
-                raw_text = ""
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=[
+                        types.Content(
+                            role="user",
+                            parts=[
+                                types.Part.from_bytes(
+                                    data=image_bytes,
+                                    mime_type="image/jpeg",
+                                ),
+                                types.Part.from_text(text=user_text),
+                            ],
+                        )
+                    ],
+                    config=types.GenerateContentConfig(
+                        system_instruction=SYSTEM_PROMPT,
+                        temperature=0.1,
+                        max_output_tokens=2048,
+                        response_mime_type="application/json",
+                    ),
+                )
 
-        if not raw_text:
-            logger.error("Gemini returned empty text. Candidates: %s", response.candidates if response else "None")
+                # Extract text from response
+                raw_text = ""
+                try:
+                    raw_text = response.text or ""
+                except Exception:
+                    if response and response.candidates:
+                        for part in response.candidates[0].content.parts:
+                            if hasattr(part, "text") and part.text:
+                                raw_text += part.text
+
+                if raw_text and raw_text.strip():
+                    logger.info("Model %s returned %d chars", model_name, len(raw_text))
+                    break
+                else:
+                    logger.warning("Model %s returned empty response, trying next", model_name)
+
+            except Exception as e:
+                logger.warning("Model %s failed: %s, trying next", model_name, e)
+                continue
+
+        if not raw_text or not raw_text.strip():
+            logger.error("All models returned empty text")
             return {"error": "Gemini a retourné une réponse vide. Réessaie avec un screenshot plus net."}
 
-        # Clean JSON (remove markdown fences if any)
         raw_text = raw_text.strip()
         logger.info("Gemini raw response: %s", raw_text[:300])
 
         parsed = _extract_json_robust(raw_text)
         if parsed is None:
-            raise json.JSONDecodeError(f"Aucun JSON valide trouvé dans la réponse", raw_text, 0)
+            raise json.JSONDecodeError("Aucun JSON valide trouvé dans la réponse", raw_text, 0)
 
         # Ensure date fallback to today
         if not parsed.get("date"):
