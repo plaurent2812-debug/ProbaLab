@@ -34,12 +34,20 @@ from src.constants import (
     DRAW_FACTOR,
     DRAW_FACTOR_BY_LEAGUE,
     ELO_DECAY_RATE,
+    ELO_DRAW_DECAY_RATE,
+    EURO_COMP_DRAW_BOOST,
     HOME_ELO_ADVANTAGE,
     HOME_XG_BONUS,
     K_FACTOR,
     KELLY_FRACTION,
     KELLY_MAX_BET_FRACTION,
     MIN_VALUE_EDGE,
+    PROB_1X2_CEIL,
+    PROB_1X2_FLOOR,
+    PROB_BTTS_CEIL,
+    PROB_BTTS_FLOOR,
+    PROB_OVER25_CEIL,
+    PROB_OVER25_FLOOR,
     STAKES_DRAW_BOOST,
     WEIGHT_ELO,
     WEIGHT_ELO_NO_MARKET,
@@ -552,12 +560,11 @@ def elo_with_decay(
 
 
 def get_elo_probs(home_elo: float, away_elo: float, league_id: int | None = None) -> dict[str, int]:
-    """Convert Elo ratings into 1X2 probabilities.
+    """Convert Elo ratings into 1X2 probabilities including a draw factor.
 
-    A home-advantage offset is added before computing expected scores,
-    and a draw component is estimated from the gap between the two sides.
-    When *league_id* is provided, uses the league-calibrated draw factor
-    (Serie A draws more than Bundesliga, etc.).
+    A home-advantage offset is added before computing expected scores.
+    A draw component is estimated from the league-calibrated draw rate,
+    decayed by the ELO gap (closer teams → more draws).
 
     Args:
         home_elo: Elo rating of the home team.
@@ -568,17 +575,25 @@ def get_elo_probs(home_elo: float, away_elo: float, league_id: int | None = None
         Dictionary with keys ``"elo_home"``, ``"elo_draw"``, ``"elo_away"``
         as rounded integer percentages.
     """
-    # On utilise simplement l'ELO_EXPECTED pour les win et loss
     p_home = elo_expected(home_elo + HOME_ELO_ADVANTAGE, away_elo)
-    p_away = elo_expected(away_elo, home_elo + HOME_ELO_ADVANTAGE)
+    p_away = 1.0 - p_home
 
-    # Normalisation sur 100% (sans nul)
-    total = p_home + p_away
-    p_home /= total
-    p_away /= total
+    # Draw factor: league-calibrated base, decays with ELO gap
+    base_draw = DRAW_FACTOR_BY_LEAGUE.get(league_id, DRAW_FACTOR)
+    elo_gap = abs(home_elo - away_elo)
+    draw_decay = math.exp(-ELO_DRAW_DECAY_RATE * elo_gap)
+    draw_prob = base_draw * draw_decay
+    # Ensure draw stays in a reasonable range
+    draw_prob = max(0.08, min(0.35, draw_prob))
+
+    # Redistribute: remove draw's share proportionally from home/away
+    remaining = 1.0 - draw_prob
+    p_home *= remaining
+    p_away *= remaining
 
     return {
         "elo_home": round(p_home * 100),
+        "elo_draw": round(draw_prob * 100),
         "elo_away": round(p_away * 100),
     }
 
@@ -1507,6 +1522,76 @@ def kelly_criterion(
 # ═══════════════════════════════════════════════════════════════════
 
 
+def clamp_probabilities(result: dict[str, Any]) -> dict[str, Any]:
+    """Apply realistic bounds to all probabilities.
+
+    Prevents extreme/unrealistic values. No single 1X2 outcome can be
+    below PROB_1X2_FLOOR or above PROB_1X2_CEIL. Markets (BTTS, Over)
+    are also bounded. Over lines are enforced to be monotonically
+    decreasing (O0.5 ≥ O1.5 ≥ O2.5 ≥ O3.5).
+    """
+    # ── 1X2 clamping with iterative redistribution ────────────────
+    h, d, a = result["proba_home"], result["proba_draw"], result["proba_away"]
+
+    # Step 1: enforce floor — raise any below minimum, take from max
+    for _ in range(3):
+        vals = [h, d, a]
+        for i in range(3):
+            if vals[i] < PROB_1X2_FLOOR:
+                deficit = PROB_1X2_FLOOR - vals[i]
+                vals[i] = PROB_1X2_FLOOR
+                # Take from the largest value
+                max_idx = max((j for j in range(3) if j != i), key=lambda j: vals[j])
+                vals[max_idx] -= deficit
+        h, d, a = vals
+
+    # Step 2: enforce ceiling — cap any above maximum, redistribute excess
+    for _ in range(3):
+        vals = [h, d, a]
+        for i in range(3):
+            if vals[i] > PROB_1X2_CEIL:
+                excess = vals[i] - PROB_1X2_CEIL
+                vals[i] = PROB_1X2_CEIL
+                # Distribute excess proportionally to the others
+                others = [j for j in range(3) if j != i]
+                other_sum = sum(vals[j] for j in others)
+                if other_sum > 0:
+                    for j in others:
+                        vals[j] += excess * vals[j] / other_sum
+                else:
+                    for j in others:
+                        vals[j] += excess / len(others)
+        h, d, a = vals
+
+    # Round and normalize to exactly 100
+    result["proba_home"] = round(h)
+    result["proba_draw"] = round(d)
+    result["proba_away"] = 100 - result["proba_home"] - result["proba_draw"]
+
+    # Safety: ensure away doesn't go below floor after rounding
+    if result["proba_away"] < PROB_1X2_FLOOR:
+        result["proba_away"] = PROB_1X2_FLOOR
+        result["proba_home"] = 100 - result["proba_draw"] - result["proba_away"]
+
+    # Recalculate double chance from clamped 1X2
+    result["proba_dc_1x"] = result["proba_home"] + result["proba_draw"]
+    result["proba_dc_x2"] = result["proba_draw"] + result["proba_away"]
+    result["proba_dc_12"] = result["proba_home"] + result["proba_away"]
+
+    # ── Markets clamping ──────────────────────────────────────────
+    result["proba_btts"] = max(PROB_BTTS_FLOOR, min(PROB_BTTS_CEIL, result["proba_btts"]))
+    result["proba_over_25"] = max(PROB_OVER25_FLOOR, min(PROB_OVER25_CEIL, result["proba_over_25"]))
+
+    # ── Monotonic over lines: O0.5 ≥ O1.5 ≥ O2.5 ≥ O3.5 ────────
+    result["proba_over_15"] = max(result["proba_over_25"] + 5, result["proba_over_15"])
+    result["proba_over_05"] = max(result["proba_over_15"] + 5, result["proba_over_05"])
+    # O3.5 should be ≤ O2.5
+    result["proba_over_35"] = min(result["proba_over_25"] - 3, result["proba_over_35"])
+    result["proba_over_35"] = max(2, result["proba_over_35"])
+
+    return result
+
+
 def analyze_match(fixture: dict[str, Any]) -> dict[str, Any]:
     """Run a full probabilistic analysis of a fixture.
 
@@ -1545,7 +1630,13 @@ def analyze_match(fixture: dict[str, Any]) -> dict[str, Any]:
     context: dict[str, Any] = {}
 
     # ── 1. Poisson de base ───────────────────────────────────────
-    league_data = calculate_team_strengths(league_id)
+    # For cross-league competitions (CL, EL, cups), skip league-level
+    # strengths (too few matches) — calculate_xg will use each team's
+    # domestic league strengths instead.
+    if league_id in CROSS_LEAGUE_IDS:
+        league_data = None
+    else:
+        league_data = calculate_team_strengths(league_id)
     xg_home, xg_away = calculate_xg(home_id or 0, away_id or 0, league_data)
 
     # ── Competition factor (CL/EL/Cup matches are less high-scoring) ──
@@ -1718,9 +1809,9 @@ def analyze_match(fixture: dict[str, Any]) -> dict[str, Any]:
             + elo_probs["elo_home"] * w_elo
             + market["market_home"] * w_market
         )
-        # On fait pleinement confiance au Poisson Bivarié pour la probabilité du Nul (Phase 4.3)
         final_draw = (
-            poisson_probs["proba_draw"] * (w_poisson + w_elo)
+            poisson_probs["proba_draw"] * w_poisson
+            + elo_probs["elo_draw"] * w_elo
             + market["market_draw"] * w_market
         )
         final_away = (
@@ -1732,7 +1823,7 @@ def analyze_match(fixture: dict[str, Any]) -> dict[str, Any]:
         w_p = WEIGHT_POISSON_NO_MARKET
         w_e = WEIGHT_ELO_NO_MARKET
         final_home = poisson_probs["proba_home"] * w_p + elo_probs["elo_home"] * w_e
-        final_draw = poisson_probs["proba_draw"] * (w_p + w_e)
+        final_draw = poisson_probs["proba_draw"] * w_p + elo_probs["elo_draw"] * w_e
         final_away = poisson_probs["proba_away"] * w_p + elo_probs["elo_away"] * w_e
 
     # Normaliser à 100%
@@ -1752,6 +1843,17 @@ def analyze_match(fixture: dict[str, Any]) -> dict[str, Any]:
         home_share = final_home / max(final_home + final_away, 1)
         final_home = round(final_home - draw_boost * home_share)
         final_away = 100 - final_home - final_draw
+
+    # ── 7c. European competition draw boost ────────────────────
+    # CL/EL matches are higher stakes → more cautious → more draws
+    euro_boost = EURO_COMP_DRAW_BOOST.get(league_id, 0)
+    if euro_boost > 0:
+        boost_pts = euro_boost * 100
+        final_draw = round(final_draw + boost_pts)
+        home_share = final_home / max(final_home + final_away, 1)
+        final_home = round(final_home - boost_pts * home_share)
+        final_away = 100 - final_home - final_draw
+        context["euro_draw_boost"] = euro_boost
 
     # ── 8. Probabilité de penalty ────────────────────────────────
     try:
@@ -2013,5 +2115,9 @@ def analyze_match(fixture: dict[str, Any]) -> dict[str, Any]:
 
     confidence = max(1, min(10, agreement_pts + data_quality + spread_pts))
     result["confidence_score"] = confidence
+
+    # ── 11. Final probability clamping ─────────────────────────────
+    # Ensures no extreme/unrealistic values survive the pipeline
+    result = clamp_probabilities(result)
 
     return result

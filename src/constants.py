@@ -217,6 +217,28 @@ COMPETITION_XG_FACTOR: dict[int, float] = {
     81: 0.97,   # DFB-Pokal
 }
 
+# European competition draw boost (higher stakes → more cautious → more draws)
+EURO_COMP_DRAW_BOOST: dict[int, float] = {
+    2: 0.04,    # Champions League: +4% draw probability
+    3: 0.03,    # Europa League: +3% draw probability
+    848: 0.02,  # Conference League: +2%
+}
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  PROBABILITY CLAMPING — prevent extreme/unrealistic values
+# ═══════════════════════════════════════════════════════════════════
+
+# 1X2: no single outcome can be < 3% or > 85%
+PROB_1X2_FLOOR: int = 3
+PROB_1X2_CEIL: int = 85
+
+# Markets: BTTS, Over/Under floors and ceilings
+PROB_BTTS_FLOOR: int = 15    # Even the most defensive matches have ≥15% BTTS
+PROB_BTTS_CEIL: int = 80
+PROB_OVER25_FLOOR: int = 12  # O2.5 is never below 12%
+PROB_OVER25_CEIL: int = 85
+
 
 # ═══════════════════════════════════════════════════════════════════
 #  CALIBRATION
