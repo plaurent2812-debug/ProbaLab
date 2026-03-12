@@ -102,23 +102,32 @@ def _save_expert_pick(pick: dict, chat_id: int) -> bool:
         else:
             expert_note = pick.get("expert_note", "")
 
+        # Cap odds to 999.99 (column is numeric(5,2))
+        odds_val = pick.get("odds")
+        if odds_val is not None:
+            try:
+                odds_val = min(float(odds_val), 999.99)
+            except (ValueError, TypeError):
+                odds_val = None
+
         record = {
             "date": pick.get("date") or datetime.utcnow().strftime("%Y-%m-%d"),
             "sport": pick.get("sport", "football"),
             "player_name": pick.get("player_name"),
             "market": market,
             "match_label": match_label,
-            "odds": pick.get("odds"),
+            "odds": odds_val,
             "confidence": pick.get("confidence", 7),
             "expert_note": expert_note,
             "result": "PENDING",
             "telegram_msg_id": str(chat_id),
         }
+        logger.info("Saving expert pick: odds=%s market=%s", odds_val, market)
         supabase.table("expert_picks").insert(record).execute()
         logger.info("Expert pick saved: %s", record)
         return True
     except Exception as e:
-        logger.error("Supabase insert error: %s", e)
+        logger.error("Supabase insert error: %s | record: %s", e, record if 'record' in dir() else 'N/A')
         return False
 
 
