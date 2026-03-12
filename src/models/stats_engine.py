@@ -583,8 +583,9 @@ def get_elo_probs(home_elo: float, away_elo: float, league_id: int | None = None
     elo_gap = abs(home_elo - away_elo)
     draw_decay = math.exp(-ELO_DRAW_DECAY_RATE * elo_gap)
     draw_prob = base_draw * draw_decay
-    # Ensure draw stays in a reasonable range
-    draw_prob = max(0.08, min(0.35, draw_prob))
+    # Ensure draw stays in a reasonable football range
+    # Even the biggest mismatches still draw 12%+ of the time
+    draw_prob = max(0.12, min(0.35, draw_prob))
 
     # Redistribute: remove draw's share proportionally from home/away
     remaining = 1.0 - draw_prob

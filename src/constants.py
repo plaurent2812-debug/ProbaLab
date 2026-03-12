@@ -229,15 +229,16 @@ EURO_COMP_DRAW_BOOST: dict[int, float] = {
 #  PROBABILITY CLAMPING — prevent extreme/unrealistic values
 # ═══════════════════════════════════════════════════════════════════
 
-# 1X2: no single outcome can be < 3% or > 85%
-PROB_1X2_FLOOR: int = 3
-PROB_1X2_CEIL: int = 85
+# 1X2: real bookmaker odds rarely exceed ~70-75% for biggest favorites
+# and even the weakest away team gets 5%+ implied probability
+PROB_1X2_FLOOR: int = 5
+PROB_1X2_CEIL: int = 72
 
 # Markets: BTTS, Over/Under floors and ceilings
-PROB_BTTS_FLOOR: int = 15    # Even the most defensive matches have ≥15% BTTS
-PROB_BTTS_CEIL: int = 80
-PROB_OVER25_FLOOR: int = 12  # O2.5 is never below 12%
-PROB_OVER25_CEIL: int = 85
+PROB_BTTS_FLOOR: int = 18    # Even the most defensive matches have ≥18% BTTS
+PROB_BTTS_CEIL: int = 75
+PROB_OVER25_FLOOR: int = 15  # O2.5 is never below 15%
+PROB_OVER25_CEIL: int = 80
 
 
 # ═══════════════════════════════════════════════════════════════════
