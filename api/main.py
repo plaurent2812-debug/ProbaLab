@@ -66,7 +66,7 @@ from api.schemas import (
 
 # ── Scheduler ────────────────────────────────────────────────
 def _scheduled_update_scores():
-    """Called by APScheduler every 15 min between 18h-23h Paris."""
+    """Called by APScheduler every 15 min — update FT scores."""
     try:
         sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
         from datetime import date
@@ -77,6 +77,15 @@ def _scheduled_update_scores():
         fetch_and_update_results()
     except Exception as e:
         print(f"[scheduler] Erreur: {e}")
+
+
+def _scheduled_live_update():
+    """Called by APScheduler every 5 min — live scores + events + stats."""
+    try:
+        from src.fetchers.live import run as live_run
+        live_run()
+    except Exception as e:
+        print(f"[scheduler] Erreur live: {e}")
 
 
 def _startup_update_scores():
@@ -143,18 +152,34 @@ async def lifespan(app_instance):
         try:
             paris_tz = pytz.timezone("Europe/Paris")
             scheduler = BackgroundScheduler(timezone=paris_tz)
-            # Toutes les 15 min entre 18h00 et 23h45 heure Paris
+            # Live scores + events + stats : toutes les 5 min (12h-01h Paris)
+            scheduler.add_job(
+                _scheduled_live_update,
+                trigger=CronTrigger(
+                    hour="12-23,0",
+                    minute="*/5",
+                    timezone=paris_tz,
+                ),
+                id="live_update",
+                name="Live scores + events + stats",
+                replace_existing=True,
+                misfire_grace_time=120,
+                max_instances=1,
+                coalesce=True,
+            )
+
+            # Résultats FT : toutes les 15 min (12h-01h Paris)
             scheduler.add_job(
                 _scheduled_update_scores,
                 trigger=CronTrigger(
-                    hour="18-23",
+                    hour="12-23,0",
                     minute="0,15,30,45",
                     timezone=paris_tz,
                 ),
                 id="update_scores",
-                name="Mise à jour scores football",
+                name="Mise à jour scores FT football",
                 replace_existing=True,
-                misfire_grace_time=300,  # 5 min de tolérance
+                misfire_grace_time=300,
             )
 
             # Envoi des tickets Telegram chaque matin à 10h00 heure Paris

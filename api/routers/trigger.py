@@ -571,10 +571,13 @@ def update_live_scores(detail: bool = Query(False, description="Fetch events & s
                     goals_list = []
                     for ev in events_resp["response"]:
                         if ev.get("type") == "Goal" and ev.get("comments") != "Penalty Shootout":
+                            assist = ev.get("assist", {}) or {}
                             goals_list.append({
                                 "team": ev.get("team", {}).get("name", ""),
                                 "player": ev.get("player", {}).get("name", ""),
                                 "player_id": ev.get("player", {}).get("id"),
+                                "assist": assist.get("name"),
+                                "assist_id": assist.get("id"),
                                 "time": ev.get("time", {}).get("elapsed", ""),
                                 "detail": ev.get("detail", ""),
                                 "half": "1H" if (ev.get("time", {}).get("elapsed", 0) or 0) <= 45 else "2H",
