@@ -212,6 +212,47 @@ def _scheduled_football_evaluation():
     except Exception as e:
         print(f"[scheduler] ⚽ ❌ Erreur évaluation football: {e}")
 
+    # Resolve expert picks + best_bets for the last 3 days
+    try:
+        from datetime import date, timedelta
+        for delta in range(3):
+            d = (date.today() - timedelta(days=delta)).isoformat()
+            for sport in ["football", "nhl"]:
+                try:
+                    # Resolve best_bets
+                    pending_bets = (
+                        supabase.table("best_bets")
+                        .select("id").eq("date", d).eq("sport", sport).eq("result", "PENDING")
+                        .execute().data or []
+                    )
+                    if pending_bets:
+                        import requests as _req
+                        _req.post(
+                            f"http://localhost:{os.environ.get('PORT', '8000')}/api/best-bets/resolve",
+                            json={"date": d, "sport": sport},
+                            headers={"Authorization": f"Bearer {os.environ.get('CRON_SECRET', '')}"},
+                            timeout=30,
+                        )
+                    # Resolve expert picks
+                    pending_expert = (
+                        supabase.table("expert_picks")
+                        .select("id").eq("date", d).eq("result", "PENDING")
+                        .execute().data or []
+                    )
+                    if pending_expert:
+                        import requests as _req
+                        _req.post(
+                            f"http://localhost:{os.environ.get('PORT', '8000')}/api/expert-picks/resolve",
+                            json={"date": d, "sport": sport},
+                            headers={"Authorization": f"Bearer {os.environ.get('CRON_SECRET', '')}"},
+                            timeout=30,
+                        )
+                except Exception:
+                    pass
+        print("[scheduler] ✅ Résolution best_bets + expert_picks terminée")
+    except Exception as e:
+        print(f"[scheduler] ⚠️ Résolution picks: {e}")
+
 
 @asynccontextmanager
 async def lifespan(app_instance):
