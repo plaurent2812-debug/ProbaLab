@@ -211,7 +211,31 @@ export default function TeamProfile() {
                         </Card>
                     </div>
 
-                    {/* Current Streak */}
+                    {/* Current Form (last 5 matches) */}
+                    {matches.length > 0 && (
+                        <div className="flex items-center gap-3 px-1">
+                            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Forme récente</span>
+                            <div className="flex items-center gap-1">
+                                {matches.slice(0, 5).map((m, i) => {
+                                    const bg = m.result === 'V' ? 'bg-emerald-500' : m.result === 'D' ? 'bg-red-500' : 'bg-amber-500'
+                                    return (
+                                        <span
+                                            key={i}
+                                            className={cn("w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black text-white", bg)}
+                                            title={`${m.opponent} (${m.score})`}
+                                        >
+                                            {m.result}
+                                        </span>
+                                    )
+                                })}
+                            </div>
+                            <span className="text-xs text-muted-foreground">
+                                {matches.slice(0, 5).filter(m => m.result === 'V').length}V
+                                {matches.slice(0, 5).filter(m => m.result === 'N').length}N
+                                {matches.slice(0, 5).filter(m => m.result === 'D').length}D
+                            </span>
+                        </div>
+                    )}
 
 
                     {/* Tab Content */}
@@ -285,17 +309,23 @@ export default function TeamProfile() {
                                                     {player.number && <span>• N°{player.number}</span>}
                                                 </div>
                                                 <div className="text-[10px] text-muted-foreground mt-1.5 flex items-center gap-3 font-medium">
-                                                    <span className="flex items-center gap-1">🏃‍♂️ {player.appearances || 0} matchs</span>
-                                                    {(player.position === "Goalkeeper" || player.position === "Gardien") ? (
+                                                    {(player.appearances > 0 || player.goals > 0 || player.assists > 0 || player.goals_conceded > 0) ? (
                                                         <>
-                                                            <span className="flex items-center gap-1">🥅 {player.goals_conceded || 0} encaissés</span>
-                                                            <span className="flex items-center gap-1">🎯 {player.assists || 0} passes</span>
+                                                            <span className="flex items-center gap-1">🏃‍♂️ {player.appearances || 0} matchs</span>
+                                                            {(player.position === "Goalkeeper" || player.position === "Gardien") ? (
+                                                                <>
+                                                                    {player.goals_conceded > 0 && <span className="flex items-center gap-1">🥅 {player.goals_conceded} encaissés</span>}
+                                                                    {player.assists > 0 && <span className="flex items-center gap-1">🎯 {player.assists} passes</span>}
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    {player.goals > 0 && <span className="flex items-center gap-1">⚽ {player.goals} buts</span>}
+                                                                    {player.assists > 0 && <span className="flex items-center gap-1">🎯 {player.assists} passes</span>}
+                                                                </>
+                                                            )}
                                                         </>
                                                     ) : (
-                                                        <>
-                                                            <span className="flex items-center gap-1">⚽ {player.goals || 0} buts</span>
-                                                            <span className="flex items-center gap-1">🎯 {player.assists || 0} passes</span>
-                                                        </>
+                                                        <span className="text-muted-foreground/50 italic">Pas encore de stats cette saison</span>
                                                     )}
                                                 </div>
                                             </div>

@@ -59,8 +59,8 @@ function StatRow({ label, value, icon: Icon, tooltip }) {
             </div>
             <span className={cn(
                 "text-sm font-bold tabular-nums",
-                value >= 70 ? "text-emerald-600 dark:text-emerald-400" :
-                    value >= 50 ? "text-amber-600 dark:text-amber-400" :
+                value >= 60 ? "text-emerald-600 dark:text-emerald-400" :
+                    value >= 40 ? "text-amber-600 dark:text-amber-400" :
                         "text-foreground"
             )}>
                 {display}
@@ -614,6 +614,22 @@ export default function MatchDetailPage() {
                 )
             })()}
 
+            {/* xG — PREMIUM (moved above Markets for better hierarchy) */}
+            <PremiumSection title="Expected Goals (xG)" icon={TrendingUp}>
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="text-center p-3 bg-accent/30 rounded-xl">
+                        <p className="text-xs text-muted-foreground mb-1">{fixture?.home_team}</p>
+                        <p className="text-2xl font-black text-primary">{xg_home ?? "—"}</p>
+                        <p className="text-[10px] text-muted-foreground">xG domicile</p>
+                    </div>
+                    <div className="text-center p-3 bg-accent/30 rounded-xl">
+                        <p className="text-xs text-muted-foreground mb-1">{fixture?.away_team}</p>
+                        <p className="text-2xl font-black text-primary">{xg_away ?? "—"}</p>
+                        <p className="text-[10px] text-muted-foreground">xG extérieur</p>
+                    </div>
+                </div>
+            </PremiumSection>
+
             {/* Marchés — PREMIUM */}
             <PremiumSection title="Marchés & Statistiques" icon={Target}>
                 <div className="space-y-0">
@@ -642,27 +658,6 @@ export default function MatchDetailPage() {
                         value={proba_over_35}
                         tooltip="Probabilité d'avoir au moins 4 buts au total dans le match."
                     />
-                    <StatRow
-                        label="But sur penalty"
-                        value={proba_penalty}
-                        tooltip="Probabilité qu'au moins un but soit marqué sur penalty pendant le temps réglementaire."
-                    />
-                </div>
-            </PremiumSection>
-
-            {/* xG — PREMIUM */}
-            <PremiumSection title="Expected Goals (xG)" icon={TrendingUp}>
-                <div className="grid grid-cols-2 gap-4">
-                    <div className="text-center p-3 bg-accent/30 rounded-xl">
-                        <p className="text-xs text-muted-foreground mb-1">{fixture?.home_team}</p>
-                        <p className="text-2xl font-black text-primary">{xg_home ?? "—"}</p>
-                        <p className="text-[10px] text-muted-foreground">xG domicile</p>
-                    </div>
-                    <div className="text-center p-3 bg-accent/30 rounded-xl">
-                        <p className="text-xs text-muted-foreground mb-1">{fixture?.away_team}</p>
-                        <p className="text-2xl font-black text-primary">{xg_away ?? "—"}</p>
-                        <p className="text-[10px] text-muted-foreground">xG extérieur</p>
-                    </div>
                 </div>
             </PremiumSection>
 
