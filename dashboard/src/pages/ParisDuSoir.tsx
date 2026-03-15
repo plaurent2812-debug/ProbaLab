@@ -918,6 +918,50 @@ export default function ParisDuSoir() {
 
             {!showHistory ? (
                 <>
+                    {/* Sport filter tabs */}
+                    <div className="flex gap-1 mb-5">
+                        {[
+                            { key: "both", label: "Tous", emoji: "🎯" },
+                            { key: "football", label: "Football", emoji: "⚽" },
+                            { key: "nhl", label: "NHL", emoji: "🏒" },
+                        ].map(({ key, label, emoji }) => (
+                            <button
+                                key={key}
+                                onClick={() => setSportFilter(key)}
+                                className={cn(
+                                    "flex-1 py-2 rounded-lg text-xs font-bold transition-all",
+                                    sportFilter === key
+                                        ? "bg-card shadow-sm text-foreground border border-border/60"
+                                        : "bg-muted/50 text-muted-foreground hover:text-foreground"
+                                )}
+                            >
+                                {emoji} {label}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Football bets */}
+                    {(sportFilter === "both" || sportFilter === "football") && (
+                        <BetSection
+                            sport="football"
+                            betsArr={footballBets}
+                            emoji="⚽"
+                            label="Football"
+                            accentColor="text-emerald-500"
+                        />
+                    )}
+
+                    {/* NHL bets */}
+                    {(sportFilter === "both" || sportFilter === "nhl") && (
+                        <BetSection
+                            sport="nhl"
+                            betsArr={nhlBets}
+                            emoji="🏒"
+                            label="NHL"
+                            accentColor="text-cyan-500"
+                        />
+                    )}
+
                     {/* Stats — admin only */}
                     <StatsDashboard stats={stats} isAdmin={isAdmin} />
                 </>
