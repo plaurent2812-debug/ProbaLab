@@ -58,6 +58,7 @@ except ImportError:
     limiter = None
 
 from api.routers import nhl, players, stripe_webhook, telegram as telegram_router, trigger
+from api.routers import push as push_router
 from api.schemas import (
     EmailPayload, SaveBetRequest, UpdateBetResultRequest,
     DateRequest, ResolveBetsRequest, ResolveExpertPicksRequest, RunPipelineRequest,
@@ -413,6 +414,7 @@ app.include_router(stripe_webhook.router)
 app.include_router(nhl.router)
 app.include_router(trigger.router)
 app.include_router(telegram_router.router)
+app.include_router(push_router.router)
 app.include_router(players.router, prefix="/api/players", tags=["Players"])
 
 origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:4173").split(",")

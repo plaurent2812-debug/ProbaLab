@@ -305,6 +305,20 @@ def _handle_update(update: dict) -> None:
                 chat_id,
                 f"✅ *{player}* ajouté aux Paris de l'Expert ! Il apparaîtra sur le site dans quelques secondes. 🎯",
             )
+            # Send push notification to all subscribers
+            try:
+                from api.routers.push import send_push_to_all
+                market = pending.get("market", "Nouveau prono")
+                match_label = pending.get("match_label", "")
+                odds = pending.get("odds", "")
+                body = f"{market}"
+                if match_label:
+                    body += f" — {match_label}"
+                if odds:
+                    body += f" (cote {odds})"
+                send_push_to_all("🎯 Nouveau Prono Expert !", body, "/paris-du-soir")
+            except Exception as push_err:
+                logger.warning("Push notification failed: %s", push_err)
         else:
             _send_message(chat_id, "❌ Erreur lors de la sauvegarde. Réessaie.")
 
