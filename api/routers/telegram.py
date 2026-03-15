@@ -308,14 +308,44 @@ def _handle_update(update: dict) -> None:
             # Send push notification to all subscribers
             try:
                 from api.routers.push import send_push_to_all
-                market = pending.get("market", "Nouveau prono")
-                match_label = pending.get("match_label", "")
-                odds = pending.get("odds", "")
-                body = f"{market}"
-                if match_label:
-                    body += f" — {match_label}"
+
+                # Build a readable body from available pick data
+                selections = pending.get("selections") or []
+                market = pending.get("market")
+                match_label = pending.get("match_label") or ""
+                player_name = pending.get("player_name") or ""
+                odds = pending.get("odds")
+
+                # For combinés: summarize selections
+                if selections and len(selections) > 1:
+                    sel_names = []
+                    for s in selections[:3]:  # Max 3 in notification
+                        bet = s.get("bet") or s.get("market") or ""
+                        match = s.get("match") or ""
+                        if bet and match:
+                            sel_names.append(f"{bet} ({match})")
+                        elif bet:
+                            sel_names.append(bet)
+                    body = " + ".join(sel_names)
+                    if len(selections) > 3:
+                        body += f" +{len(selections) - 3} autre(s)"
+                # Single pick
+                elif player_name:
+                    body = f"{player_name} — {market or 'Pari expert'}"
+                    if match_label:
+                        body += f" ({match_label})"
+                elif market:
+                    body = market
+                    if match_label:
+                        body += f" — {match_label}"
+                elif match_label:
+                    body = match_label
+                else:
+                    body = "Un nouveau prono est disponible !"
+
                 if odds:
-                    body += f" (cote {odds})"
+                    body += f" 📊 Cote {odds}"
+
                 send_push_to_all("🎯 Nouveau Prono Expert !", body, "/paris-du-soir")
             except Exception as push_err:
                 logger.warning("Push notification failed: %s", push_err)
