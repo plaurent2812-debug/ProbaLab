@@ -816,6 +816,24 @@ def run_brain() -> None:
                 f"   {action_msg} → {final['proba_home']}-{final['proba_draw']}-{final['proba_away']} | {final.get('recommended_bet')}"
             )
 
+            # Clean up any stale predictions from other model versions for this fixture
+            # This prevents the old meta_v2 / fallback predictions from causing data conflicts
+            try:
+                stale = (
+                    supabase.table("predictions")
+                    .select("id, model_version")
+                    .eq("fixture_id", fix["id"])
+                    .neq("model_version", insert_data["model_version"])
+                    .execute()
+                    .data or []
+                )
+                if stale:
+                    stale_ids = [s["id"] for s in stale]
+                    supabase.table("predictions").delete().in_("id", stale_ids).execute()
+                    logger.info(f"   🗑️ Nettoyé {len(stale_ids)} prédiction(s) obsolète(s)")
+            except Exception as cleanup_err:
+                logger.debug(f"   Cleanup skipped: {cleanup_err}")
+
         except Exception as e:
             logger.error("   ❌ Erreur sauvegarde : %s", e)
 

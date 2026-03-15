@@ -2458,7 +2458,7 @@ def get_predictions(
 
     # Get predictions for those fixtures
     predictions = (
-        supabase.table("predictions").select("*").in_("fixture_id", fixture_ids).execute().data
+        supabase.table("predictions").select("*").in_("fixture_id", fixture_ids).order("created_at").execute().data
         or []
     )
 
