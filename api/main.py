@@ -1903,6 +1903,49 @@ def get_best_bets_stats(request: Request):
                 result["sample_warning"] = f"Basé sur seulement {total} paris résolus"
             return result
 
+        # ── Normalize market names (merge duplicates) ─────────────
+        MARKET_NORMALIZE = {
+            # BTTS duplicates
+            "BTTS — Les deux équipes marquent": "BTTS",
+            "BTTS Oui": "BTTS",
+            # Category meta-tags → skip in breakdown
+            "fun_football": "__skip__",
+            "fun_nhl": "__skip__",
+            "safe_football": "__skip__",
+            "safe_nhl": "__skip__",
+            # NHL player markets → clean French names
+            "player_points_over_0.5": "Points (NHL)",
+            "player_goals_over_0.5": "Buts (NHL)",
+            "player_assists_over_0.5": "Passes (NHL)",
+            "player_shots_over_2.5": "Tirs (NHL)",
+            # Expert enrichment duplicates
+            "Points du joueur : 1 ou plus": "Points (NHL)",
+            "Passes décisives du joueur : 1 ou plus": "Passes (NHL)",
+            "Buts du joueur : 1 ou plus": "Buts (NHL)",
+            # Double Chance variants
+            "Double chance 1N": "Double Chance 1N",
+            "Double Chance 1X": "Double Chance 1N",
+            # Ambiguous "Victoire"
+            "Victoire": "Victoire (autre)",
+        }
+
+        def normalize_market(raw):
+            return MARKET_NORMALIZE.get(raw, raw)
+
+        def build_market_breakdown(rows):
+            grouped = defaultdict(list)
+            for b in rows:
+                key = normalize_market(b.get("market", "unknown"))
+                if key == "__skip__":
+                    continue
+                grouped[key].append(b)
+            breakdown = {}
+            for market, bets in grouped.items():
+                s = calc_stats(bets)
+                if s["total"] > 0:
+                    breakdown[market] = s
+            return breakdown
+
         # ── 1. Expert picks stats (Paris de l'Expert) ─────────────
         expert_resp = (
             supabase.table("expert_picks")
@@ -1918,15 +1961,8 @@ def get_best_bets_stats(request: Request):
         expert_football = [b for b in expert_rows if b["sport"] == "football"]
         expert_nhl = [b for b in expert_rows if b["sport"] == "nhl"]
 
-        # Expert market breakdown
-        expert_market_stats = defaultdict(list)
-        for b in expert_rows:
-            expert_market_stats[b.get("market", "unknown")].append(b)
-        expert_market_breakdown = {}
-        for market, bets in expert_market_stats.items():
-            s = calc_stats(bets)
-            if s["total"] > 0:
-                expert_market_breakdown[market] = s
+        # Expert market breakdown (normalized)
+        expert_market_breakdown = build_market_breakdown(expert_rows)
 
         # Expert streak (last 10)
         expert_resolved = [b for b in expert_rows if b["result"] in ("WIN", "LOSS")]
@@ -1989,29 +2025,15 @@ def get_best_bets_stats(request: Request):
         model_football = [b for b in model_rows if b["sport"] == "football"]
         model_nhl = [b for b in model_rows if b["sport"] == "nhl"]
 
-        # Model market breakdown (BTTS, Over 2.5, player_points, etc.)
-        model_market_stats = defaultdict(list)
-        for b in model_rows:
-            model_market_stats[b.get("market", "unknown")].append(b)
-        model_market_breakdown = {}
-        for market, bets in model_market_stats.items():
-            s = calc_stats(bets)
-            if s["total"] > 0:
-                model_market_breakdown[market] = s
+        # Model market breakdown (normalized)
+        model_market_breakdown = build_market_breakdown(model_rows)
         # ── 3. Combined stats (expert + model merged) ────────────
         all_rows = expert_rows + model_rows
         all_football = [b for b in all_rows if b["sport"] == "football"]
         all_nhl = [b for b in all_rows if b["sport"] == "nhl"]
 
-        # Combined market breakdown
-        combined_market_stats = defaultdict(list)
-        for b in all_rows:
-            combined_market_stats[b.get("market", "unknown")].append(b)
-        combined_market_breakdown = {}
-        for market, bets in combined_market_stats.items():
-            s = calc_stats(bets)
-            if s["total"] > 0:
-                combined_market_breakdown[market] = s
+        # Combined market breakdown (normalized)
+        combined_market_breakdown = build_market_breakdown(all_rows)
 
         # Combined timeline
         combined_timeline = defaultdict(lambda: {"wins": 0, "losses": 0})

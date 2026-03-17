@@ -325,36 +325,41 @@ function StatsDashboard({ stats, isAdmin }) {
         )
     }
 
-    // Market name display — rename internal algo names to user-friendly labels
-    const marketLabels = {
-        "Victoire domicile": "Victoire domicile",
-        "Victoire extérieur": "Victoire extérieur",
-        "Victoire": "Victoire",
-        "Match nul": "Match nul",
-        "Double Chance 1X": "Double Chance 1X",
-        "Double Chance X2": "Double Chance X2",
-        "BTTS — Les deux équipes marquent": "BTTS",
-        "BTTS": "BTTS",
-        "BTTS Oui": "BTTS",
-        "Over 2.5 buts": "Over 2.5 buts",
-        "Over 1.5 buts": "Over 1.5 buts",
-        "Over 3.5 buts": "Over 3.5 buts",
-        "Double chance 1N": "Double Chance 1N",
-        "player_points_over_0.5": "Over 0.5 Pts (NHL)",
-        "player_assists_over_0.5": "Over 0.5 Assists (NHL)",
-        "player_goals_over_0.5": "Over 0.5 Goals (NHL)",
-        "player_shots_over_2.5": "Over 2.5 Tirs (NHL)",
-        "fun_football": "Football Algo",
-        "fun_nhl": "NHL Algo",
-        "safe_football": "Football Safe",
-        "safe_nhl": "NHL Safe",
-        "Victoire + Over 1.5": "Victoire + Over 1.5",
-    }
+    // Markets are already normalized by the backend — no label map needed.
+    // Detect NHL markets by name suffix "(NHL)" or known NHL-only names.
+    const NHL_MARKETS = new Set(["Points (NHL)", "Buts (NHL)", "Passes (NHL)", "Tirs (NHL)"])
+    const isNhlMarket = (m: string) => NHL_MARKETS.has(m) || m.includes("(NHL)")
 
     const byMarket = stats.by_market || {}
-    const sortedMarkets = Object.entries(byMarket)
-        .filter(([, data]) => data.total >= 3)
-        .sort((a, b) => b[1].total - a[1].total)
+    const allMarkets = Object.entries(byMarket).filter(([, data]) => data.total >= 3)
+    const footballMarkets = allMarkets.filter(([m]) => !isNhlMarket(m)).sort((a, b) => b[1].total - a[1].total)
+    const nhlMarkets = allMarkets.filter(([m]) => isNhlMarket(m)).sort((a, b) => b[1].total - a[1].total)
+
+    function MarketRow({ market, data }) {
+        return (
+            <div className="flex items-center justify-between px-4 py-2.5">
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <span className="text-xs text-foreground font-medium truncate">
+                        {market}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground shrink-0">
+                        {data.total} paris
+                    </span>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                    <span className="text-xs font-bold">{data.win_rate}%</span>
+                    <span className="text-[10px] text-emerald-400">{data.wins}W</span>
+                    <span className="text-[10px] text-red-400">{data.losses}L</span>
+                    <span className={cn(
+                        "text-[10px] font-semibold w-14 text-right",
+                        data.roi_pct >= 0 ? "text-emerald-400" : "text-red-400"
+                    )}>
+                        {data.roi_pct >= 0 ? "+" : ""}{data.roi_pct}%
+                    </span>
+                </div>
+            </div>
+        )
+    }
 
     return (
         <div className="mt-6">
@@ -371,37 +376,38 @@ function StatsDashboard({ stats, isAdmin }) {
                 <StatCard label="🏒 NHL" data={n} color="border-cyan-500/20 bg-cyan-500/5" />
             </div>
 
-            {/* Market breakdown table */}
-            {sortedMarkets.length > 0 && (
-                <div className="mt-4 rounded-xl border border-border/60 bg-card overflow-hidden">
-                    <div className="px-4 py-2.5 border-b border-border/40">
-                        <p className="text-xs font-semibold">Détail par type de pari</p>
-                    </div>
-                    <div className="divide-y divide-border/30">
-                        {sortedMarkets.map(([market, data]) => (
-                            <div key={market} className="flex items-center justify-between px-4 py-2.5">
-                                <div className="flex items-center gap-2 flex-1 min-w-0">
-                                    <span className="text-xs text-foreground font-medium truncate">
-                                        {marketLabels[market] || market}
-                                    </span>
-                                    <span className="text-[10px] text-muted-foreground shrink-0">
-                                        {data.total} paris
-                                    </span>
-                                </div>
-                                <div className="flex items-center gap-3 shrink-0">
-                                    <span className="text-xs font-bold">{data.win_rate}%</span>
-                                    <span className="text-[10px] text-emerald-400">{data.wins}W</span>
-                                    <span className="text-[10px] text-red-400">{data.losses}L</span>
-                                    <span className={cn(
-                                        "text-[10px] font-semibold w-14 text-right",
-                                        data.roi_pct >= 0 ? "text-emerald-400" : "text-red-400"
-                                    )}>
-                                        {data.roi_pct >= 0 ? "+" : ""}{data.roi_pct}%
-                                    </span>
-                                </div>
+            {/* Market breakdown — separated by sport */}
+            {(footballMarkets.length > 0 || nhlMarkets.length > 0) && (
+                <div className="mt-4 space-y-3">
+                    {/* ⚽ Football markets */}
+                    {footballMarkets.length > 0 && (
+                        <div className="rounded-xl border border-border/60 bg-card overflow-hidden">
+                            <div className="px-4 py-2.5 border-b border-border/40 flex items-center gap-2">
+                                <span className="text-sm">⚽</span>
+                                <p className="text-xs font-semibold">Football — par type de pari</p>
                             </div>
-                        ))}
-                    </div>
+                            <div className="divide-y divide-border/30">
+                                {footballMarkets.map(([market, data]) => (
+                                    <MarketRow key={market} market={market} data={data} />
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 🏒 NHL markets */}
+                    {nhlMarkets.length > 0 && (
+                        <div className="rounded-xl border border-border/60 bg-card overflow-hidden">
+                            <div className="px-4 py-2.5 border-b border-border/40 flex items-center gap-2">
+                                <span className="text-sm">🏒</span>
+                                <p className="text-xs font-semibold">NHL — par type de pari</p>
+                            </div>
+                            <div className="divide-y divide-border/30">
+                                {nhlMarkets.map(([market, data]) => (
+                                    <MarketRow key={market} market={market} data={data} />
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -489,21 +495,7 @@ function StatsDashboard({ stats, isAdmin }) {
                                 .filter(([, data]) => data.total >= 3)
                                 .sort(([, a], [, b]) => b.total - a.total)
                                 .map(([market, data]) => (
-                                    <div key={market} className="flex items-center justify-between px-4 py-2.5">
-                                        <div className="flex items-center gap-2 flex-1 min-w-0">
-                                            <span className="text-xs text-foreground font-medium truncate">
-                                                {marketLabels[market] || market}
-                                            </span>
-                                            <span className="text-[10px] text-muted-foreground shrink-0">
-                                                {data.total} paris
-                                            </span>
-                                        </div>
-                                        <div className="flex items-center gap-3 shrink-0">
-                                            <span className="text-xs font-bold">{data.win_rate}%</span>
-                                            <span className="text-[10px] text-emerald-400">{data.wins}W</span>
-                                            <span className="text-[10px] text-red-400">{data.losses}L</span>
-                                        </div>
-                                    </div>
+                                    <MarketRow key={market} market={market} data={data} />
                                 ))}
                         </div>
                     </div>
