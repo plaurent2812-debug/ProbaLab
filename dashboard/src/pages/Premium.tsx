@@ -45,9 +45,11 @@ export default function PremiumPage() {
     const { user, isPremium, isAdmin } = useAuth()
     const navigate = useNavigate()
 
+    const stripeAvailable = STRIPE_PAYMENT_LINK && STRIPE_PAYMENT_LINK !== '#'
+
     const handleUpgrade = () => {
         if (!user) { navigate('/login'); return }
-        // Stripe payment link with client_reference_id for user tracking
+        if (!stripeAvailable) return
         const url = `${STRIPE_PAYMENT_LINK}?client_reference_id=${user.id}`
         window.open(url, '_blank')
     }
@@ -142,15 +144,16 @@ export default function PremiumPage() {
                 <div className="text-center space-y-4">
                     <Button
                         size="lg"
-                        className="bg-amber-500 hover:bg-amber-600 text-white border-0 shadow-xl shadow-amber-500/25 px-8 py-6 text-base font-bold"
+                        className="bg-amber-500 hover:bg-amber-600 text-white border-0 shadow-xl shadow-amber-500/25 px-8 py-6 text-base font-bold disabled:opacity-50 disabled:cursor-not-allowed"
                         onClick={handleUpgrade}
+                        disabled={!stripeAvailable}
                     >
                         <Trophy className="w-5 h-5 mr-2" />
                         Passer Premium
                         <ArrowRight className="w-5 h-5 ml-2" />
                     </Button>
                     <p className="text-xs text-muted-foreground">
-                        Paiement sécurisé via Stripe · Annulation à tout moment
+                        {stripeAvailable ? "Paiement sécurisé via Stripe · Annulation à tout moment" : "Paiement temporairement indisponible"}
                     </p>
                 </div>
             )}

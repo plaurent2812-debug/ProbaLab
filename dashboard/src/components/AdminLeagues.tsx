@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/auth'
 import { Globe, RefreshCw } from 'lucide-react'
-
-const API_BASE = import.meta.env.VITE_API_URL || 'https://web-production-ff663.up.railway.app'
+import { API_ROOT } from '@/lib/api'
 
 const FLAGS: Record<string, string> = {
     France: '🇫🇷', England: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', Spain: '🇪🇸', Italy: '🇮🇹', Germany: '🇩🇪', World: '🏆',
@@ -17,12 +16,13 @@ export default function AdminLeagues() {
         try {
             const { data } = await supabase.auth.getSession()
             const token = data?.session?.access_token
-            const res = await fetch(`${API_BASE}/api/trigger/admin/leagues`, {
+            const res = await fetch(`${API_ROOT}/api/trigger/admin/leagues`, {
                 headers: { 'Authorization': `Bearer ${token}` },
             })
+            if (!res.ok) throw new Error(`HTTP ${res.status}`)
             const json = await res.json()
             setLeagues(json.leagues || [])
-        } catch (e) { console.error(e) }
+        } catch (e) { console.error('Erreur chargement ligues:', e) }
         finally { setLoading(false) }
     }
 

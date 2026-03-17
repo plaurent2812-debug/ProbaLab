@@ -8,8 +8,7 @@ import { useNavigate } from "react-router-dom"
 import { X, Target, Bell, BellOff } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { isPushSupported, getPushPermission, subscribeToPush, isSubscribedToPush } from "@/lib/pushSubscription"
-
-const API_BASE = import.meta.env.VITE_API_URL || ""
+import { API_ROOT } from "@/lib/api"
 const POLL_INTERVAL = 30_000 // 30 seconds
 
 function ExpertPickToast({ toast, onDismiss }) {
@@ -166,7 +165,7 @@ export default function ExpertPickNotifications() {
 
     const checkForNewPick = useCallback(async () => {
         try {
-            const res = await fetch(`${API_BASE}/api/expert-picks/latest`)
+            const res = await fetch(`${API_ROOT}/api/expert-picks/latest`)
             if (!res.ok) return
             const data = await res.json()
             const pick = data?.pick
@@ -192,8 +191,8 @@ export default function ExpertPickNotifications() {
                 }
                 setToasts(prev => [newToast, ...prev].slice(0, 2)) // max 2 toasts
             }
-        } catch {
-            // Silent fail
+        } catch (err) {
+            console.warn("Expert picks polling failed:", err)
         }
     }, [])
 

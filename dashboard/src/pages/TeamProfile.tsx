@@ -22,7 +22,10 @@ function LoginBlur({ children }) {
                     <Lock className="w-5 h-5" />
                 </div>
                 <p className="text-sm font-bold text-foreground">Connectez-vous pour voir l'historique</p>
-                <button className="mt-3 px-4 py-1.5 text-xs font-semibold bg-primary text-primary-foreground rounded-full hover:bg-primary/90 transition-colors">
+                <button
+                    onClick={() => window.location.href = '/login'}
+                    className="mt-3 px-4 py-1.5 text-xs font-semibold bg-primary text-primary-foreground rounded-full hover:bg-primary/90 transition-colors"
+                >
                     Se connecter
                 </button>
             </div>
@@ -66,7 +69,10 @@ export default function TeamProfile() {
         setLoading(true)
         Promise.all([
             fetchTeamHistory(name),
-            fetchTeamRoster(name).catch(() => ({ roster: [] }))
+            fetchTeamRoster(name).catch(() => {
+                console.warn("Impossible de charger l'effectif")
+                return { roster: [] }
+            })
         ])
             .then(([historyData, rosterData]) => {
                 setData(historyData)
@@ -119,7 +125,7 @@ export default function TeamProfile() {
                 <div>
                     <h1 className="text-3xl font-black tracking-tight">{data.team_name}</h1>
                     <p className="text-sm text-muted-foreground">
-                        Saison {import.meta.env.VITE_API_SEASON || "2025-2026"}
+                        Saison {import.meta.env.VITE_API_SEASON || "2024-2025"}
                     </p>
                 </div>
             </div>

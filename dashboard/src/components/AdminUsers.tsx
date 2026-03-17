@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/auth'
 import { Users, Crown, Shield, User, Trash2, Search, RefreshCw, ChevronDown } from 'lucide-react'
-
-const API_BASE = import.meta.env.VITE_API_URL || 'https://web-production-ff663.up.railway.app'
+import { API_ROOT } from '@/lib/api'
 
 const ROLE_CONFIG = {
     admin: { label: 'Admin', color: 'text-red-400 bg-red-500/15 border-red-500/30', icon: Shield },
@@ -30,7 +29,7 @@ export default function AdminUsers() {
         setLoading(true)
         try {
             const headers = await getAuthHeaders()
-            const res = await fetch(`${API_BASE}/api/trigger/admin/users`, { headers })
+            const res = await fetch(`${API_ROOT}/api/trigger/admin/users`, { headers })
             if (!res.ok) throw new Error(`HTTP ${res.status}`)
             const data = await res.json()
             setUsers(data.users || [])
@@ -47,7 +46,7 @@ export default function AdminUsers() {
         if (!window.confirm(`Changer le rôle en "${newRole}" ?`)) return
         try {
             const headers = await getAuthHeaders()
-            const res = await fetch(`${API_BASE}/api/trigger/admin/users/${userId}/role`, {
+            const res = await fetch(`${API_ROOT}/api/trigger/admin/users/${userId}/role`, {
                 method: 'PUT',
                 headers,
                 body: JSON.stringify({ role: newRole }),
@@ -64,7 +63,7 @@ export default function AdminUsers() {
         if (!window.confirm(`⚠️ Supprimer définitivement ${email || userId} ?\n\nCette action supprime le compte de Supabase Auth ET le profil. C'est irréversible.`)) return
         try {
             const headers = await getAuthHeaders()
-            const res = await fetch(`${API_BASE}/api/trigger/admin/users/${userId}`, {
+            const res = await fetch(`${API_ROOT}/api/trigger/admin/users/${userId}`, {
                 method: 'DELETE',
                 headers,
             })

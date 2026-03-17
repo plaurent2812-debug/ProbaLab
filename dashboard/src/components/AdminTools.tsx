@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '@/lib/auth'
 import { Wrench, Trash2, Zap, CheckCircle, AlertCircle, Loader2 } from 'lucide-react'
-
-const API_BASE = import.meta.env.VITE_API_URL || 'https://web-production-ff663.up.railway.app'
+import { API_ROOT } from '@/lib/api'
 
 export default function AdminTools() {
     const [testFixtureId, setTestFixtureId] = useState('')
@@ -12,13 +11,18 @@ export default function AdminTools() {
     const [cacheLoading, setCacheLoading] = useState(false)
 
     const runTestPrediction = async () => {
-        if (!testFixtureId.trim()) return
+        const id = testFixtureId.trim()
+        if (!id) return
+        if (!/^\d+$/.test(id)) {
+            setTestResult({ ok: false, data: { error: "Le Fixture ID doit être numérique (ex: 1208736)" } })
+            return
+        }
         setTestLoading(true)
         setTestResult(null)
         try {
             const { data } = await supabase.auth.getSession()
             const token = data?.session?.access_token
-            const res = await fetch(`${API_BASE}/api/trigger/analyze-fixture`, {
+            const res = await fetch(`${API_ROOT}/api/trigger/analyze-fixture`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ fixture_id: testFixtureId.trim() }),
@@ -127,7 +131,7 @@ export default function AdminTools() {
                 </h2>
                 <div className="grid md:grid-cols-2 gap-3">
                     {[
-                        { label: 'Backend API', value: API_BASE },
+                        { label: 'Backend API', value: API_ROOT },
                         { label: 'Frontend', value: window.location.origin },
                         { label: 'Modèle IA', value: 'Gemini 2.5 Flash' },
                         { label: 'Base de données', value: 'Supabase (PostgreSQL)' },

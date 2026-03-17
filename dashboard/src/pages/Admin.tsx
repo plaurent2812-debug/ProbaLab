@@ -38,7 +38,12 @@ function AdminDashboard() {
 
     useEffect(() => {
         refreshStatus()
-        const interval = setInterval(refreshStatus, 3000)
+        const interval = setInterval(() => {
+            // Pause polling when tab is not visible to save bandwidth
+            if (document.visibilityState === 'visible') {
+                refreshStatus()
+            }
+        }, 3000)
         return () => clearInterval(interval)
     }, [])
 

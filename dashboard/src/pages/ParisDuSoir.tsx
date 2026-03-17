@@ -9,15 +9,14 @@ import {
 import { cn } from "@/lib/utils"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/lib/auth"
-
-const API_BASE = import.meta.env.VITE_API_URL || ""
+import { API_ROOT } from "@/lib/api"
 
 // ── API helpers ───────────────────────────────────────────────
 async function fetchBestBets(date, sport = null) {
     const params = new URLSearchParams({ date })
     if (sport) params.set("sport", sport)
     try {
-        const res = await fetch(`${API_BASE}/api/best-bets?${params}`)
+        const res = await fetch(`${API_ROOT}/api/best-bets?${params}`)
         if (!res.ok) return null
         return res.json()
     } catch { return null }
@@ -25,14 +24,14 @@ async function fetchBestBets(date, sport = null) {
 
 async function fetchBestBetsStats() {
     try {
-        const res = await fetch(`${API_BASE}/api/best-bets/stats`)
+        const res = await fetch(`${API_ROOT}/api/best-bets/stats`)
         if (!res.ok) return null
         return res.json()
     } catch { return null }
 }
 
 async function updateBetResult(betId, result, notes = "") {
-    const res = await fetch(`${API_BASE}/api/best-bets/${betId}/result`, {
+    const res = await fetch(`${API_ROOT}/api/best-bets/${betId}/result`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ result, notes }),
@@ -41,7 +40,7 @@ async function updateBetResult(betId, result, notes = "") {
 }
 
 async function saveBet(bet, sport, date) {
-    const res = await fetch(`${API_BASE}/api/best-bets/save`, {
+    const res = await fetch(`${API_ROOT}/api/best-bets/save`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...bet, sport, date }),
@@ -53,7 +52,7 @@ async function fetchExpertPicks(date, sport = null) {
     const params = new URLSearchParams({ date })
     if (sport && sport !== "both") params.set("sport", sport)
     try {
-        const res = await fetch(`${API_BASE}/api/expert-picks?${params}`)
+        const res = await fetch(`${API_ROOT}/api/expert-picks?${params}`)
         if (!res.ok) return []
         const data = await res.json()
         return data.picks || []
@@ -62,7 +61,7 @@ async function fetchExpertPicks(date, sport = null) {
 
 async function deleteExpertPick(id) {
     try {
-        const res = await fetch(`${API_BASE}/api/expert-picks/${id}`, { method: "DELETE" })
+        const res = await fetch(`${API_ROOT}/api/expert-picks/${id}`, { method: "DELETE" })
         return res.ok
     } catch { return false }
 }
@@ -289,9 +288,8 @@ function BetCard({ bet, sport, date, isAdmin, onResultUpdate }) {
     )
 }
 
-// ── Stats Dashboard (Admin only) ────────────────────────────
+// ── Stats Dashboard ──────────────────────────────────────────
 function StatsDashboard({ stats, isAdmin }) {
-    if (!isAdmin) return null
     if (!stats || stats.error) return null
 
     const { global: g, football: f, nhl: n } = stats
@@ -363,7 +361,6 @@ function StatsDashboard({ stats, isAdmin }) {
             <div className="flex items-center gap-2 mb-4">
                 <BarChart3 className="w-4 h-4 text-primary" />
                 <h2 className="text-sm font-bold">Performance ProbaLab</h2>
-                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-primary/15 text-primary">Admin</span>
                 <span className="text-[10px] text-muted-foreground ml-1">({g.total} paris résolus)</span>
             </div>
 
@@ -544,7 +541,7 @@ function ExpertPickCard({ pick, isAdmin = false, onDelete }) {
                     }))
                 }
             }
-        } catch { }
+        } catch { /* malformed expert_note JSON — fallback to simple pick */ }
     }
 
     // If no selections at all, create one from the pick itself
@@ -796,10 +793,10 @@ export default function ParisDuSoir() {
         if (historyDateTo) params.set("date_to", historyDateTo)
         const sportParam = sportFilter === "both" ? "" : sportFilter
         if (sportParam) params.set("sport", sportParam)
-        fetch(`${API_BASE}/api/best-bets/history?${params}`)
+        fetch(`${API_ROOT}/api/best-bets/history?${params}`)
             .then(r => r.json())
             .then(setHistory)
-            .catch(() => { })
+            .catch(() => console.warn("Impossible de charger l'historique des paris"))
             .finally(() => setHistoryLoading(false))
     }, [showHistory, sportFilter, canAccess, historyDateFrom, historyDateTo])
 
@@ -814,17 +811,22 @@ export default function ParisDuSoir() {
     const filteredHistoryStats = useMemo(() => {
         const resolved = filteredHistory.filter(p => p.result === "WIN" || p.result === "LOSS")
         let pl = 0
+        let oddsEstimated = 0
         for (const r of resolved) {
-            if (r.result === "WIN") pl += (parseFloat(r.odds || 1.85) - 1)
+            const odds = r.odds ? parseFloat(r.odds) : null
+            if (r.result === "WIN") pl += ((odds || 1.85) - 1)
             else pl -= 1
+            if (!odds) oddsEstimated++
         }
+        const wins = resolved.filter(r => r.result === "WIN").length
         return {
             total: filteredHistory.length,
             resolved: resolved.length,
-            wins: resolved.filter(r => r.result === "WIN").length,
-            losses: resolved.filter(r => r.result === "LOSS").length,
+            wins,
+            losses: resolved.length - wins,
             total_pl: Math.round(pl * 100) / 100,
-            win_rate: resolved.length > 0 ? Math.round(resolved.filter(r => r.result === "WIN").length / resolved.length * 100) : 0,
+            win_rate: resolved.length > 0 ? Math.round(wins / resolved.length * 100) : 0,
+            odds_estimated: oddsEstimated,
         }
     }, [filteredHistory])
 
@@ -879,13 +881,13 @@ export default function ParisDuSoir() {
     async function resolveBet(id, result) {
         if (!id) return
         try {
-            await fetch(`${API_BASE}/api/best-bets/${id}/result`, {
+            await fetch(`${API_ROOT}/api/best-bets/${id}/result`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ result }),
             })
             setRefreshKey(k => k + 1)
-        } catch { }
+        } catch (e) { console.warn("Erreur résolution pari:", e) }
     }
 
     return (
@@ -1085,6 +1087,26 @@ export default function ParisDuSoir() {
                             {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-12 w-full rounded-lg" />)}
                         </div>
                     ) : filteredHistory.length > 0 ? (
+                        <HistoryTable filteredHistory={filteredHistory} filteredHistoryStats={filteredHistoryStats} />
+                    ) : (
+                        <div className="text-center py-12 text-xs text-muted-foreground border border-dashed border-border/50 rounded-xl">
+                            Aucun historique disponible.
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+    )
+}
+
+/* ── Paginated History Table ──────────────────────────────────── */
+function HistoryTable({ filteredHistory, filteredHistoryStats }) {
+    const PAGE_SIZE = 30
+    const [page, setPage] = useState(0)
+    const totalPages = Math.ceil(filteredHistory.length / PAGE_SIZE)
+    const pageItems = filteredHistory.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+
+    return (
                         <>
                             {/* Summary header */}
                             <div className="flex items-center justify-between px-3 py-2.5 rounded-xl border border-border/50 bg-card">
@@ -1112,7 +1134,7 @@ export default function ParisDuSoir() {
                             {/* Picks table */}
                             <div className="rounded-xl border border-border/50 bg-card overflow-hidden">
                                 <div className="divide-y divide-border/30">
-                                    {filteredHistory.map((pick) => {
+                                    {pageItems.map((pick) => {
                                         const isWin = pick.result === "WIN"
                                         const isLoss = pick.result === "LOSS"
                                         const isPending = pick.result === "PENDING"
@@ -1171,14 +1193,29 @@ export default function ParisDuSoir() {
                                     })}
                                 </div>
                             </div>
+
+                            {/* Pagination */}
+                            {totalPages > 1 && (
+                                <div className="flex items-center justify-between px-1 pt-2">
+                                    <button
+                                        onClick={() => setPage(p => Math.max(0, p - 1))}
+                                        disabled={page === 0}
+                                        className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-muted/50 hover:bg-muted text-muted-foreground disabled:opacity-30 transition-colors"
+                                    >
+                                        ← Précédent
+                                    </button>
+                                    <span className="text-[10px] text-muted-foreground">
+                                        Page {page + 1} / {totalPages}
+                                    </span>
+                                    <button
+                                        onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+                                        disabled={page >= totalPages - 1}
+                                        className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-muted/50 hover:bg-muted text-muted-foreground disabled:opacity-30 transition-colors"
+                                    >
+                                        Suivant →
+                                    </button>
+                                </div>
+                            )}
                         </>
-                    ) : (
-                        <div className="text-center py-12 text-xs text-muted-foreground border border-dashed border-border/50 rounded-xl">
-                            Aucun historique disponible.
-                        </div>
-                    )}
-                </div>
-            )}
-        </div>
     )
 }

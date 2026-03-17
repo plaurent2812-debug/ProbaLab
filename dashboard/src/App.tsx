@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, NavLink, useNavigate, useLocation } from "react-router-dom"
 import { lazy, Suspense, useState, useEffect, Component } from "react"
-import { Zap, Trophy, Shield, User, Star, Radio, LayoutGrid, Target } from "lucide-react"
+import { Zap, Trophy, Shield, User, LayoutGrid, Target } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { AuthProvider, useAuth } from "@/lib/auth"
 import { ThemeProvider } from "@/components/theme-provider"
@@ -73,8 +73,12 @@ const ProfilePage = lazy(() => import("@/pages/Profile"))
 const WatchlistPage = lazy(() => import("@/pages/WatchlistPage"))
 const ParisDuSoirPage = lazy(() => import("@/pages/ParisDuSoir"))
 const UpdatePasswordPage = lazy(() => import("@/pages/UpdatePassword"))
+const CGUPage = lazy(() => import("@/pages/CGU"))
+const ConfidentialitePage = lazy(() => import("@/pages/Confidentialite"))
 import GoalNotifications from "@/components/GoalNotifications"
 import ExpertPickNotifications from "@/components/ExpertPickNotifications"
+import Toaster from "@/components/Toaster"
+import OfflineBanner from "@/components/OfflineBanner"
 
 
 function PageLoader() {
@@ -231,8 +235,8 @@ function BottomNav() {
     ]
     : [
       { to: "/", label: "Tous", icon: LayoutGrid, exact: true },
-      { to: "/football", label: "Direct", icon: FootballIcon },
-      { to: "/watchlist", label: "Favoris", icon: Star },
+      { to: "/football", label: "Football", icon: FootballIcon },
+      { to: "/nhl", label: "NHL", icon: NHLIcon },
       { to: "/premium", label: "Premium", icon: Trophy },
     ]
 
@@ -272,8 +276,8 @@ function Footer() {
             Analyses statistiques à titre informatif. Pas un conseil en paris. 18+
           </p>
           <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
-            <a href="#" className="hover:text-foreground transition-colors">CGU</a>
-            <a href="#" className="hover:text-foreground transition-colors">Confidentialité</a>
+            <NavLink to="/cgu" className="hover:text-foreground transition-colors">CGU</NavLink>
+            <NavLink to="/confidentialite" className="hover:text-foreground transition-colors">Confidentialité</NavLink>
           </div>
         </div>
       </div>
@@ -289,6 +293,26 @@ function AdminGuard({ children }) {
       <div className="flex flex-col items-center justify-center py-32 text-center">
         <Shield className="w-12 h-12 text-muted-foreground/30 mb-4" />
         <p className="text-muted-foreground font-medium">Accès réservé aux administrateurs</p>
+      </div>
+    )
+  }
+  return children
+}
+
+// ── Premium Guard ─────────────────────────────────────────────
+function PremiumGuard({ children }) {
+  const { hasAccess } = useAuth()
+  if (!hasAccess('premium')) {
+    return (
+      <div className="flex flex-col items-center justify-center py-32 text-center">
+        <Trophy className="w-12 h-12 text-amber-500/30 mb-4" />
+        <p className="text-muted-foreground font-medium mb-4">Accès réservé aux abonnés Premium</p>
+        <NavLink
+          to="/premium"
+          className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-bold text-sm transition-colors"
+        >
+          Découvrir Premium
+        </NavLink>
       </div>
     )
   }
@@ -320,6 +344,7 @@ function AppContent() {
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground has-bottom-nav">
       <Header />
+      <OfflineBanner />
 
       <main className="flex-1 max-w-[1200px] mx-auto w-full">
         <Suspense fallback={<PageLoader />}>
@@ -344,8 +369,10 @@ function AppContent() {
               <Route path="/admin" element={<AdminGuard><AdminPage /></AdminGuard>} />
               <Route path="/profile" element={<Protected><ProfilePage /></Protected>} />
               <Route path="/watchlist" element={<WatchlistPage />} />
-              <Route path="/paris-du-soir" element={<ParisDuSoirPage />} />
+              <Route path="/paris-du-soir" element={<PremiumGuard><ParisDuSoirPage /></PremiumGuard>} />
               <Route path="/update-password" element={<UpdatePasswordPage />} />
+              <Route path="/cgu" element={<CGUPage />} />
+              <Route path="/confidentialite" element={<ConfidentialitePage />} />
             </Routes>
           </div>
         </Suspense>
@@ -355,6 +382,7 @@ function AppContent() {
       <BottomNav />
       <GoalNotifications />
       <ExpertPickNotifications />
+      <Toaster />
     </div>
   )
 }

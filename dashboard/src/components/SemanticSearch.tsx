@@ -3,8 +3,7 @@ import { Search, X, Sparkles, ArrowRight, Loader2 } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import { cn } from "@/lib/utils"
 
-const API_ROOT = import.meta.env.VITE_API_URL || ''
-const API_BASE = API_ROOT.endsWith('/api') ? API_ROOT : (API_ROOT ? `${API_ROOT}/api` : '/api')
+import { API_BASE } from "@/lib/api"
 
 export default function SemanticSearch() {
   const [open, setOpen] = useState(false)
@@ -77,8 +76,8 @@ export default function SemanticSearch() {
     navigate(`/football/match/${fixtureId}`)
   }
 
-  const hasPredictions = results?.predictions?.length > 0
-  const hasLearnings = results?.learnings?.length > 0
+  const hasPredictions = (results?.predictions?.length ?? 0) > 0
+  const hasLearnings = (results?.learnings?.length ?? 0) > 0
   const hasResults = hasPredictions || hasLearnings
 
   return (

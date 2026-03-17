@@ -109,7 +109,7 @@ export default function GoalNotifications() {
                         const events = match.events_json || []
                         const latestGoal = [...events]
                             .reverse()
-                            .find(e => e.player && e.type !== "Card")
+                            .find(e => e.player && e.type === "Goal")
 
                         const newToast = {
                             id: ++toastIdRef.current,
@@ -148,7 +148,7 @@ export default function GoalNotifications() {
                         away: match.away_goals ?? 0
                     }
                 }
-            } catch { }
+            } catch { /* score init — non-blocking */ }
         }
         init()
 

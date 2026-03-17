@@ -929,12 +929,13 @@ def get_best_bets(
                     for market_name, bookmaker_odds, model_proba in markets:
                         if model_proba < 30:
                             continue
-                        # Use real odds if available, else estimate
+                        # Use real odds if available, else estimate from model probability
                         if bookmaker_odds and bookmaker_odds > 1.0:
                             odds_val = float(bookmaker_odds)
                             odds_source = "real"
                         else:
-                            odds_val = round((1 / (model_proba / 100)) * 0.95, 2) if model_proba > 0 else 0
+                            # Only estimate odds for probabilities >= 1% to avoid absurd values
+                            odds_val = round((1 / (model_proba / 100)) * 0.95, 2) if model_proba >= 1 else 0
                             odds_source = "estimated"
 
                         if odds_val < 1.05:
@@ -996,13 +997,17 @@ def get_best_bets(
                     goal_markets = [c for c in real_cands if c["market"] in (
                         "BTTS Oui", "Over 1.5 buts", "Over 2.5 buts")]
 
+                    # Positive correlation factor for outcome+goal combos (e.g. "Team wins" + "BTTS")
+                    # Teams that win tend to score, creating slight positive correlation vs independence
+                    COMBO_CORRELATION_FACTOR = 1.08
+
                     for om in outcome_markets:
                         for gm in goal_markets:
                             combo_odds = round(om["odds"] * gm["odds"], 2)
                             if SAFE_MIN <= combo_odds <= SAFE_MAX:
                                 # Combined proba ≈ P(A) × P(B) × correlation factor
                                 combo_proba = round(
-                                    (om["proba_model"] / 100) * (gm["proba_model"] / 100) * 1.08 * 100, 1
+                                    (om["proba_model"] / 100) * (gm["proba_model"] / 100) * COMBO_CORRELATION_FACTOR * 100, 1
                                 )
                                 combo_ev = round((combo_proba / 100) * combo_odds - 1, 3)
                                 safe_options.append({
@@ -1878,13 +1883,25 @@ def get_best_bets_stats(request: Request):
             total = wins + losses
             win_rate = round(wins / total * 100, 1) if total else 0
             roi = 0
+            odds_estimated = 0
             for b in resolved:
+                odds_val = b.get("odds")
+                if not odds_val:
+                    odds_val = 1.85
+                    odds_estimated += 1
+                else:
+                    odds_val = float(odds_val)
                 if b["result"] == "WIN":
-                    roi += (float(b.get("odds") or 1.85) - 1)
+                    roi += (odds_val - 1)
                 else:
                     roi -= 1
             roi_pct = round(roi / total * 100, 1) if total else 0
-            return {"wins": wins, "losses": losses, "voids": voids, "total": total, "win_rate": win_rate, "roi_pct": roi_pct}
+            result = {"wins": wins, "losses": losses, "voids": voids, "total": total, "win_rate": win_rate, "roi_pct": roi_pct}
+            if odds_estimated > 0:
+                result["odds_estimated_count"] = odds_estimated
+            if total > 0 and total < 10:
+                result["sample_warning"] = f"Basé sur seulement {total} paris résolus"
+            return result
 
         # ── 1. Expert picks stats (Paris de l'Expert) ─────────────
         expert_resp = (
@@ -3036,7 +3053,9 @@ def get_performance(days: int = Query(30, description="Rolling window in days"))
             "accuracy_score": _pct(correct_score, total_score),
             "avg_confidence": round(total_conf / total_with_pred, 1) if total_with_pred else 0,
             "value_bets": value_bets_count,
+            # Brier score for 1X2 (3 outcomes): range [0, 2], normalized to [0, 1] where 0=perfect, 0.5=random
             "brier_score_1x2": round(brier_sum / total_with_pred, 3) if total_with_pred else 0,
+            "brier_score_1x2_normalized": round(brier_sum / total_with_pred / 2, 3) if total_with_pred else 0,
             "daily_stats": sorted(daily.values(), key=lambda x: x["date"]),
         }
 

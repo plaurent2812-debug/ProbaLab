@@ -1,7 +1,9 @@
 import { supabase } from '@/lib/auth'
 
-const API_ROOT = import.meta.env.VITE_API_URL || ''
-const API_BASE = API_ROOT.endsWith('/api') ? API_ROOT : (API_ROOT ? `${API_ROOT}/api` : '/api')
+export const API_ROOT = import.meta.env.VITE_API_URL || ''
+export const API_BASE = API_ROOT.endsWith('/api') ? API_ROOT : (API_ROOT ? `${API_ROOT}/api` : '/api')
+// NHL router uses /nhl prefix (no /api), so we use API_ROOT directly
+export const NHL_BASE = API_ROOT
 
 async function getAuthHeaders() {
     const { data: { session } } = await supabase.auth.getSession()
@@ -11,6 +13,13 @@ async function getAuthHeaders() {
 
 const cache = {}
 const CACHE_TTL = 60 * 1000 // 60 seconds
+
+/** Clear all cached API responses (call on logout) */
+export function clearApiCache() {
+    for (const key of Object.keys(cache)) {
+        delete cache[key]
+    }
+}
 
 export async function fetchPredictions(date, skipCache = false) {
     const params = date ? `?date=${date}` : ''
@@ -50,7 +59,7 @@ export async function fetchPerformance(days = 30) {
 }
 
 export async function fetchNHLPerformance(days = 30) {
-    const url = `${import.meta.env.VITE_API_URL || ''}/nhl/performance?days=${days}`
+    const url = `${NHL_BASE}/nhl/performance?days=${days}`
     if (cache[url] && Date.now() - cache[url].timestamp < CACHE_TTL) {
         return cache[url].data
     }
@@ -119,14 +128,14 @@ export async function fetchNews() {
 }
 
 export async function fetchNHLMatchTopPlayers(fixtureId) {
-    const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/nhl/match/${fixtureId}/top_players`)
+    const res = await fetch(`${NHL_BASE}/nhl/match/${fixtureId}/top_players`)
     if (!res.ok) return null
     return res.json()
 }
 
 export async function fetchNHLMetaAnalysis(date) {
     const params = date ? `?date=${date}` : ''
-    const url = `${import.meta.env.VITE_API_URL || ''}/nhl/meta_analysis${params}`
+    const url = `${NHL_BASE}/nhl/meta_analysis${params}`
     if (cache[url] && Date.now() - cache[url].timestamp < CACHE_TTL * 5) {
         return cache[url].data
     }

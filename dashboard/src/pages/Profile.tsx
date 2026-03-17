@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
-import { User, Mail, Shield, Calendar, LogOut, CreditCard } from "lucide-react"
+import { User, Mail, Shield, Calendar, LogOut, CreditCard, KeyRound } from "lucide-react"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
 
@@ -89,6 +89,24 @@ export default function ProfilePage() {
                             </div>
                         </div>
                     </div>
+                </CardContent>
+            </Card>
+
+            {/* Account Security */}
+            <Card className="border-border/50">
+                <CardContent className="pt-6">
+                    <button
+                        onClick={() => navigate("/update-password")}
+                        className="flex items-center gap-3 w-full p-3 rounded-lg hover:bg-accent/30 border border-border/30 transition-colors text-left"
+                    >
+                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                            <KeyRound className="w-4 h-4 text-primary" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium">Changer le mot de passe</p>
+                            <p className="text-xs text-muted-foreground">Mettre à jour votre mot de passe</p>
+                        </div>
+                    </button>
                 </CardContent>
             </Card>
 

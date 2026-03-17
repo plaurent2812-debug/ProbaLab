@@ -138,8 +138,8 @@ def send_push_to_all(title: str, body: str, url: str = "/paris-du-soir") -> int:
     for endpoint in stale_endpoints:
         try:
             supabase.table("push_subscriptions").delete().eq("endpoint", endpoint).execute()
-        except:
-            pass
+        except Exception as e:
+            logger.warning("Failed to cleanup stale endpoint %s: %s", endpoint[:50], e)
 
     logger.info("Push sent to %d/%d subscribers (%d stale removed)", sent, len(subs), len(stale_endpoints))
     return sent

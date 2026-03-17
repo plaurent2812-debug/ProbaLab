@@ -6,11 +6,9 @@ import {
     ArrowRight, Newspaper, TrendingUp, CheckCircle2, XCircle
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { fetchPredictions, fetchNews } from "@/lib/api"
+import { fetchPredictions, fetchNews, API_ROOT } from "@/lib/api"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth, supabase } from "@/lib/auth"
-
-const API_BASE = import.meta.env.VITE_API_URL || ""
 
 /* ── Live Alert Banner ────────────────────────────────────────── */
 function LiveAlertBanner({ alert }) {
@@ -195,12 +193,15 @@ export default function HomePage() {
         Promise.all([fetchFB, fetchNHL]).finally(() => setLoading(false))
 
         // Fetch bet stats (ROI, streak, etc.)
-        fetch(`${API_BASE}/api/best-bets/stats`)
+        fetch(`${API_ROOT}/api/best-bets/stats`)
             .then(r => r.json())
             .then(setBetStats)
-            .catch(() => { })
+            .catch(() => console.warn("Impossible de charger les stats de paris"))
 
-        fetchNews().then(r => setNews(r.news || [])).catch(() => { }).finally(() => setNewsLoading(false))
+        fetchNews()
+            .then(r => setNews(r.news || []))
+            .catch(() => console.warn("Impossible de charger les actualités"))
+            .finally(() => setNewsLoading(false))
 
         // Live alert
         const thirtyMinsAgo = new Date(Date.now() - 30 * 60000).toISOString()
@@ -480,8 +481,8 @@ export default function HomePage() {
                             <Activity className="w-6 h-6 text-muted-foreground/40 animate-pulse" />
                         </div>
                         <p className="font-bold text-foreground mb-1">Analyse en cours...</p>
-                        <p className="max-w-[200px] leading-relaxed mx-auto opacity-70">
-                            Notre algorithme scanne les derniers coefficients d'Efficacité. Revenez d'ici quelques minutes.
+                        <p className="max-w-[220px] leading-relaxed mx-auto opacity-70">
+                            Le pipeline tourne à 06h et 08h30. Les spots VIP apparaîtront ici dès qu'ils seront détectés.
                         </p>
                     </div>
                 )}

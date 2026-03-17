@@ -117,6 +117,7 @@ export default function PerformancePage() {
     const [sport, setSport] = useState("football") // 'football' | 'nhl'
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
+    const [retryKey, setRetryKey] = useState(0)
 
     useEffect(() => {
         setLoading(true)
@@ -133,7 +134,7 @@ export default function PerformancePage() {
                 })
                 .finally(() => setLoading(false))
         })
-    }, [jours, sport])
+    }, [jours, sport, retryKey])
 
     if (loading) {
         return (
@@ -154,7 +155,7 @@ export default function PerformancePage() {
                     <p className="text-muted-foreground">{error}</p>
                 </div>
                 <button
-                    onClick={() => setJours(jours)}
+                    onClick={() => { setError(null); setRetryKey(k => k + 1) }}
                     className="px-4 py-2 bg-secondary rounded-md text-sm font-medium hover:bg-secondary/80"
                 >
                     Réessayer
@@ -263,13 +264,19 @@ export default function PerformancePage() {
                                 <Activity className="w-5 h-5" />
                             </div>
                             <div>
-                                <p className="text-2xl font-black tabular-nums">{data.brier_score_1x2?.toFixed(3) || "—"}</p>
+                                <p className="text-2xl font-black tabular-nums">
+                                    {data.brier_score_1x2_normalized != null
+                                        ? data.brier_score_1x2_normalized.toFixed(3)
+                                        : data.brier_score_1x2?.toFixed(3) || "—"}
+                                </p>
                                 <div className="flex items-center gap-1">
                                     <p className="text-[11px] text-muted-foreground font-medium">Calibration</p>
                                     <div className="group relative">
                                         <Info className="w-3 h-3 text-muted-foreground cursor-help" />
-                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-card border border-border rounded-lg shadow-xl text-[10px] text-muted-foreground w-48 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                                            <strong className="text-foreground">Brier Score</strong> : mesure la qualité des probabilités. Plus c'est proche de 0, mieux c'est. &lt;0.25 = bon.
+                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-card border border-border rounded-lg shadow-xl text-[10px] text-muted-foreground w-52 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                                            <strong className="text-foreground">Brier Score normalisé</strong> — qualité des probabilités sur une échelle 0→1.
+                                            <br /><span className="text-emerald-400">0 = parfait</span> · 0.25 = hasard · <span className="text-red-400">0.5 = mauvais</span>.
+                                            <br />Moins c'est bas, mieux c'est.
                                         </div>
                                     </div>
                                 </div>

@@ -629,14 +629,6 @@
   transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* ── Glass effect ──────────────────────────────────────────── */
-.glass {
-  background: hsl(var(--card) / 0.7);
-  backdrop-filter: blur(16px) saturate(180%);
-  -webkit-backdrop-filter: blur(16px) saturate(180%);
-  border: 1px solid hsl(var(--border) / 0.6);
-}
-
 /* ── Glow effects ──────────────────────────────────────────── */
 .glow-primary {
   box-shadow: 0 0 24px hsl(var(--primary) / 0.15),
@@ -654,13 +646,6 @@
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-}
-
-/* ── Premium blur overlay ──────────────────────────────────── */
-.premium-blur {
-  filter: blur(5px);
-  user-select: none;
-  pointer-events: none;
 }
 
 /* ── Disclaimer footer ─────────────────────────────────────── */

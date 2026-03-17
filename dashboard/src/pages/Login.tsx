@@ -5,8 +5,7 @@ import { useAuth } from "@/lib/auth"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-
-const API_BASE = import.meta.env.VITE_API_URL || ""
+import { API_ROOT } from "@/lib/api"
 
 function InputField({ label, type = "text", value, onChange, placeholder, icon: Icon }) {
     const [show, setShow] = useState(false)
@@ -102,19 +101,19 @@ function RegisterForm() {
     const handleRegister = async (e) => {
         e.preventDefault()
         setError("")
-        if (password !== confirm) { setError("Les mots de passe ne correspondent pas"); return }
         if (password.length < 6) { setError("Le mot de passe doit faire au moins 6 caractères"); return }
+        if (password !== confirm) { setError("Les mots de passe ne correspondent pas"); return }
         setLoading(true)
         try {
             await signUp(email, password)
             // Send welcome email
             try {
-                await fetch(`${API_BASE}/api/resend/welcome`, {
+                await fetch(`${API_ROOT}/api/resend/welcome`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ email }),
                 })
-            } catch (_) { }
+            } catch (e) { console.warn("Welcome email failed:", e) }
             setSuccess(true)
         } catch (err) {
             setError(err.message || "Erreur lors de l'inscription")
@@ -139,8 +138,18 @@ function RegisterForm() {
     return (
         <form onSubmit={handleRegister} className="space-y-4">
             <InputField label="Email" type="email" value={email} onChange={setEmail} placeholder="vous@exemple.fr" icon={Mail} />
-            <InputField label="Mot de passe" type="password" value={password} onChange={setPassword} placeholder="Min. 6 caractères" icon={Lock} />
-            <InputField label="Confirmer le mot de passe" type="password" value={confirm} onChange={setConfirm} placeholder="••••••••" icon={Lock} />
+            <div>
+                <InputField label="Mot de passe" type="password" value={password} onChange={setPassword} placeholder="Min. 6 caractères" icon={Lock} />
+                {password.length > 0 && password.length < 6 && (
+                    <p className="text-[10px] text-amber-500 mt-1 ml-1">{6 - password.length} caractère{6 - password.length > 1 ? "s" : ""} restant{6 - password.length > 1 ? "s" : ""}</p>
+                )}
+            </div>
+            <div>
+                <InputField label="Confirmer le mot de passe" type="password" value={confirm} onChange={setConfirm} placeholder="••••••••" icon={Lock} />
+                {confirm.length > 0 && password !== confirm && (
+                    <p className="text-[10px] text-red-400 mt-1 ml-1">Les mots de passe ne correspondent pas</p>
+                )}
+            </div>
             {error && <p className="text-sm text-red-500 bg-red-500/10 px-3 py-2 rounded-lg">{error}</p>}
             <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? "Création..." : "Créer mon compte"}

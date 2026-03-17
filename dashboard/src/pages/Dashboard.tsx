@@ -67,7 +67,7 @@ function FootballMetaAnalysisCard({ date }) {
                     setAnalysis(data.analysis)
                 }
             })
-            .catch(() => { })
+            .catch(() => console.warn("Impossible de charger la méta-analyse football"))
             .finally(() => setLoading(false))
     }, [date])
 
@@ -348,7 +348,7 @@ function MatchRow({ match, isStarred, onToggleStar }) {
 
     return (
         <div
-            className={cn("fs-match-row", isLowConfidence && "opacity-45")}
+            className={cn("fs-match-row", isLowConfidence && "opacity-60")}
             onClick={() => navigate(`/football/match/${match.id}`)}
         >
             {/* Time / Status */}

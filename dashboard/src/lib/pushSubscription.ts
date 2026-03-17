@@ -8,7 +8,7 @@
  * 4. Sending subscription to backend
  */
 
-const API_BASE = import.meta.env.VITE_API_URL || ""
+const API_BASE = import.meta.env.VITE_API_URL || "" // matches API_ROOT from api.js
 // VAPID public key — safe to hardcode (not a secret, it's the public half of the keypair)
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY || "BFmgOQVXmIvGAxwFsY5GnwwXakVDRDiGchyecsL1aauh9Oh6Y3sFL5TC2JfYCCXDb1PnA6ZqeCeOQ6N9R2A5LCY"
 

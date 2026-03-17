@@ -8,6 +8,7 @@ import { supabase } from "@/lib/auth"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Flame } from "lucide-react"
+import { toast } from "@/lib/toast"
 
 /* ── Mini Match Row (FlashScore-style) ─────────────────────── */
 function MiniMatchRow({ match, isStarred, onToggleStar, sport = "football" }) {
@@ -163,7 +164,10 @@ export default function WatchlistPage() {
         })
 
         const footPromise = Promise.all(
-            days.map(day => fetchPredictions(day).then(r => r.matches || []).catch(() => []))
+            days.map(day => fetchPredictions(day).then(r => r.matches || []).catch(() => {
+                toast.error("Erreur de chargement des matchs football")
+                return []
+            }))
         ).then(results => results.flat())
 
         const start = new Date(); start.setHours(0, 0, 0, 0)
@@ -173,7 +177,10 @@ export default function WatchlistPage() {
             .lte('date', end.toISOString())
             .order('date', { ascending: true })
             .then(({ data }) => data || [])
-            .catch(() => [])
+            .catch(() => {
+                toast.error("Erreur de chargement des matchs NHL")
+                return []
+            })
 
         Promise.all([footPromise, nhlPromise]).then(([foot, nhl]) => {
             foot.sort((a, b) => new Date(a.date) - new Date(b.date))
@@ -251,7 +258,7 @@ export default function WatchlistPage() {
                         {allTeams.map(team => (
                             <button key={team}
                                 className="w-full text-left text-xs px-3 py-1.5 hover:bg-accent/60 border-b border-border/20 last:border-0 transition-colors"
-                                onClick={() => { toggleTeam(team); setTeamSearch("") }}
+                                onClick={() => { toggleTeam(team); setTeamSearch(""); toast.success(`${team} ajoutée aux favoris`) }}
                             >
                                 + {team}
                             </button>

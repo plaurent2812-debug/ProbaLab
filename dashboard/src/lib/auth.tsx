@@ -1,8 +1,8 @@
 import { useState, createContext, useContext, useEffect } from 'react'
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "https://yskpqdnidxojoclmqcxn.supabase.co"
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlza3BxZG5pZHhvam9jbG1xY3huIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA2MTk4MTEsImV4cCI6MjA4NjE5NTgxMX0.8n3OW6Gq4DY9qd5FQURVbtrbwwEo3BhxRMNLumu5Dsk"
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 // Fail gracefully if env vars are missing to avoid white page
 let supabase
@@ -118,6 +118,11 @@ export const AuthProvider = ({ children }) => {
     }
 
     const signOut = async () => {
+        // Clear API cache on logout to prevent data leaking between users
+        try {
+            const { clearApiCache } = await import('@/lib/api')
+            clearApiCache()
+        } catch { /* api module may not expose clearApiCache yet */ }
         await supabase.auth.signOut()
     }
 

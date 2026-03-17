@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/auth'
 import { BarChart3, Users, Zap, Trophy, TrendingUp, Activity, RefreshCw, Globe } from 'lucide-react'
-
-const API_BASE = import.meta.env.VITE_API_URL || 'https://web-production-ff663.up.railway.app'
+import { API_ROOT } from '@/lib/api'
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
     const { data } = await supabase.auth.getSession()
     const token = data?.session?.access_token
+    if (!token) console.warn("Admin request without auth token — may be rejected")
     return { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) }
 }
 
@@ -20,8 +20,8 @@ export default function AdminOverview() {
         const headers = await getAuthHeaders()
         try {
             const [statsRes, quotaRes] = await Promise.all([
-                fetch(`${API_BASE}/api/trigger/admin/stats`, { headers }),
-                fetch(`${API_BASE}/api/trigger/admin/api-quota`, { headers }),
+                fetch(`${API_ROOT}/api/trigger/admin/stats`, { headers }),
+                fetch(`${API_ROOT}/api/trigger/admin/api-quota`, { headers }),
             ])
             setStats(await statsRes.json())
             setQuota(await quotaRes.json())

@@ -537,10 +537,12 @@ export default function NHLMatchDetailPage() {
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="relative">
-                                <div className="premium-blur select-none pointer-events-none">
-                                    <p className="text-sm text-foreground/80 leading-relaxed">
-                                        Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
-                                    </p>
+                                <div className="select-none pointer-events-none space-y-2">
+                                    <div className="h-3 bg-muted/40 rounded w-full" />
+                                    <div className="h-3 bg-muted/40 rounded w-11/12" />
+                                    <div className="h-3 bg-muted/40 rounded w-4/5" />
+                                    <div className="h-3 bg-muted/40 rounded w-full" />
+                                    <div className="h-3 bg-muted/40 rounded w-3/4" />
                                 </div>
                                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-card/60 backdrop-blur-[2px] rounded-b-xl">
                                     <Lock className="w-6 h-6 text-amber-500 mb-2" />

@@ -665,7 +665,7 @@ export default function MatchDetailPage() {
             <PremiumSection title="Buteurs probables" icon={Users}>
                 {scorers.length > 0 ? (
                     <div className="space-y-2">
-                        {scorers.slice(0, 2).map((s, i) => {
+                        {scorers.slice(0, 3).map((s, i) => {
                             const regress = s.xg_regression || 1.0;
                             const broken = s.synergy_broken || false;
 
@@ -710,6 +710,11 @@ export default function MatchDetailPage() {
                                 </div>
                             )
                         })}
+                        {scorers.length > 3 && (
+                            <p className="text-[10px] text-muted-foreground text-center pt-1">
+                                et {scorers.length - 3} autre{scorers.length - 3 > 1 ? "s" : ""} buteur{scorers.length - 3 > 1 ? "s" : ""} probable{scorers.length - 3 > 1 ? "s" : ""}
+                            </p>
+                        )}
                     </div>
                 ) : (
                     <p className="text-sm text-muted-foreground text-center py-2">Données non disponibles</p>

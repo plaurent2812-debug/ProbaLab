@@ -6,6 +6,7 @@ import { ChevronDown, ChevronUp, Star, Flame, Brain, Sparkles } from "lucide-rea
 import { cn } from "@/lib/utils"
 import { supabase } from "@/lib/auth"
 import { Skeleton } from "@/components/ui/skeleton"
+import { toast } from "@/lib/toast"
 import { useWatchlist } from "@/lib/useWatchlist"
 import { fetchNHLMetaAnalysis } from "@/lib/api"
 
@@ -64,7 +65,7 @@ function MetaAnalysisCard({ date }) {
                     setAnalysis(data.analysis)
                 }
             })
-            .catch(() => { })
+            .catch(() => console.warn("Impossible de charger la méta-analyse NHL"))
             .finally(() => setLoading(false))
     }, [date])
 
@@ -209,9 +210,9 @@ function NHLMatchRow({ match, isStarred, onToggleStar }) {
     const hasScore = isFinished || isLive
 
     const periodLabel = {
-        "1P": "1P", "2P": "2P", "3P": "3P",
-        "OT": "OT", "SO": "SO", "LIVE": "LIVE",
-    }[match.status] || "Live"
+        "1P": "1ère", "2P": "2ème", "3P": "3ème",
+        "OT": "Prol.", "SO": "TaB", "LIVE": "Live",
+    }[match.status] || (isLive ? "Live" : match.status)
 
     const conf = match.confidence_score
     const isHot = conf >= 7 && !isFinished
@@ -226,9 +227,11 @@ function NHLMatchRow({ match, isStarred, onToggleStar }) {
     if (!isFinished && (homeWinProba || awayWinProba || probaOver55 != null)) {
         const parts = []
         if (homeWinProba && awayWinProba) {
+            // Extract short team name: last word, or full name if single word
+            const shortName = (name) => { const parts = (name || "").split(' '); return parts.length > 1 ? parts.pop() : name || "?" }
             const fav = homeWinProba >= awayWinProba
-                ? `${match.home_team?.split(' ').pop()} ${Math.round(homeWinProba * 100)}%`
-                : `${match.away_team?.split(' ').pop()} ${Math.round(awayWinProba * 100)}%`
+                ? `${shortName(match.home_team)} ${Math.round(homeWinProba * 100)}%`
+                : `${shortName(match.away_team)} ${Math.round(awayWinProba * 100)}%`
             parts.push(fav)
         }
         if (probaOver55 != null) {
@@ -395,7 +398,10 @@ export default function NHLPage({ date, setDate }) {
                     setMatches(data || [])
                 }
             })
-            .catch(console.error)
+            .catch(err => {
+                console.error(err)
+                if (showLoading) toast.error("Impossible de charger les matchs NHL")
+            })
             .finally(() => { if (showLoading) setLoading(false) })
     }, [date])
 
