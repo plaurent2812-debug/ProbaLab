@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom"
 import { format, addDays, subDays } from "date-fns"
 import { fr } from "date-fns/locale"
 import {
-    Flame, Trophy, ChevronDown, ChevronUp, Star,
+    Trophy, ChevronDown, ChevronUp, Star,
     Activity, Target, BrainCircuit, Brain, Sparkles
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -417,16 +417,19 @@ function MatchRow({ match, isStarred, onToggleStar }) {
                         {/* Match Style Tags */}
                         {(() => {
                             const probaOver25 = pred?.proba_over_25 ?? pred?.proba_over_2_5
-                            if (probaOver25 != null && probaOver25 >= 50) {
+                            if (probaOver25 != null && probaOver25 >= 55) {
                                 return (
-                                    <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-orange-500/15 text-orange-500 flex items-center gap-1">
-                                        <Flame className="w-2.5 h-2.5" />
-                                        Offensif
+                                    <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-orange-500/15 text-orange-500 whitespace-nowrap">
+                                        🔥 Offensif
                                     </span>
                                 )
                             }
                             if (probaOver25 != null && probaOver25 <= 35) {
-                                return null
+                                return (
+                                    <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-slate-500/20 text-slate-400 whitespace-nowrap">
+                                        🛡️ Défensif
+                                    </span>
+                                )
                             }
                             return null
                         })()}
