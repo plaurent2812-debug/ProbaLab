@@ -10,12 +10,14 @@ import { API_ROOT } from "@/lib/api"
 function InputField({ label, type = "text", value, onChange, placeholder, icon: Icon }) {
     const [show, setShow] = useState(false)
     const isPassword = type === "password"
+    const fieldId = label.toLowerCase().replace(/\s+/g, '-')
     return (
         <div className="space-y-1.5">
-            <label className="text-sm font-medium text-foreground">{label}</label>
+            <label htmlFor={fieldId} className="text-sm font-medium text-foreground">{label}</label>
             <div className="relative">
                 {Icon && <Icon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />}
                 <input
+                    id={fieldId}
                     type={isPassword && show ? "text" : type}
                     value={value}
                     onChange={e => onChange(e.target.value)}

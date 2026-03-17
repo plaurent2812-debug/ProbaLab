@@ -29,6 +29,8 @@ export default function Toaster() {
                 return (
                     <div
                         key={t.id}
+                        role="alert"
+                        aria-live="polite"
                         className={cn(
                             "flex items-center gap-2.5 px-4 py-3 rounded-xl border shadow-xl backdrop-blur-sm pointer-events-auto",
                             "animate-in slide-in-from-bottom-2 fade-in duration-200",

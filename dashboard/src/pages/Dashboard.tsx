@@ -349,7 +349,10 @@ function MatchRow({ match, isStarred, onToggleStar }) {
     return (
         <div
             className={cn("fs-match-row", isLowConfidence && "opacity-60")}
+            role="button"
+            tabIndex={0}
             onClick={() => navigate(`/football/match/${match.id}`)}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/football/match/${match.id}`) } }}
         >
             {/* Time / Status */}
             <div className="fs-match-time">
@@ -523,11 +526,13 @@ export default function FootballPage({ date, setDate, selectedLeague, setSelecte
             .catch(console.error)
             .finally(() => setLoading(false))
 
-        // Auto-refresh every 30s for live matches (skip cache)
+        // Auto-refresh every 30s for live matches (skip cache, only when tab visible)
         const interval = setInterval(() => {
-            fetchPredictions(date, true)
-                .then(r => setMatches(r.matches || []))
-                .catch(console.error)
+            if (document.visibilityState === 'visible') {
+                fetchPredictions(date, true)
+                    .then(r => setMatches(r.matches || []))
+                    .catch(console.error)
+            }
         }, 30_000)
 
         return () => clearInterval(interval)

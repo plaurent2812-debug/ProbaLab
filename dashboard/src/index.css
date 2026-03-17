@@ -26,7 +26,7 @@
   --secondary-foreground: 221 83% 30%;
 
   --muted: 214 60% 94%;
-  --muted-foreground: 215 25% 45%;
+  --muted-foreground: 215 20% 40%;
 
   --accent: 214 80% 92%;
   --accent-foreground: 221 83% 30%;
@@ -72,7 +72,7 @@
   --secondary-foreground: 210 40% 90%;
 
   --muted: 222 47% 13%;
-  --muted-foreground: 215 20% 55%;
+  --muted-foreground: 215 15% 65%;
 
   --accent: 222 47% 16%;
   --accent-foreground: 210 40% 90%;
@@ -222,7 +222,7 @@
 }
 
 .fs-date-item .date-day {
-  font-size: 0.65rem;
+  font-size: 0.75rem;
   font-weight: 500;
   opacity: 0.7;
   margin-bottom: 1px;
@@ -255,7 +255,7 @@
 }
 
 .fs-league-country {
-  font-size: 0.65rem;
+  font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
   color: hsl(var(--muted-foreground));
@@ -509,7 +509,7 @@
   align-items: center;
   justify-content: center;
   gap: 2px;
-  font-size: 0.6rem;
+  font-size: 0.625rem;
   font-weight: 600;
   color: hsl(var(--muted-foreground));
   cursor: pointer;
@@ -556,13 +556,12 @@
 
 /* ── Star button (compact) ─────────────────────────────────── */
 .fs-star-btn {
-  flex-shrink: 0;
-  width: 28px;
-  height: 28px;
+  width: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
+  border-radius: 8px;
   cursor: pointer;
   transition: background 0.12s ease;
   background: transparent;
@@ -670,4 +669,25 @@
 .match-card:hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 16px hsl(var(--primary) / 0.08);
+}
+
+/* ── Focus visible for keyboard navigation ────────────────── */
+.fs-date-item:focus-visible,
+.fs-match-row:focus-visible,
+.fs-star-btn:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ── Respect reduced motion preference ────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

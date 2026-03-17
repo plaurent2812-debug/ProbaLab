@@ -102,6 +102,9 @@ export default function SemanticSearch() {
       {/* Overlay */}
       {open && (
         <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Recherche sémantique"
           className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm animate-in fade-in duration-150"
           onClick={handleClose}
         >
@@ -119,12 +122,13 @@ export default function SemanticSearch() {
                 value={query}
                 onChange={handleInput}
                 placeholder="Recherche en langage naturel... (ex: derby avec gros enjeu)"
+                aria-label="Recherche en langage naturel"
                 className="flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/60"
               />
               {loading ? (
                 <Loader2 className="w-4 h-4 text-muted-foreground animate-spin shrink-0" />
               ) : query ? (
-                <button onClick={() => { setQuery(""); setResults(null) }} className="text-muted-foreground hover:text-foreground">
+                <button onClick={() => { setQuery(""); setResults(null) }} aria-label="Effacer la recherche" className="text-muted-foreground hover:text-foreground">
                   <X className="w-4 h-4" />
                 </button>
               ) : null}

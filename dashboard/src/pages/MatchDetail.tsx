@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Info } from "lucide-react"
 
 /* ── Probability bar ───────────────────────────────────────── */
@@ -163,8 +164,23 @@ export default function MatchDetailPage() {
     }, [data?.fixture?.date, id])
 
     if (loading) return (
-        <div className="flex items-center justify-center py-32">
-            <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+        <div className="max-w-2xl mx-auto space-y-4 pb-12 px-3 pt-4">
+            <div className="flex items-center justify-between">
+                <Skeleton className="h-8 w-32" />
+                <div className="flex gap-2">
+                    <Skeleton className="h-10 w-10 rounded-full" />
+                    <Skeleton className="h-10 w-10 rounded-full" />
+                </div>
+            </div>
+            <Skeleton className="h-40 w-full rounded-xl" />
+            <Skeleton className="h-24 w-full rounded-xl" />
+            <Skeleton className="h-16 w-full rounded-xl" />
+            <div className="grid grid-cols-3 gap-3">
+                <Skeleton className="h-20 rounded-xl" />
+                <Skeleton className="h-20 rounded-xl" />
+                <Skeleton className="h-20 rounded-xl" />
+            </div>
+            <Skeleton className="h-48 w-full rounded-xl" />
         </div>
     )
 
@@ -214,18 +230,20 @@ export default function MatchDetailPage() {
                     <Button
                         variant="outline"
                         size="icon"
-                        className="h-8 w-8 rounded-full bg-card"
+                        className="h-10 w-10 rounded-full bg-card"
                         disabled={!adjacent.prev}
                         onClick={() => adjacent.prev && navigate(`/football/match/${adjacent.prev}`)}
+                        aria-label="Match précédent"
                     >
                         <ChevronLeft className="w-4 h-4" />
                     </Button>
                     <Button
                         variant="outline"
                         size="icon"
-                        className="h-8 w-8 rounded-full bg-card"
+                        className="h-10 w-10 rounded-full bg-card"
                         disabled={!adjacent.next}
                         onClick={() => adjacent.next && navigate(`/football/match/${adjacent.next}`)}
+                        aria-label="Match suivant"
                     >
                         <ChevronRight className="w-4 h-4" />
                     </Button>

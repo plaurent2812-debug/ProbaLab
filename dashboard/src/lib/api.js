@@ -40,9 +40,15 @@ export async function fetchPredictions(date, skipCache = false) {
 }
 
 export async function fetchPredictionDetail(fixtureId) {
-    const res = await fetch(`${API_BASE}/predictions/${fixtureId}`)
+    const url = `${API_BASE}/predictions/${fixtureId}`
+    if (cache[url] && Date.now() - cache[url].timestamp < CACHE_TTL) {
+        return cache[url].data
+    }
+    const res = await fetch(url)
     if (!res.ok) throw new Error(`API error: ${res.status}`)
-    return res.json()
+    const data = await res.json()
+    cache[url] = { data, timestamp: Date.now() }
+    return data
 }
 
 export async function fetchPerformance(days = 30) {
@@ -72,15 +78,27 @@ export async function fetchNHLPerformance(days = 30) {
 }
 
 export async function fetchTeamHistory(teamName, limit = 60) {
-    const res = await fetch(`${API_BASE}/team/${encodeURIComponent(teamName)}/history?limit=${limit}`)
+    const url = `${API_BASE}/team/${encodeURIComponent(teamName)}/history?limit=${limit}`
+    if (cache[url] && Date.now() - cache[url].timestamp < CACHE_TTL) {
+        return cache[url].data
+    }
+    const res = await fetch(url)
     if (!res.ok) throw new Error(`API error: ${res.status}`)
-    return res.json()
+    const data = await res.json()
+    cache[url] = { data, timestamp: Date.now() }
+    return data
 }
 
 export async function fetchTeamRoster(teamName) {
-    const res = await fetch(`${API_BASE}/team/${encodeURIComponent(teamName)}/roster`)
+    const url = `${API_BASE}/team/${encodeURIComponent(teamName)}/roster`
+    if (cache[url] && Date.now() - cache[url].timestamp < CACHE_TTL) {
+        return cache[url].data
+    }
+    const res = await fetch(url)
     if (!res.ok) throw new Error(`API error: ${res.status}`)
-    return res.json()
+    const data = await res.json()
+    cache[url] = { data, timestamp: Date.now() }
+    return data
 }
 
 export async function triggerPipeline(mode = 'full') {

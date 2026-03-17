@@ -7,6 +7,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/lib/auth"
 import { Lock } from "lucide-react"
 
@@ -84,8 +85,21 @@ export default function TeamProfile() {
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center py-32">
-                <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+            <div className="space-y-6 pb-12 px-3 pt-4">
+                <div className="flex items-center gap-4">
+                    <Skeleton className="h-10 w-10 rounded-lg" />
+                    <div className="space-y-2">
+                        <Skeleton className="h-8 w-48" />
+                        <Skeleton className="h-4 w-32" />
+                    </div>
+                </div>
+                <div className="grid grid-cols-4 gap-3">
+                    <Skeleton className="h-20 rounded-xl" />
+                    <Skeleton className="h-20 rounded-xl" />
+                    <Skeleton className="h-20 rounded-xl" />
+                    <Skeleton className="h-20 rounded-xl" />
+                </div>
+                <Skeleton className="h-64 w-full rounded-xl" />
             </div>
         )
     }

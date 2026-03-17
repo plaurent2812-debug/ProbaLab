@@ -248,36 +248,36 @@ function BetCard({ bet, sport, date, isAdmin, onResultUpdate }) {
                             <button
                                 onClick={handleSave}
                                 disabled={saving}
-                                className="px-2 py-1 rounded text-[10px] font-bold bg-primary/15 text-primary hover:bg-primary/25 transition-colors disabled:opacity-50"
+                                className="px-3 py-1.5 rounded text-[10px] font-bold bg-primary/15 text-primary hover:bg-primary/25 transition-colors disabled:opacity-50"
                             >
                                 {saving ? "..." : "Tracker"}
                             </button>
                         )}
                         {(isTracked || localResult !== "PENDING") && (
-                            <div className="flex gap-1">
+                            <div className="flex gap-2">
                                 <button
                                     onClick={() => handleResult("WIN")}
                                     disabled={updating}
-                                    className="w-7 h-7 rounded flex items-center justify-center bg-emerald-500/15 hover:bg-emerald-500/30 transition-colors text-emerald-400 disabled:opacity-50"
+                                    className="w-10 h-10 rounded flex items-center justify-center bg-emerald-500/15 hover:bg-emerald-500/30 transition-colors text-emerald-400 disabled:opacity-50"
                                     title="WIN"
                                 >
-                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                    <CheckCircle2 className="w-4 h-4" />
                                 </button>
                                 <button
                                     onClick={() => handleResult("LOSS")}
                                     disabled={updating}
-                                    className="w-7 h-7 rounded flex items-center justify-center bg-red-500/15 hover:bg-red-500/30 transition-colors text-red-400 disabled:opacity-50"
+                                    className="w-10 h-10 rounded flex items-center justify-center bg-red-500/15 hover:bg-red-500/30 transition-colors text-red-400 disabled:opacity-50"
                                     title="LOSS"
                                 >
-                                    <XCircle className="w-3.5 h-3.5" />
+                                    <XCircle className="w-4 h-4" />
                                 </button>
                                 <button
                                     onClick={() => handleResult("VOID")}
                                     disabled={updating}
-                                    className="w-7 h-7 rounded flex items-center justify-center bg-slate-500/15 hover:bg-slate-500/30 transition-colors text-slate-400 disabled:opacity-50"
+                                    className="w-10 h-10 rounded flex items-center justify-center bg-slate-500/15 hover:bg-slate-500/30 transition-colors text-slate-400 disabled:opacity-50"
                                     title="NUL/VOID"
                                 >
-                                    <Minus className="w-3.5 h-3.5" />
+                                    <Minus className="w-4 h-4" />
                                 </button>
                             </div>
                         )}

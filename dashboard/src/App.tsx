@@ -190,6 +190,7 @@ function Header() {
             {user ? (
               <NavLink
                 to="/profile"
+                aria-label="Profil"
                 className={({ isActive }) => cn(
                   "p-1.5 rounded transition-colors",
                   isActive ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground hover:bg-accent/60"
@@ -200,6 +201,7 @@ function Header() {
             ) : (
               <NavLink
                 to="/login"
+                aria-label="Connexion"
                 className="px-2.5 py-1 rounded text-xs font-bold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
               >
                 Connexion
@@ -343,10 +345,13 @@ function AppContent() {
 
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground has-bottom-nav">
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-0 focus:left-0 focus:z-[100] focus:bg-primary focus:text-primary-foreground focus:px-4 focus:py-2 focus:text-sm focus:font-bold">
+        Aller au contenu principal
+      </a>
       <Header />
       <OfflineBanner />
 
-      <main className="flex-1 max-w-[1200px] mx-auto w-full">
+      <main id="main-content" className="flex-1 max-w-[1200px] mx-auto w-full">
         <Suspense fallback={<PageLoader />}>
           <div className="animate-fade-in-up">
             <Routes>

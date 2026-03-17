@@ -68,9 +68,10 @@ export default function UpdatePassword() {
                             )}
 
                             <div>
-                                <label className="text-sm font-medium text-muted-foreground mb-1.5 block">Nouveau mot de passe</label>
+                                <label htmlFor="new-password" className="text-sm font-medium text-muted-foreground mb-1.5 block">Nouveau mot de passe</label>
                                 <div className="relative">
                                     <input
+                                        id="new-password"
                                         type={showPassword ? 'text' : 'password'}
                                         value={password}
                                         onChange={e => setPassword(e.target.value)}
@@ -79,6 +80,7 @@ export default function UpdatePassword() {
                                         required
                                     />
                                     <button type="button" onClick={() => setShowPassword(!showPassword)}
+                                        aria-label="Afficher le mot de passe"
                                         className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                                         {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                                     </button>
@@ -86,9 +88,10 @@ export default function UpdatePassword() {
                             </div>
 
                             <div>
-                                <label className="text-sm font-medium text-muted-foreground mb-1.5 block">Confirmer le mot de passe</label>
+                                <label htmlFor="confirm-password" className="text-sm font-medium text-muted-foreground mb-1.5 block">Confirmer le mot de passe</label>
                                 <div className="relative">
                                     <input
+                                        id="confirm-password"
                                         type={showConfirm ? 'text' : 'password'}
                                         value={confirmPassword}
                                         onChange={e => setConfirmPassword(e.target.value)}
@@ -97,6 +100,7 @@ export default function UpdatePassword() {
                                         required
                                     />
                                     <button type="button" onClick={() => setShowConfirm(!showConfirm)}
+                                        aria-label="Afficher le mot de passe"
                                         className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                                         {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                                     </button>
