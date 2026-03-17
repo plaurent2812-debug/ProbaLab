@@ -1904,15 +1904,11 @@ def get_best_bets_stats(request: Request):
             return result
 
         # ── Normalize market names (merge duplicates) ─────────────
+        CATEGORY_MARKETS = {"fun_football", "fun_nhl", "safe_football", "safe_nhl"}
         MARKET_NORMALIZE = {
             # BTTS duplicates
             "BTTS — Les deux équipes marquent": "BTTS",
             "BTTS Oui": "BTTS",
-            # Category meta-tags → skip in breakdown
-            "fun_football": "__skip__",
-            "fun_nhl": "__skip__",
-            "safe_football": "__skip__",
-            "safe_nhl": "__skip__",
             # NHL player markets → clean French names
             "player_points_over_0.5": "Points (NHL)",
             "player_goals_over_0.5": "Buts (NHL)",
@@ -1925,18 +1921,25 @@ def get_best_bets_stats(request: Request):
             # Double Chance variants
             "Double chance 1N": "Double Chance 1N",
             "Double Chance 1X": "Double Chance 1N",
-            # Ambiguous "Victoire"
-            "Victoire": "Victoire (autre)",
         }
 
-        def normalize_market(raw):
+        def normalize_market(raw, bet_label=""):
+            """Normalize market name. For category meta-tags, extract real market from bet_label."""
+            if raw in CATEGORY_MARKETS and bet_label:
+                # Extract actual market from label: "PSG vs Lyon — Victoire domicile"
+                for sep in (" — ", "—"):
+                    if sep in bet_label:
+                        actual = bet_label.split(sep, 1)[1].strip()
+                        return MARKET_NORMALIZE.get(actual, actual)
+                return "unknown"
             return MARKET_NORMALIZE.get(raw, raw)
 
         def build_market_breakdown(rows):
             grouped = defaultdict(list)
             for b in rows:
-                key = normalize_market(b.get("market", "unknown"))
-                if key == "__skip__":
+                label = b.get("bet_label") or b.get("match_label") or ""
+                key = normalize_market(b.get("market", "unknown"), label)
+                if key == "unknown":
                     continue
                 grouped[key].append(b)
             breakdown = {}
@@ -1949,7 +1952,7 @@ def get_best_bets_stats(request: Request):
         # ── 1. Expert picks stats (Paris de l'Expert) ─────────────
         expert_resp = (
             supabase.table("expert_picks")
-            .select("sport, result, date, odds, market")
+            .select("sport, result, date, odds, market, match_label")
             .neq("result", "PENDING")
             .order("date", desc=True)
             .limit(500)
@@ -2013,7 +2016,7 @@ def get_best_bets_stats(request: Request):
         # ── 2. Model predictions stats (best_bets — ProbaLab IA) ──
         model_resp = (
             supabase.table("best_bets")
-            .select("sport, result, date, odds, market")
+            .select("sport, result, date, odds, market, bet_label")
             .neq("result", "PENDING")
             .order("date", desc=True)
             .limit(500)
