@@ -165,15 +165,13 @@ export default function HomePage() {
                 setFbCount(todayMatches.length)
                 setFbLiveCount(todayMatches.filter(m => ["1H", "2H", "HT", "LIVE"].includes(m.status)).length)
 
-                // VIP = today only, high confidence or edge
-                const vip = todayMatches.filter(m => {
+                // VIP = today, not finished, has prediction, sorted by confidence
+                const upcoming = todayMatches.filter(m => {
                     if (["FT", "AET", "PEN"].includes(m.status) || !m.prediction) return false
-                    const c = m.prediction.confidence_score || 0
-                    const sj = m.prediction.stats_json || {}
-                    const edge = m.prediction.kelly_edge || sj.kelly_edge || 0
-                    return c >= 8 || edge >= 4
+                    return (m.prediction.confidence_score || 0) >= 1
                 }).sort((a, b) => (b.prediction?.confidence_score || 0) - (a.prediction?.confidence_score || 0))
-                setVipSpots(vip)
+                // Show top 5 matches by confidence (always show something if matches exist)
+                setVipSpots(upcoming.slice(0, 5))
             })
             .catch(console.error)
 
@@ -445,8 +443,8 @@ export default function HomePage() {
                 <div className="fs-league-header bg-amber-500/5 border-b border-border/50">
                     <ShieldAlert className="w-4 h-4 text-amber-500 shrink-0" />
                     <div>
-                        <div className="fs-league-name font-black">🔥 Spots Premium du Jour</div>
-                        <div className="fs-league-country">Haute confiance & Edge identifié</div>
+                        <div className="fs-league-name font-black">⚡ Matchs du Jour</div>
+                        <div className="fs-league-country">Top matchs analysés par ProbaLab</div>
                     </div>
                     {vipSpots.length > 0 && (
                         <span className="fs-league-count bg-amber-500/20 text-amber-600">{vipSpots.length}</span>
@@ -478,11 +476,11 @@ export default function HomePage() {
                 ) : (
                     <div className="text-center py-8 text-xs text-muted-foreground flex flex-col items-center px-6">
                         <div className="w-12 h-12 rounded-full bg-muted/20 flex items-center justify-center mb-3">
-                            <Activity className="w-6 h-6 text-muted-foreground/40 animate-pulse" />
+                            <Activity className="w-6 h-6 text-muted-foreground/40" />
                         </div>
-                        <p className="font-bold text-foreground mb-1">Analyse en cours...</p>
+                        <p className="font-bold text-foreground mb-1">Pas de match prévu</p>
                         <p className="max-w-[220px] leading-relaxed mx-auto opacity-70">
-                            Le pipeline tourne à 06h et 08h30. Les spots VIP apparaîtront ici dès qu'ils seront détectés.
+                            Aucun match analysé pour aujourd'hui. Consultez la page Football ou NHL pour les prochaines rencontres.
                         </p>
                     </div>
                 )}
