@@ -194,7 +194,6 @@ export default function MatchDetailPage() {
     )
 
     const { fixture, prediction: p } = data
-    const isHot = p?.confidence_score >= 7
     const time = fixture?.date?.slice(11, 16) || "—"
     const dateStr = fixture?.date ? new Date(fixture.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) : ""
 
@@ -263,12 +262,6 @@ export default function MatchDetailPage() {
                                     <BrainCircuit className="w-3 h-3" />
                                     Meta V2
                                 </Badge>
-                            )}
-                            {isHot && (
-                                <div className="flex items-center gap-1">
-                                    <Flame className="w-3.5 h-3.5 text-orange-500 flame-badge" />
-                                    <span className="text-[10px] font-bold text-orange-500">HOT</span>
-                                </div>
                             )}
                             <span className="text-xs text-muted-foreground capitalize">{dateStr} · {time}</span>
                         </div>
@@ -343,24 +336,9 @@ export default function MatchDetailPage() {
                 {/* Pari recommandé + confiance — FREE */}
                 {p && (
                     <CardContent className="p-4 space-y-3">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-xs text-muted-foreground mb-1">Pari recommandé</p>
-                                <p className="text-base font-bold text-primary">{p.recommended_bet || "—"}</p>
-                            </div>
-                            {p.confidence_score != null && (
-                                <div className="text-center">
-                                    <p className="text-xs text-muted-foreground mb-1">Confiance</p>
-                                    <div className={cn(
-                                        "text-2xl font-black tabular-nums",
-                                        p.confidence_score >= 8 ? "text-emerald-600 dark:text-emerald-400" :
-                                            p.confidence_score >= 6 ? "text-amber-600 dark:text-amber-400" :
-                                                "text-foreground"
-                                    )}>
-                                        {p.confidence_score}<span className="text-sm text-muted-foreground font-normal">/10</span>
-                                    </div>
-                                </div>
-                            )}
+                        <div>
+                            <p className="text-xs text-muted-foreground mb-1">Pari recommandé</p>
+                            <p className="text-base font-bold text-primary">{p.recommended_bet || "—"}</p>
                         </div>
                     </CardContent>
                 )}
