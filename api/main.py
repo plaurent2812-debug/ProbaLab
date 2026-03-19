@@ -2985,22 +2985,24 @@ def get_monitoring():
 def get_performance(days: int = Query(0, description="Rolling window in days (0 = all-time)")):
     """Get model performance metrics over the last N days (0 = all-time)."""
     try:
-        # Get finished fixtures with predictions
-        query = (
-            supabase.table("fixtures")
-            .select("id, home_team, away_team, home_goals, away_goals, date, status")
-            .eq("status", "FT")
-        )
-        if days > 0:
-            cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
-            query = query.gte("date", cutoff)
-        finished = (
-            query
-            .order("date")
-            .execute()
-            .data
-            or []
-        )
+        # Get finished fixtures with predictions (paginated for all-time)
+        finished = []
+        offset = 0
+        PAGE = 1000
+        while True:
+            query = (
+                supabase.table("fixtures")
+                .select("id, home_team, away_team, home_goals, away_goals, date, status")
+                .eq("status", "FT")
+            )
+            if days > 0:
+                cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+                query = query.gte("date", cutoff)
+            page = query.order("date").range(offset, offset + PAGE - 1).execute().data or []
+            finished.extend(page)
+            if len(page) < PAGE:
+                break
+            offset += PAGE
 
         fixture_ids = [f["id"] for f in finished]
         if not fixture_ids:
@@ -3014,10 +3016,13 @@ def get_performance(days: int = Query(0, description="Rolling window in days (0 
                 "daily_stats": [],
             }
 
-        predictions = (
-            supabase.table("predictions").select("*").in_("fixture_id", fixture_ids).execute().data
-            or []
-        )
+        # Fetch predictions in chunks (Supabase URL limit on in_())
+        predictions = []
+        CHUNK = 100
+        for i in range(0, len(fixture_ids), CHUNK):
+            chunk = fixture_ids[i : i + CHUNK]
+            page = supabase.table("predictions").select("*").in_("fixture_id", chunk).execute().data or []
+            predictions.extend(page)
 
         pred_by_fixture = {p["fixture_id"]: p for p in predictions}
 
