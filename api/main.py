@@ -107,53 +107,13 @@ def _startup_update_scores():
 
 
 def _scheduled_telegram_tickets():
-    """Called by APScheduler every day at 10h00 Paris — FOOTBALL tickets only.
-
-    NHL predictions aren't available yet (pipeline runs at 16h).
-    """
-    try:
-        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-        from datetime import date
-
-        from src.telegram_bot import send_telegram_message
-        from src.ticket_generator import format_telegram_message, generate_daily_tickets
-
-        print(f"[scheduler] ⚽ Tickets FOOT du jour — {date.today()}")
-
-        safe, fun = generate_daily_tickets()
-        # Only send if we have football picks (NHL not ready yet)
-        has_foot = (safe and safe.get("football")) or (fun and fun.get("football"))
-        if has_foot:
-            message = format_telegram_message(safe, fun)
-            send_telegram_message(message)
-            print("[scheduler] ✅ Tickets foot envoyés sur Telegram.")
-        else:
-            print("[scheduler] ℹ️ Aucun ticket foot généré.")
-    except Exception as e:
-        print(f"[scheduler] Erreur Telegram: {e}")
+    """Disabled — Telegram ticket notifications removed."""
+    pass
 
 
 def _scheduled_nhl_tickets():
-    """Called at 16h30 Paris — NHL tickets (after 16h pipeline) + full recap."""
-    try:
-        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-        from datetime import date
-
-        from src.telegram_bot import send_telegram_message
-        from src.ticket_generator import format_telegram_message, generate_daily_tickets
-
-        print(f"[scheduler] 🏒 Tickets NHL du soir — {date.today()}")
-
-        safe, fun = generate_daily_tickets()
-        has_nhl = (safe and safe.get("nhl")) or (fun and fun.get("nhl"))
-        if has_nhl:
-            message = format_telegram_message(safe, fun)
-            send_telegram_message(message)
-            print("[scheduler] ✅ Tickets NHL envoyés sur Telegram.")
-        else:
-            print("[scheduler] ℹ️ Aucun ticket NHL généré.")
-    except Exception as e:
-        print(f"[scheduler] Erreur Telegram NHL: {e}")
+    """Disabled — Telegram ticket notifications removed."""
+    pass
 
 
 def _scheduled_nhl_pipeline():

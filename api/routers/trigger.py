@@ -25,42 +25,8 @@ TELEGRAM_CHAT_IDS = os.getenv("TELEGRAM_CHAT_IDS", "").split(",")
 
 
 def _send_telegram_alert(home: str, away: str, analysis: str, bet: str, confidence: int) -> bool:
-    """Send a Telegram message to all registered chat IDs."""
-    if not HTTPX_AVAILABLE or not TELEGRAM_BOT_TOKEN:
-        logger.warning("[Telegram] httpx not available or no token")
-        return False
-
-    message = (
-        f"🔥 *ALERTE LIVE — ProbaLab*\n\n"
-        f"⚽ *{home} vs {away}*\n\n"
-        f"{analysis}\n\n"
-        f"💰 *Pari suggéré :* {bet}\n"
-        f"📊 *Confiance :* {confidence}/10"
-    )
-
-    sent = False
-    for chat_id in TELEGRAM_CHAT_IDS:
-        chat_id = chat_id.strip()
-        if not chat_id:
-            continue
-        try:
-            resp = httpx.post(
-                f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
-                json={
-                    "chat_id": chat_id,
-                    "text": message,
-                    "parse_mode": "Markdown",
-                },
-                timeout=10.0,
-            )
-            if resp.status_code == 200:
-                logger.info(f"[Telegram] ✅ Message envoyé à {chat_id}")
-                sent = True
-            else:
-                logger.error(f"[Telegram] Erreur {resp.status_code}: {resp.text}")
-        except Exception as e:
-            logger.error(f"[Telegram] Erreur envoi à {chat_id}: {e}")
-    return sent
+    """Disabled — Telegram alert notifications removed."""
+    return False
 
 
 from fastapi import Depends, Header
@@ -928,25 +894,12 @@ def fetch_lineups():
 
 
 def _send_telegram_message(text: str) -> bool:
-    """Send a raw Telegram message to all registered chat IDs."""
-    if not HTTPX_AVAILABLE or not TELEGRAM_BOT_TOKEN:
-        return False
-    sent = False
-    for chat_id in TELEGRAM_CHAT_IDS:
-        chat_id = chat_id.strip()
-        if not chat_id:
-            continue
-        try:
-            resp = httpx.post(
-                f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
-                json={"chat_id": chat_id, "text": text, "parse_mode": "Markdown"},
-                timeout=10.0,
-            )
-            if resp.status_code == 200:
-                sent = True
-        except Exception as e:
-            logger.error(f"[Telegram] Erreur: {e}")
-    return sent
+    """Disabled — Telegram spam notifications removed.
+
+    Only push notifications for expert picks remain
+    (handled by api/routers/telegram.py + push.py).
+    """
+    return False
 
 
 # ─── 1. Automated Daily Pipeline ────────────────────────────────

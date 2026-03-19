@@ -417,25 +417,6 @@ function MatchRow({ match, isStarred, onToggleStar }) {
                                 VALUE +{match.best_value.edge.toFixed(0)}%
                             </span>
                         )}
-                        {/* Match Style Tags */}
-                        {(() => {
-                            const probaOver25 = pred?.proba_over_25 ?? pred?.proba_over_2_5
-                            if (probaOver25 != null && probaOver25 >= 55) {
-                                return (
-                                    <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-orange-500/15 text-orange-500 whitespace-nowrap">
-                                        🔥 Offensif
-                                    </span>
-                                )
-                            }
-                            if (probaOver25 != null && probaOver25 <= 35) {
-                                return (
-                                    <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-slate-500/20 text-slate-400 whitespace-nowrap">
-                                        🛡️ Défensif
-                                    </span>
-                                )
-                            }
-                            return null
-                        })()}
 
                     </>
                 )}
