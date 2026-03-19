@@ -363,10 +363,10 @@ def _build_football_fun(predictions: list, fixture_map: dict, odds_map: dict) ->
                     "odds": o_cs,
                 })
 
-        # Pick the best option for this match (highest odds with decent proba)
-        # For FUN, we want higher odds (more audacious)
+        # Pick the best option for this match: highest EV (proba × odds)
+        # This favors picks with real edge, not just high odds
         if match_options:
-            match_options.sort(key=lambda m: m["odds"], reverse=True)
+            match_options.sort(key=lambda m: (m["proba"] / 100) * m["odds"], reverse=True)
             best = match_options[0]
             candidates.append({
                 "match": match_label,
@@ -377,26 +377,27 @@ def _build_football_fun(predictions: list, fixture_map: dict, odds_map: dict) ->
                 "sport": "football",
             })
 
-    # Sort by odds descending (we want audacious picks for FUN)
-    candidates.sort(key=lambda x: x["odds"], reverse=True)
+    # Sort by PROBA descending — prioritize picks most likely to hit
+    candidates.sort(key=lambda x: x["proba"], reverse=True)
 
     if len(candidates) < 3:
         return None
 
-    # Select 3-5 picks to hit ~20+ total odds
+    # Select 3-5 picks targeting combined odds ~12-20
+    # Strategy: take highest-proba picks first, stop when odds reach 12+
     picks = []
     running_odds = 1.0
     for c in candidates:
-        if running_odds * c["odds"] > 60:
+        if running_odds * c["odds"] > 40:  # Don't overshoot too much
             continue
         picks.append(c)
         running_odds *= c["odds"]
-        if running_odds >= 15 and len(picks) >= 3:
+        if running_odds >= 12 and len(picks) >= 3:
             break
         if len(picks) >= 5:
             break
 
-    if running_odds < 10 or len(picks) < 3:
+    if running_odds < 5 or len(picks) < 3:
         return None
 
     return {"type": "FUN", "sport": "football", "picks": picks, "total_odds": round(running_odds, 2)}
