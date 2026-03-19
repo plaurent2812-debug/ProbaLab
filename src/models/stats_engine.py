@@ -43,6 +43,7 @@ from src.constants import (
     FORM_WEIGHT_LONG,
     FORM_WEIGHT_SHORT,
     HOME_ELO_ADVANTAGE,
+    HOME_ELO_ADVANTAGE_BY_LEAGUE,
     HOME_XG_BONUS,
     K_FACTOR,
     K_FACTOR_BY_LEAGUE,
@@ -106,20 +107,11 @@ except ImportError:
 def dixon_coles_correction(
     h: int, a: int, lambda_h: float, lambda_a: float, rho: float = DIXON_COLES_RHO
 ) -> float:
-    """Apply the Dixon-Coles correction for low-scoring outcomes.
+    """Compute the Dixon-Coles correction factor for a single (h, a) cell.
 
-    The independent Poisson model under-estimates the correlation between
-    home and away goals for low scores.  Dixon & Coles (1997) introduced
-    a correlation parameter rho that adjusts probabilities for scorelines
-    where both teams score 0 or 1.  With a typical negative rho, 0-0 and
-    1-1 draws become more likely, while 0-1 and 1-0 become less likely.
-
-    Args:
-        h: Home goals.
-        a: Away goals.
-        lambda_h: Expected goals (xG) for the home team.
-        lambda_a: Expected goals (xG) for the away team.
-        rho: Correlation parameter (typically -0.03 to -0.20).
+    Note: This function is kept for unit-testing and external callers.
+    The main ``poisson_grid`` applies the corrections inline (vectorized)
+    for performance.
 
     Returns:
         Multiplicative correction factor (close to 1.0).
@@ -175,8 +167,8 @@ def poisson_grid(
     elif xg_total > 3.5:
         rho = base_rho * 0.7
     else:
-        # Linear interpolation: 1.3 at 2.0 → 1.0 at 2.75 → 0.7 at 3.5
-        scale = 1.3 - 0.4 * (xg_total - 2.0) / 1.5
+        # Linear interpolation: 1.3 at 2.0 → 0.7 at 3.5 (continuous)
+        scale = 1.3 - 0.6 * (xg_total - 2.0) / 1.5
         rho = base_rho * scale
 
     # ── Vectorized Poisson grid (replaces double-loop) ────────
@@ -196,17 +188,22 @@ def poisson_grid(
     if grid_sum > 0:
         grid /= grid_sum
 
-    # ── Draw calibration (per-league) ─────────────────────────────
+    # ── Draw calibration (per-league, iterative) ─────────────────
     # Poisson tends to under-predict draws in tactical leagues (Serie A, CL).
-    # If the predicted draw rate deviates >2% from the league's historical
-    # rate, we apply a gentle diagonal correction (capped at ±10%).
-    # Falls back to global DRAW_FACTOR when league_id is not in the per-league dict.
+    # Iterative correction: each pass applies a capped diagonal scaling,
+    # renormalizes, then checks if the target is reached. 3 passes suffice
+    # because the cap (±15%) is relaxed enough for convergence.
     target_draw = DRAW_FACTOR_BY_LEAGUE.get(league_id, DRAW_FACTOR) if league_id is not None else None
     if target_draw is not None:
-        predicted_draw = float(np.trace(grid))
-        if predicted_draw > 0.01:
+        for _draw_pass in range(3):
+            predicted_draw = float(np.trace(grid))
+            if predicted_draw < 0.01:
+                break
+            error = abs(target_draw - predicted_draw)
+            if error < 0.005:  # Within 0.5% — converged
+                break
             correction = target_draw / predicted_draw
-            correction = max(0.85, min(1.15, correction))  # ±15% max (was ±10%)
+            correction = max(0.85, min(1.15, correction))  # ±15% max per pass
             np.fill_diagonal(grid, np.diag(grid) * correction)
             grid /= grid.sum()  # Renormalise after diagonal shift
 
@@ -251,10 +248,15 @@ def poisson_grid(
     proba_cs_away = float(grid[0, :].sum())  # Home scores 0
     proba_btts_over25 = float(grid[1:, 1:][total_goals[1:, 1:] > 2].sum())
 
+    # Force 1X2 sum == 100 (independent rounding can give 99 or 101)
+    p_home = round(home_win * 100)
+    p_draw = round(draw * 100)
+    p_away = 100 - p_home - p_draw
+
     return {
-        "proba_home": round(home_win * 100),
-        "proba_draw": round(draw * 100),
-        "proba_away": round(away_win * 100),
+        "proba_home": p_home,
+        "proba_draw": p_draw,
+        "proba_away": p_away,
         "proba_btts": round(btts * 100),
         "proba_btts_over25": round(proba_btts_over25 * 100),
         "proba_cs_home": round(proba_cs_home * 100),
@@ -439,12 +441,17 @@ _CUP_TO_DOMESTIC: dict[int, int] = {
 }
 
 
-def _get_domestic_league_id(team_api_id: int) -> int | None:
-    """Look up a team's domestic league from the teams table.
+_DOMESTIC_LEAGUES: set[int] = {39, 61, 62, 78, 135, 140}  # PL, L1, L2, BuLi, Serie A, Liga
 
-    Used for cross-league competitions (Champions League, Europa League,
-    national cups) where teams come from different domestic leagues.
-    Normalises cup league IDs to their domestic equivalent.
+
+def _get_domestic_league_id(team_api_id: int) -> int | None:
+    """Look up a team's domestic league.
+
+    Strategy:
+      1. Check teams.league_id → if it's a known domestic league, return it.
+      2. If it's a cup/European comp, map via _CUP_TO_DOMESTIC.
+      3. If still None (team stored as CL/EL), infer from the team's
+         most-played domestic league in recent fixtures.
 
     Returns:
         The domestic league_id, or None if not found.
@@ -459,11 +466,46 @@ def _get_domestic_league_id(team_api_id: int) -> int | None:
     if not resp.data:
         return None
     lid = resp.data[0].get("league_id")
-    # Normalise: if the stored league is a cup, map to domestic league
+
+    # Direct domestic league
+    if lid in _DOMESTIC_LEAGUES:
+        return lid
+
+    # Known cup → domestic mapping
     if lid in _CUP_TO_DOMESTIC:
         mapped = _CUP_TO_DOMESTIC[lid]
-        return mapped  # None for CL/EL (handled by caller)
-    return lid
+        if mapped is not None:
+            return mapped
+
+    # Fallback: infer from fixtures — find the league where this team
+    # has played the most matches (excluding European comps and cups)
+    try:
+        from src.config import logger
+        team_name_resp = supabase.table("teams").select("name").eq("api_id", team_api_id).limit(1).execute()
+        if not team_name_resp.data:
+            return None
+        team_name = team_name_resp.data[0]["name"]
+
+        recent = (
+            supabase.table("fixtures")
+            .select("league_id")
+            .or_(f"home_team.eq.{team_name},away_team.eq.{team_name}")
+            .not_.in_("league_id", list(CROSS_LEAGUE_IDS))
+            .limit(20)
+            .execute()
+            .data or []
+        )
+        if recent:
+            from collections import Counter
+            league_counts = Counter(f["league_id"] for f in recent if f.get("league_id"))
+            if league_counts:
+                best_lid = league_counts.most_common(1)[0][0]
+                logger.info(f"  ↪ Inferred domestic league for {team_name} (id={team_api_id}): {best_lid}")
+                return best_lid
+    except Exception:
+        pass
+
+    return None
 
 
 def calculate_xg(
@@ -525,8 +567,34 @@ def calculate_xg(
                 away_s = away_league_data["strengths"].get(away_team_id)
                 logger.info(f"  ↪ Forces domestiques {away_team_id}: league {domestic_lid}")
 
-    # If still missing after all lookups, use hardcoded fallback
+    # If still missing after all lookups, use ELO-based xG estimation
+    # instead of flat 1.3/1.1 defaults (which produce undifferentiated probas)
     if not home_s or not away_s:
+        try:
+            elos_resp = supabase.table("team_elo").select("team_api_id, elo_rating").in_(
+                "team_api_id", [home_team_id, away_team_id]
+            ).execute().data or []
+            elo_lookup = {e["team_api_id"]: e["elo_rating"] for e in elos_resp}
+            h_elo = elo_lookup.get(home_team_id, DEFAULT_ELO)
+            a_elo = elo_lookup.get(away_team_id, DEFAULT_ELO)
+
+            # ELO-based xG: use expected score to scale around league average ~1.3 goals
+            avg_goals = 1.30
+            h_exp = elo_expected(h_elo + HOME_ELO_ADVANTAGE, a_elo)
+            a_exp = 1.0 - h_exp
+            # Scale: favorite gets more xG, underdog gets less
+            # h_exp ~0.65 for a 200-ELO advantage → xG ~1.69 vs 0.91
+            xg_h = avg_goals * (h_exp / 0.5) * HOME_XG_BONUS
+            xg_a = avg_goals * (a_exp / 0.5) * (2.0 - HOME_XG_BONUS)
+
+            xg_h = max(XG_FLOOR, min(XG_CEIL, xg_h))
+            xg_a = max(XG_FLOOR, min(XG_CEIL, xg_a))
+
+            logger.info(f"  ↪ ELO-based xG for {home_team_id} vs {away_team_id}: "
+                        f"ELO {h_elo:.0f}-{a_elo:.0f} → xG {xg_h:.2f}-{xg_a:.2f}")
+            return xg_h, xg_a
+        except Exception:
+            pass
         logger.warning(f"  ⚠ xG fallback pour {home_team_id} vs {away_team_id} (données insuffisantes)")
         return XG_FALLBACK_HOME, XG_FALLBACK_AWAY
 
@@ -647,7 +715,8 @@ def get_elo_probs(home_elo: float, away_elo: float, league_id: int | None = None
         Dictionary with keys ``"elo_home"``, ``"elo_draw"``, ``"elo_away"``
         as rounded integer percentages.
     """
-    p_home = elo_expected(home_elo + HOME_ELO_ADVANTAGE, away_elo)
+    home_adv = HOME_ELO_ADVANTAGE_BY_LEAGUE.get(league_id, HOME_ELO_ADVANTAGE) if league_id else HOME_ELO_ADVANTAGE
+    p_home = elo_expected(home_elo + home_adv, away_elo)
     p_away = 1.0 - p_home
 
     # Draw factor: league-calibrated base, decays with ELO gap
@@ -656,7 +725,7 @@ def get_elo_probs(home_elo: float, away_elo: float, league_id: int | None = None
     draw_decay = math.exp(-ELO_DRAW_DECAY_RATE * elo_gap)
     draw_prob = base_draw * draw_decay
     # Ensure draw stays in a reasonable football range
-    # Even the biggest mismatches still draw 15%+ of the time
+    # Even the biggest mismatches still draw ~15% of the time
     # (backtest showed draws under-predicted; raised floor from 0.12 to 0.15)
     draw_prob = max(0.15, min(0.35, draw_prob))
 
@@ -665,10 +734,14 @@ def get_elo_probs(home_elo: float, away_elo: float, league_id: int | None = None
     p_home *= remaining
     p_away *= remaining
 
+    elo_home = round(p_home * 100)
+    elo_draw = round(draw_prob * 100)
+    elo_away = 100 - elo_home - elo_draw  # Force sum == 100
+
     return {
-        "elo_home": round(p_home * 100),
-        "elo_draw": round(draw_prob * 100),
-        "elo_away": round(p_away * 100),
+        "elo_home": elo_home,
+        "elo_draw": elo_draw,
+        "elo_away": elo_away,
     }
 
 
@@ -726,7 +799,8 @@ def update_elo_from_results() -> dict[int, float]:
         ag = fix["away_goals"] or 0
         gd = abs(hg - ag)
 
-        h_elo = elos[hid] + HOME_ELO_ADVANTAGE
+        h_adv = HOME_ELO_ADVANTAGE_BY_LEAGUE.get(fix.get("league_id"), HOME_ELO_ADVANTAGE)
+        h_elo = elos[hid] + h_adv
         a_elo = elos[aid]
 
         h_exp = elo_expected(h_elo, a_elo)
@@ -1842,11 +1916,29 @@ def clamp_probabilities(result: dict[str, Any]) -> dict[str, Any]:
     result["proba_over_25"] = max(PROB_OVER25_FLOOR, min(PROB_OVER25_CEIL, result["proba_over_25"]))
 
     # ── Monotonic over lines: O0.5 ≥ O1.5 ≥ O2.5 ≥ O3.5 ────────
-    result["proba_over_15"] = max(result["proba_over_25"] + 5, result["proba_over_15"])
-    result["proba_over_05"] = max(result["proba_over_15"] + 5, result["proba_over_05"])
-    # O3.5 should be ≤ O2.5
-    result["proba_over_35"] = min(result["proba_over_25"] - 3, result["proba_over_35"])
-    result["proba_over_35"] = max(2, result["proba_over_35"])
+    # Use soft enforcement: preserve values when already monotonic,
+    # only pull up to maintain the chain (no arbitrary +5 gap).
+    o25 = result["proba_over_25"]
+    o15 = result["proba_over_15"]
+    o05 = result["proba_over_05"]
+    o35 = result["proba_over_35"]
+
+    # Enforce chain from bottom up: O3.5 ≤ O2.5 ≤ O1.5 ≤ O0.5
+    o35 = min(o35, o25 - 1)
+    o35 = max(2, o35)
+    o15 = max(o15, o25 + 1)  # O1.5 must be > O2.5
+    o05 = max(o05, o15 + 1)  # O0.5 must be > O1.5
+    o05 = min(99, o05)
+
+    result["proba_over_35"] = o35
+    result["proba_over_15"] = o15
+    result["proba_over_05"] = o05
+
+    # ── Cross-market coherence: BTTS ≤ O0.5 (logical constraint) ──
+    # If both teams score, at least 2 goals → BTTS ≤ Over 1.5 is always true.
+    # More precisely: BTTS implies Over 1.5 (at least 1-1).
+    if result["proba_btts"] > o15:
+        result["proba_btts"] = o15
 
     return result
 
@@ -1990,10 +2082,21 @@ def analyze_match(fixture: dict[str, Any]) -> dict[str, Any]:
     home_base = form_factor_h * rest_h * h2h_h * weather_per_side
     away_base = form_factor_a * rest_a * h2h_a * weather_per_side
 
+    # Guard-fou: cap the total multiplier product to avoid excessive compression.
+    # Without this, cascading penalties (bad form + fatigue + injuries + rain + h2h)
+    # can compress xG by 40%+, producing unrealistically low outputs.
+    MIN_TOTAL_MULTIPLIER = 0.65
+    home_total_mult = home_base * atk_h * def_a
+    away_total_mult = away_base * atk_a * def_h
+    if home_total_mult < MIN_TOTAL_MULTIPLIER:
+        home_total_mult = MIN_TOTAL_MULTIPLIER
+    if away_total_mult < MIN_TOTAL_MULTIPLIER:
+        away_total_mult = MIN_TOTAL_MULTIPLIER
+
     # xG_home = force offensive dom × faiblesse défensive adverse (blessures ext)
-    xg_home_adj = xg_home * home_base * atk_h * def_a
+    xg_home_adj = xg_home * home_total_mult
     # xG_away = force offensive ext × faiblesse défensive dom (blessures dom)
-    xg_away_adj = xg_away * away_base * atk_a * def_h
+    xg_away_adj = xg_away * away_total_mult
 
     # Si l'arbitre siffle beaucoup de pénaltys, léger boost aux buts
     if ref_impact and ref_impact["penalty_bias"] > 1.3:
@@ -2156,10 +2259,15 @@ def analyze_match(fixture: dict[str, Any]) -> dict[str, Any]:
                 "away_congestion_30d": context.get("congestion_away", 4),
                 "home_stakes": stakes_h,
                 "away_stakes": stakes_a,
-                "h2h_home_winrate": h2h_data.get("team_a_wins", 0)
-                / max(h2h_data.get("total_matches", 1), 1)
-                if h2h_data
-                else 0.33,
+                "h2h_home_winrate": (
+                    h2h_data.get("team_a_wins", 0) / max(h2h_data.get("total_matches", 1), 1)
+                    if h2h_data and h2h_data.get("team_a_api_id") == home_id
+                    else (
+                        h2h_data.get("team_b_wins", 0) / max(h2h_data.get("total_matches", 1), 1)
+                        if h2h_data
+                        else 0.33
+                    )
+                ),
                 "h2h_total_matches": h2h_data.get("total_matches", 0) if h2h_data else 0,
                 "home_injury_count": len(injured_h),
                 "away_injury_count": len(injured_a),
@@ -2272,8 +2380,12 @@ def analyze_match(fixture: dict[str, Any]) -> dict[str, Any]:
 
     # ── 9c. European competition draw boost ────────────────────
     # CL/EL matches are higher stakes → more cautious → more draws
+    # Only apply if this league does NOT already have a calibrated draw factor
+    # in DRAW_FACTOR_BY_LEAGUE (which the Poisson draw calibration already uses).
+    # Applying both would double-count the CL/EL draw tendency.
     euro_boost = EURO_COMP_DRAW_BOOST.get(league_id, 0)
-    if euro_boost > 0:
+    has_calibrated_draw = league_id in DRAW_FACTOR_BY_LEAGUE
+    if euro_boost > 0 and not has_calibrated_draw:
         boost_pts = euro_boost * 100
         final_draw = round(final_draw + boost_pts)
         home_share = final_home / max(final_home + final_away, 1)
@@ -2363,8 +2475,9 @@ def analyze_match(fixture: dict[str, Any]) -> dict[str, Any]:
     # B3: Pari recommandé — Priorité à la probabilité la plus élevée (seuil min 55%)
     # Marchés inclus (Over 0.5 exclu car cote quasi nulle)
 
-    dc_1x = poisson_probs.get("proba_dc_1x", 0)
-    dc_x2 = poisson_probs.get("proba_dc_x2", 0)
+    # Use FINAL blended probabilities for bet recommendation (not raw Poisson)
+    dc_1x = final_home + final_draw
+    dc_x2 = final_draw + final_away
     over_15 = poisson_probs["proba_over_15"]
     COMBO_THRESHOLD = 65  # Both legs must clear this to recommend combined bet
 

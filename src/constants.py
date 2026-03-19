@@ -11,7 +11,7 @@ from __future__ import annotations
 #  POISSON / DIXON-COLES
 # ═══════════════════════════════════════════════════════════════════
 
-MAX_GOALS_GRID: int = 7
+MAX_GOALS_GRID: int = 10
 DIXON_COLES_RHO: float = -0.13  # Corrélation Dixon-Coles globale (fallback)
 
 # Rho per-ligue : calibré empiriquement selon le style de jeu et le taux de nuls.
@@ -40,8 +40,23 @@ DIXON_COLES_RHO_BY_LEAGUE: dict[int, float] = {
 # ═══════════════════════════════════════════════════════════════════
 
 K_FACTOR: int = 32  # Valeur par défaut (ligue inconnue)
-HOME_ELO_ADVANTAGE: int = 65
+HOME_ELO_ADVANTAGE: int = 65  # Default (fallback)
 DEFAULT_ELO: int = 1500
+
+# Per-league home advantage (ELO points).
+# Calibrated from historical home win rates:
+#   ~60% home wins → +75 ELO, ~55% → +65, ~52% → +50
+HOME_ELO_ADVANTAGE_BY_LEAGUE: dict[int, int] = {
+    61: 70,   # Ligue 1 — strong home advantage
+    62: 70,   # Ligue 2 — strong home advantage
+    39: 60,   # Premier League — moderate
+    140: 65,  # La Liga — average
+    135: 65,  # Serie A — average
+    78: 50,   # Bundesliga — weakest in top 5 leagues
+    2: 55,    # Champions League — reduced (neutral-ish)
+    3: 55,    # Europa League
+    848: 55,  # Conference League
+}
 ELO_DECAY_RATE: float = 0.001  # Decay ELO temporel (régression vers 1500)
 
 # K-factor dynamique par ligue : compétitions européennes comptent plus,
@@ -143,21 +158,9 @@ EXTREME_TEMP_FACTOR: float = 0.97
 #  BLESSURES
 # ═══════════════════════════════════════════════════════════════════
 
-INJURY_MIN_MINUTES: int = 90
-INJURY_STARTER_SHARE: float = 0.03  # > 3% du temps total
-INJURY_ATTACK_FLOOR: float = 0.70
-INJURY_DEFENSE_CEIL: float = 1.35
-
-# Seuils d'impact attaquant (part des buts de l'équipe)
-ATK_CRITICAL_SHARE: float = 0.30
-ATK_MAJOR_SHARE: float = 0.20
-ATK_SIGNIFICANT_SHARE: float = 0.10
-
-# Seuils d'impact milieu (passes clés / 90)
-MID_CREATOR_KP90: float = 2.0
-MID_SIGNIFICANT_KP90: float = 1.0
-MID_CREATOR_ASSIST_SHARE: float = 0.25
-MID_SIGNIFICANT_ASSIST_SHARE: float = 0.15
+# Injury impact is now computed via VORP model (src/models/injury_vorp.py).
+# Legacy thresholds removed — the VORP model uses continuous ratings
+# with replacement-level baseline (6.5) instead of static thresholds.
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -405,3 +408,31 @@ FEATURE_COLS: list[str] = [
     "away_form_long",
     "form_long_diff",
 ]
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  COHERENCE ASSERTIONS — fail fast if constants are misconfigured
+# ═══════════════════════════════════════════════════════════════════
+
+assert abs(FORM_WEIGHT_SHORT + FORM_WEIGHT_LONG - 1.0) < 1e-9, (
+    f"FORM_WEIGHT_SHORT + FORM_WEIGHT_LONG must equal 1.0, got {FORM_WEIGHT_SHORT + FORM_WEIGHT_LONG}"
+)
+assert abs(WEIGHT_POISSON + WEIGHT_ELO + WEIGHT_MARKET - 1.0) < 1e-9, (
+    f"WEIGHT_POISSON + WEIGHT_ELO + WEIGHT_MARKET must equal 1.0, got {WEIGHT_POISSON + WEIGHT_ELO + WEIGHT_MARKET}"
+)
+assert abs(WEIGHT_POISSON_NO_MARKET + WEIGHT_ELO_NO_MARKET - 1.0) < 1e-9, (
+    f"WEIGHT_POISSON_NO_MARKET + WEIGHT_ELO_NO_MARKET must equal 1.0"
+)
+assert abs(WEIGHT_STATS_VS_ML + WEIGHT_ML - 1.0) < 1e-9, (
+    f"WEIGHT_STATS_VS_ML + WEIGHT_ML must equal 1.0"
+)
+assert abs(WEIGHT_STATS + WEIGHT_AI - 1.0) < 1e-9, (
+    f"WEIGHT_STATS + WEIGHT_AI must equal 1.0"
+)
+assert PROB_1X2_FLOOR > 0, "PROB_1X2_FLOOR must be positive"
+assert PROB_1X2_CEIL < 100, "PROB_1X2_CEIL must be less than 100"
+assert PROB_1X2_FLOOR * 3 <= 100, "3 × PROB_1X2_FLOOR must be ≤ 100 (three outcomes)"
+assert XG_FLOOR > 0, "XG_FLOOR must be positive"
+assert XG_CEIL > XG_FLOOR, "XG_CEIL must be greater than XG_FLOOR"
+assert KELLY_FRACTION > 0 and KELLY_FRACTION <= 1.0, "KELLY_FRACTION must be in (0, 1]"
+assert KELLY_MAX_BET_FRACTION > 0 and KELLY_MAX_BET_FRACTION <= 1.0, "KELLY_MAX_BET_FRACTION must be in (0, 1]"

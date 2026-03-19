@@ -18,6 +18,7 @@ XGBoost excelle sur les interactions, LightGBM sur les catégories,
 LogReg fournit une baseline stable et bien calibrée.
 """
 import base64
+import io
 import math
 import pickle
 from typing import Any
@@ -36,6 +37,13 @@ from sklearn.metrics import (
 )
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.preprocessing import LabelEncoder, StandardScaler
+
+
+def _safe_loads(data: bytes) -> Any:
+    """Deserialize bytes using RestrictedUnpickler from ml_predictor."""
+    from src.models.ml_predictor import RestrictedUnpickler
+    return RestrictedUnpickler(io.BytesIO(data)).load()
+
 
 # ═══════════════════════════════════════════════════════════════════
 #  STACKING ENSEMBLE — TRAINING
@@ -107,18 +115,30 @@ def train_stacking_ensemble(
     oof_probas = _generate_oof_predictions(base_models, X_train, y_train, n_classes)
 
     # Entraîner les base learners sur tout le train set
+    # Class balancing: compute sample weights to correct H/D/A imbalance (~40/25/35)
+    from sklearn.utils.class_weight import compute_sample_weight
+    sample_weight_train = compute_sample_weight(class_weight="balanced", y=y_train)
+
+    # Split a validation set from train for XGBoost early stopping
+    # (using test set for eval_set leaks test distribution info)
+    val_size = max(int(len(X_train) * 0.15), 10)
+    X_tr, X_val = X_train[:-val_size], X_train[-val_size:]
+    y_tr, y_val = y_train[:-val_size], y_train[-val_size:]
+    sw_tr = sample_weight_train[:-val_size]
+
     fitted_base = {}
     for name, model in base_models.items():
         if name == "logreg":
             scaler = StandardScaler()
             X_scaled = scaler.fit_transform(X_train)
-            model.fit(X_scaled, y_train)
+            model.fit(X_scaled, y_train, sample_weight=sample_weight_train)
             fitted_base[name] = {"model": model, "scaler": scaler}
         elif name == "xgboost":
-            model.fit(X_train, y_train, eval_set=[(X_test, y_test)], verbose=False)
+            model.fit(X_tr, y_tr, sample_weight=sw_tr,
+                      eval_set=[(X_val, y_val)], verbose=False)
             fitted_base[name] = {"model": model}
         else:
-            model.fit(X_train, y_train)
+            model.fit(X_train, y_train, sample_weight=sample_weight_train)
             fitted_base[name] = {"model": model}
 
     # ── Couche 2 : Meta-Learner ──────────────────────────────────
@@ -127,7 +147,6 @@ def train_stacking_ensemble(
         max_iter=1000,
         C=1.0,
         solver="lbfgs",
-        multi_class="multinomial" if n_classes > 2 else "auto",
     )
     meta_model.fit(meta_features_train, y_train)
     logger.info(f"  Meta-learner entraîné sur {meta_features_train.shape[1]} meta-features")
@@ -247,7 +266,6 @@ def _build_base_learners(n_classes: int, lgb_tuned_params: dict | None = None) -
         max_iter=1000,
         C=0.5,
         solver="lbfgs",
-        multi_class="multinomial" if n_classes > 2 else "auto",
         random_state=42,
     )
 
@@ -414,7 +432,7 @@ def load_ensemble(model_name: str = "ensemble_1x2") -> bool:
         if not weights_b64:
             return False
 
-        payload = pickle.loads(base64.b64decode(weights_b64))
+        payload = _safe_loads(base64.b64decode(weights_b64))
         # Reconstruct XGBoost model from save_model() bytes if new format
         base_models = payload.get("base_models", {})
         if "xgboost" in base_models:

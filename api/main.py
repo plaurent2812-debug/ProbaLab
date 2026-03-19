@@ -2698,6 +2698,50 @@ def get_predictions(
                 return val
             return stats.get(key, default)
 
+        # Compute value edges (model prob vs bookmaker odds)
+        _market_labels = {
+            "home": "Victoire Domicile", "draw": "Match Nul", "away": "Victoire Extérieur",
+            "over_25": "Plus de 2.5 buts", "under_25": "Moins de 2.5 buts",
+            "btts_yes": "BTTS Oui", "btts_no": "BTTS Non",
+        }
+        _odds_row = odds_by_api_id.get(str(f.get("api_fixture_id"))) or {}
+        _edges = _get_ev_edges(
+            {
+                "proba_home": get_val("proba_home"),
+                "proba_draw": get_val("proba_draw"),
+                "proba_away": get_val("proba_away"),
+                "proba_btts": get_val("proba_btts"),
+                "proba_over_2_5": get_val("proba_over_2_5") or get_val("proba_over_25"),
+            },
+            _odds_row,
+        ) if pred else {}
+        # Best value: highest edge with its odds
+        # Exclude low-quality predictions from value bets:
+        # - Fallback 40-30-30 (stats engine failed)
+        # - Low confidence (< 5) → model is uncertain
+        _conf = get_val("confidence_score", 0) or 0
+        _is_fallback = (
+            pred and get_val("proba_home") == 40
+            and get_val("proba_draw") == 30
+            and get_val("proba_away") == 30
+            and _conf <= 3
+        ) or _conf < 5
+        _best_value = None
+        if _edges and not _is_fallback:
+            _best_key = max(_edges, key=_edges.get)
+            _odds_keys = {
+                "home": "home_win_odds", "draw": "draw_odds", "away": "away_win_odds",
+                "over_25": "over_25_odds", "under_25": "under_25_odds",
+                "btts_yes": "btts_yes_odds", "btts_no": "btts_no_odds",
+            }
+            _best_odds = _odds_row.get(_odds_keys.get(_best_key, ""), None)
+            if _edges[_best_key] >= 5.0:  # MIN_VALUE_EDGE = 5%
+                _best_value = {
+                    "market": _market_labels.get(_best_key, _best_key),
+                    "edge": _edges[_best_key],
+                    "odds": _best_odds,
+                }
+
         matches.append(
             {
                 "id": f["id"],
@@ -2735,16 +2779,9 @@ def get_predictions(
                 if pred
                 else None,
                 "odds": odds_by_api_id.get(str(f.get("api_fixture_id"))),
-                "value_edges": _get_ev_edges(
-                    {
-                        "proba_home": get_val("proba_home"),
-                        "proba_draw": get_val("proba_draw"),
-                        "proba_away": get_val("proba_away"),
-                        "proba_btts": get_val("proba_btts"),
-                        "proba_over_2_5": get_val("proba_over_2_5") or get_val("proba_over_25"),
-                    },
-                    odds_by_api_id.get(str(f.get("api_fixture_id"))) or {}
-                ) if pred else {}
+                "value_edges": _edges,
+                "best_value": _best_value,
+                "is_value_bet": bool(_best_value),
             }
         )
 
@@ -2941,6 +2978,73 @@ def get_prediction_detail(fixture_id: str):
         "odds": odds,
         "value_edges": value_edges,
     }
+
+
+# ── Monitoring cache (CLV + Brier are expensive to compute) ────────
+_monitoring_cache: dict = {}
+_monitoring_cache_ts: float = 0
+
+
+@app.get("/api/monitoring")
+def get_monitoring():
+    """Get model quality monitoring: CLV, Brier, calibration health."""
+    import time as _t
+    global _monitoring_cache, _monitoring_cache_ts
+
+    # Cache 5 minutes
+    if _monitoring_cache and _t.time() - _monitoring_cache_ts < 300:
+        return _monitoring_cache
+
+    try:
+        from src.monitoring.backtest_clv import run as run_clv
+        from src.monitoring.brier_monitor import run as run_brier
+
+        clv_result = {}
+        brier_result = {}
+
+        try:
+            clv_result = run_clv()
+        except Exception as e:
+            clv_result = {"status": "ERROR", "error": str(e)}
+
+        try:
+            brier_result = run_brier()
+        except Exception as e:
+            brier_result = {"status": "ERROR", "error": str(e)}
+
+        health_score = brier_result.get("health_score", 5)
+
+        response = {
+            "clv": {
+                "clv_best_mean": clv_result.get("clv_best_mean", 0),
+                "clv_when_correct": clv_result.get("clv_when_correct", 0),
+                "pct_positive_clv": clv_result.get("pct_positive_clv", 0),
+                "n_matches": clv_result.get("n_matches", 0),
+                "verdict": clv_result.get("verdict", "NO_DATA"),
+                "by_league": clv_result.get("by_league", {}),
+                "daily_clv": clv_result.get("daily_clv", []),
+                "status": clv_result.get("status", "NO_DATA"),
+            },
+            "brier": {
+                "brier_1x2": brier_result.get("brier_1x2", {}).get("brier"),
+                "brier_1x2_grade": brier_result.get("brier_1x2", {}).get("grade"),
+                "ece": brier_result.get("ece", {}).get("ece"),
+                "ece_grade": brier_result.get("ece", {}).get("grade"),
+                "log_loss": brier_result.get("log_loss_1x2", {}).get("log_loss"),
+                "btts": brier_result.get("binary_markets", {}).get("BTTS", {}).get("brier"),
+                "over15": brier_result.get("binary_markets", {}).get("Over 1.5", {}).get("brier"),
+                "over25": brier_result.get("binary_markets", {}).get("Over 2.5", {}).get("brier"),
+                "n_matches": brier_result.get("n_matches", 0),
+                "drift": brier_result.get("drift", {}),
+            },
+            "health_score": health_score,
+        }
+
+        _monitoring_cache = response
+        _monitoring_cache_ts = _t.time()
+        return response
+    except Exception as e:
+        return {"error": str(e), "health_score": 0}
 
 
 @app.get("/api/performance")

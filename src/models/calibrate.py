@@ -34,6 +34,11 @@ MIN_SAMPLES: int = 20  # Seuil bas pour fit_platt_scaling / fit_isotonic_calibra
 # Cache en mémoire des modèles isotonic (évite de refitter à chaque prédiction)
 _isotonic_cache: dict[str, IsotonicRegression | None] = {}
 
+# Cache TTL — auto-invalidate after 1 hour (3600 seconds)
+import time as _time
+_CACHE_TTL_SECONDS: int = 3600
+_cache_created_at: float = _time.monotonic()
+
 
 # ═══════════════════════════════════════════════════════════════════
 #  1. CHARGEMENT DES DONNÉES
@@ -296,6 +301,9 @@ def apply_calibration(raw_prob: int, bet_type: str, league_id: int | None = None
         parametric and robust with moderate data).
       - Otherwise: returns *raw_prob* unchanged.
 
+    Auto-invalidates caches after ``_CACHE_TTL_SECONDS`` to pick up fresh
+    calibration parameters without requiring a process restart.
+
     Args:
         raw_prob: Raw probability in percent (0–100).
         bet_type: Bet category key (e.g. ``"1x2_home"``, ``"btts"``).
@@ -304,6 +312,12 @@ def apply_calibration(raw_prob: int, bet_type: str, league_id: int | None = None
     Returns:
         Calibrated probability in percent (0–100).
     """
+    # Auto-invalidate stale caches
+    global _cache_created_at
+    if _time.monotonic() - _cache_created_at > _CACHE_TTL_SECONDS:
+        clear_cache()
+        _cache_created_at = _time.monotonic()
+
     calib: dict | None = _get_calibration_params(bet_type, league_id)
     if not calib:
         return raw_prob
@@ -324,6 +338,12 @@ def apply_calibration(raw_prob: int, bet_type: str, league_id: int | None = None
 
     a: float = calib.get("platt_a", 1.0)
     b: float = calib.get("platt_b", 0.0)
+
+    # Sanity check: reject degenerate Platt parameters
+    # (e.g. a=50 maps all inputs to sigmoid ≈ 1.0, destroying differentiation)
+    if abs(a) > 20 or abs(b) > 20:
+        return raw_prob
+
     x = raw_prob / 100.0
     z: float = a * x + b
     z = max(-10, min(10, z))  # Protection overflow

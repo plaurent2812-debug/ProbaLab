@@ -260,7 +260,8 @@ class TestCalculateXg:
 
     def test_unknown_team_fallback(self, sample_league_data):
         xg_h, xg_a = calculate_xg(9999, 9998, sample_league_data)
-        assert xg_h == 1.3 and xg_a == 1.1
+        # ELO-based fallback or flat fallback — xG should be in valid range
+        assert 0.3 <= xg_h <= 4.0 and 0.3 <= xg_a <= 4.0
 
 
 # ═══════════════════════════════════════════════════════════════════

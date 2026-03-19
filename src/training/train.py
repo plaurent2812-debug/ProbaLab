@@ -304,11 +304,12 @@ def train_classifier(
     # 1X2 : ~40% Home / ~25% Draw / ~35% Away → sans correction, le modèle sur-prédit Home
     sample_weight_train = compute_sample_weight(class_weight="balanced", y=y_train)
 
-    # Cross-validation temporelle (5 folds)
+    # Cross-validation temporelle (5 folds) — with balanced sample weights
     cv_scores = cross_val_score(
-        model, X_train, y_train, cv=tscv, scoring="accuracy"
+        model, X_train, y_train, cv=tscv, scoring="accuracy",
+        params={"sample_weight": sample_weight_train},
     )
-    logger.info(f"  CV Accuracy (temporal) : {cv_scores.mean():.4f} ± {cv_scores.std():.4f}")
+    logger.info(f"  CV Accuracy (temporal, balanced) : {cv_scores.mean():.4f} ± {cv_scores.std():.4f}")
 
     # Entraînement final
     model.fit(

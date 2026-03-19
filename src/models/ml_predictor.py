@@ -16,6 +16,58 @@ from src.config import logger, supabase
 from src.constants import FEATURE_COLS
 from numpy.typing import NDArray
 
+
+# ── Secure unpickling — whitelist allowed classes to prevent RCE ──
+_PICKLE_ALLOWED_MODULES: dict[str, set[str]] = {
+    "sklearn.linear_model._logistic": {"LogisticRegression"},
+    "sklearn.preprocessing._label": {"LabelEncoder"},
+    "sklearn.preprocessing._data": {"StandardScaler"},
+    "sklearn.impute._base": {"SimpleImputer"},
+    "sklearn.isotonic": {"IsotonicRegression"},
+    "numpy": {"ndarray", "dtype", "float64", "float32", "int64", "int32"},
+    "numpy.core.multiarray": {"scalar", "_reconstruct"},
+    "numpy.core.numeric": {"*"},
+    "collections": {"OrderedDict", "defaultdict"},
+    "builtins": {"dict", "list", "tuple", "set", "frozenset", "str", "int", "float", "bool", "bytes", "type", "NoneType", "complex", "slice", "range"},
+    "copy_reg": {"*"},
+    "copyreg": {"_reconstructor"},
+    "lightgbm.sklearn": {"LGBMClassifier"},
+    "lightgbm.basic": {"Booster"},
+    "_codecs": {"encode"},
+}
+
+
+# Allowed numpy/sklearn sub-module prefixes (tighter than blanket startswith)
+_NUMPY_ALLOWED_PREFIXES = ("numpy.core", "numpy._core", "numpy.dtypes", "numpy.random", "numpy")
+_SKLEARN_ALLOWED_PREFIXES = (
+    "sklearn.linear_model", "sklearn.preprocessing", "sklearn.impute",
+    "sklearn.isotonic", "sklearn.utils", "sklearn.tree", "sklearn.ensemble",
+    "sklearn.base", "sklearn.calibration", "sklearn.model_selection",
+)
+
+
+class RestrictedUnpickler(pickle.Unpickler):
+    """Unpickler that only allows whitelisted classes to be deserialized."""
+
+    def find_class(self, module: str, name: str) -> Any:
+        allowed = _PICKLE_ALLOWED_MODULES.get(module)
+        if allowed is not None and (name in allowed or "*" in allowed):
+            return super().find_class(module, name)
+        # Allow specific numpy sub-modules (reconstructors, dtypes, etc.)
+        if any(module.startswith(p) for p in _NUMPY_ALLOWED_PREFIXES):
+            return super().find_class(module, name)
+        # Allow specific sklearn sub-modules (model classes + internal helpers)
+        if any(module.startswith(p) for p in _SKLEARN_ALLOWED_PREFIXES):
+            return super().find_class(module, name)
+        raise pickle.UnpicklingError(
+            f"Blocked deserialization of {module}.{name} — not in whitelist"
+        )
+
+
+def _safe_loads(data: bytes) -> Any:
+    """Deserialize bytes using RestrictedUnpickler."""
+    return RestrictedUnpickler(io.BytesIO(data)).load()
+
 # Cache des modèles chargés
 _model_cache: dict[str, dict[str, Any]] = {}
 _cache_loaded: bool = False
@@ -55,7 +107,7 @@ def load_models() -> bool:
             if not weights_b64:
                 continue
             try:
-                payload: dict[str, Any] = pickle.loads(base64.b64decode(weights_b64))
+                payload: dict[str, Any] = _safe_loads(base64.b64decode(weights_b64))
                 # New format: XGBoost stored via save_model(), not pickle
                 if "xgb_model_bytes" in payload:
                     import xgboost as xgb
@@ -132,8 +184,23 @@ def _impute(X: NDArray[np.float32], model_name: str) -> NDArray[np.float32]:
                 if np.isnan(X[0, i]):
                     X[0, i] = col_medians[i] if not np.isnan(col_medians[i]) else 0.0
     else:
-        # Pas d'imputer — remplacer les NaN par 0
-        X = np.nan_to_num(X, nan=0.0)
+        # No imputer — use sensible defaults instead of destructive 0.0
+        # Market features imputed to ~33% (uniform prior), others to 0.0
+        _MARKET_COLS = {"market_home_prob", "market_draw_prob", "market_away_prob"}
+        for i, col_name in enumerate(FEATURE_COLS):
+            if i < X.shape[1] and np.isnan(X[0, i]):
+                if col_name in _MARKET_COLS:
+                    X[0, i] = 33.0  # Uniform prior (no information)
+                elif col_name == "h2h_home_winrate":
+                    X[0, i] = 0.33  # Prior: equal chances
+                elif col_name in ("home_form", "away_form", "home_form_long", "away_form_long"):
+                    X[0, i] = 0.5  # Average form
+                elif col_name in ("home_elo", "away_elo"):
+                    X[0, i] = 1500.0  # Default ELO
+                elif col_name == "elo_diff":
+                    X[0, i] = 0.0  # No advantage
+                else:
+                    X[0, i] = 0.0
     return X
 
 
@@ -233,6 +300,15 @@ def get_ml_predictions(context: dict) -> dict[str, int | float]:
         included.
     """
     if not load_models():
+        return {}
+
+    # Guard: skip ML if too many features are missing (predictions would be noise)
+    n_total = len(FEATURE_COLS)
+    n_missing = sum(1 for col in FEATURE_COLS if context.get(col) is None)
+    if n_missing > n_total * 0.40:
+        logger.warning(
+            f"  ⚠️ ML skipped: {n_missing}/{n_total} features missing (>{40}% threshold)"
+        )
         return {}
 
     result: dict[str, int | float] = {}

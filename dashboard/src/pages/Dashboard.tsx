@@ -411,6 +411,12 @@ function MatchRow({ match, isStarred, onToggleStar }) {
             <div className="shrink-0 w-[110px] flex items-center gap-1.5 pl-2 justify-end">
                 {(!isFinished && pred) && (
                     <>
+                        {/* Value Bet Badge */}
+                        {match.best_value && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 whitespace-nowrap" title={`${match.best_value.market} @ ${match.best_value.odds}`}>
+                                VALUE +{match.best_value.edge.toFixed(0)}%
+                            </span>
+                        )}
                         {/* Match Style Tags */}
                         {(() => {
                             const probaOver25 = pred?.proba_over_25 ?? pred?.proba_over_2_5
@@ -500,6 +506,7 @@ export default function FootballPage({ date, setDate, selectedLeague, setSelecte
     const [matches, setMatches] = useState([])
     const [loading, setLoading] = useState(true)
     const [minConfidence, setMinConfidence] = useState(0)
+    const [valueOnly, setValueOnly] = useState(false)
     const { isStarred, toggleMatch } = useWatchlist()
 
     useEffect(() => {
@@ -525,8 +532,10 @@ export default function FootballPage({ date, setDate, selectedLeague, setSelecte
     const filteredMatches = matches.filter(m => {
         const conf = m.prediction?.confidence_score || 0
         if (conf < minConfidence) return false
+        if (valueOnly && !m.is_value_bet) return false
         return true
     })
+    const valueBetCount = matches.filter(m => m.is_value_bet).length
 
     // Build league groups
     const byLeague = {}
@@ -555,6 +564,21 @@ export default function FootballPage({ date, setDate, selectedLeague, setSelecte
                     <span className="fs-summary-badge bg-red-500/15 text-red-500">{liveCount}</span>
                 )}
                 <span className="fs-summary-badge bg-muted text-muted-foreground ml-auto">{totalMatches}</span>
+
+                {/* Value bet filter */}
+                {valueBetCount > 0 && (
+                    <button
+                        onClick={() => setValueOnly(v => !v)}
+                        className={cn(
+                            "ml-2 text-[10px] font-bold px-2 py-0.5 rounded-full border transition-colors",
+                            valueOnly
+                                ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                                : "bg-transparent text-muted-foreground border-border/50 hover:text-emerald-400"
+                        )}
+                    >
+                        VALUE ({valueBetCount})
+                    </button>
+                )}
 
                 {/* Compact confidence filter */}
                 <select
