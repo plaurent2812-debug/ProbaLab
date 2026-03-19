@@ -506,10 +506,10 @@ def get_nhl_performance(days: int = 30):
 
         cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
 
-        # Get all performance rows for the given period
+        # Get all performance rows with match + player info for top-1 filtering
         resp = (
             supabase.table("nhl_suivi_algo_clean")
-            .select("date, type, pari, résultat, proba_predite")
+            .select("date, match, joueur, pari, résultat, proba_predite")
             .gte("date", cutoff)
             .order("date")
             .execute()
@@ -517,17 +517,43 @@ def get_nhl_performance(days: int = 30):
 
         rows = resp.data or []
 
-        metrics = {
-            "days": days,
-            "total_matches": 0,
-            "accuracy_goal": 0,
-            "accuracy_assist": 0,
-            "accuracy_point": 0,
-            "accuracy_shot": 0,
-            "avg_confidence": 0,
-            "daily_stats": [],
-        }
+        # ── Classify each row by market type ─────────────────────────
+        def _market_type(pari: str) -> str | None:
+            p = (pari or "").lower()
+            if "but" in p or "goal" in p:
+                return "goal"
+            if "passe" in p or "assist" in p:
+                return "assist"
+            if "point" in p:
+                return "point"
+            if "tir" in p or "shot" in p:
+                return "shot"
+            return None
 
+        # ── Keep only the TOP 1 player per (date, match, market) ─────
+        # Group by (date, match, market), pick the player with highest proba
+        from collections import defaultdict
+        groups: dict[tuple, list] = defaultdict(list)
+
+        for r in rows:
+            res_str = (r.get("résultat") or "").upper()
+            if "GAGN" not in res_str and "PERDU" not in res_str:
+                continue
+            market = _market_type(r.get("pari", ""))
+            if not market:
+                continue
+            day = (r.get("date") or "")[:10]
+            match_name = r.get("match", "")
+            key = (day, match_name, market)
+            groups[key].append(r)
+
+        # For each group, keep only the player with the highest probability
+        top1_rows = []
+        for key, candidates in groups.items():
+            best = max(candidates, key=lambda x: float(x.get("proba_predite") or 0))
+            top1_rows.append((key, best))
+
+        # ── Compute stats on top-1 only ──────────────────────────────
         stats = {
             "goal": {"total": 0, "correct": 0},
             "assist": {"total": 0, "correct": 0},
@@ -535,59 +561,43 @@ def get_nhl_performance(days: int = 30):
             "shot": {"total": 0, "correct": 0},
             "all": {"total": 0, "correct": 0, "sum_conf": 0},
         }
-
         daily = {}
 
-        for r in rows:
-            res_str = (r.get("résultat") or "").upper()
-            if "GAGN" not in res_str and "PERDU" not in res_str:
-                continue
+        for (day, match_name, market), r in top1_rows:
+            is_win = "GAGN" in (r.get("résultat") or "").upper()
 
-            is_win = "GAGN" in res_str
-            stat_type = None
-            pari_lower = (r.get("pari") or "").lower()
+            stats[market]["total"] += 1
+            stats["all"]["total"] += 1
+            if is_win:
+                stats[market]["correct"] += 1
+                stats["all"]["correct"] += 1
 
-            if "but" in pari_lower or "goal" in pari_lower:
-                stat_type = "goal"
-            elif "passe" in pari_lower or "assist" in pari_lower:
-                stat_type = "assist"
-            elif "point" in pari_lower:
-                stat_type = "point"
-            elif "tir" in pari_lower or "shot" in pari_lower:
-                stat_type = "shot"
+            prob = float(r.get("proba_predite") or 50)
+            stats["all"]["sum_conf"] += prob
 
-            if stat_type:
-                stats[stat_type]["total"] += 1
-                stats["all"]["total"] += 1
-                if is_win:
-                    stats[stat_type]["correct"] += 1
-                    stats["all"]["correct"] += 1
-
-                prob = r.get("proba_predite") or 50
-                stats["all"]["sum_conf"] += prob
-
-                # Daily grouping
-                day = r.get("date")[:10] if r.get("date") else "unknown"
-                if day not in daily:
-                    daily[day] = {"date": day, "total": 0, "correct": 0}
-                daily[day]["total"] += 1
-                if is_win:
-                    daily[day]["correct"] += 1
+            if day not in daily:
+                daily[day] = {"date": day, "total": 0, "correct": 0}
+            daily[day]["total"] += 1
+            if is_win:
+                daily[day]["correct"] += 1
 
         def _pct(c, t):
             return round(c / t * 100, 1) if t > 0 else 0
 
-        metrics["total_matches"] = stats["all"]["total"]
-        metrics["accuracy_goal"] = _pct(stats["goal"]["correct"], stats["goal"]["total"])
-        metrics["accuracy_assist"] = _pct(stats["assist"]["correct"], stats["assist"]["total"])
-        metrics["accuracy_point"] = _pct(stats["point"]["correct"], stats["point"]["total"])
-        metrics["accuracy_shot"] = _pct(stats["shot"]["correct"], stats["shot"]["total"])
-        metrics["avg_confidence"] = (
-            round(stats["all"]["sum_conf"] / stats["all"]["total"], 1)
-            if stats["all"]["total"] > 0
-            else 0
-        )
-        metrics["daily_stats"] = sorted(daily.values(), key=lambda x: x["date"])
+        metrics = {
+            "days": days,
+            "total_matches": stats["all"]["total"],
+            "accuracy_goal": _pct(stats["goal"]["correct"], stats["goal"]["total"]),
+            "accuracy_assist": _pct(stats["assist"]["correct"], stats["assist"]["total"]),
+            "accuracy_point": _pct(stats["point"]["correct"], stats["point"]["total"]),
+            "accuracy_shot": _pct(stats["shot"]["correct"], stats["shot"]["total"]),
+            "avg_confidence": (
+                round(stats["all"]["sum_conf"] / stats["all"]["total"], 1)
+                if stats["all"]["total"] > 0
+                else 0
+            ),
+            "daily_stats": sorted(daily.values(), key=lambda x: x["date"]),
+        }
 
         return metrics
 
