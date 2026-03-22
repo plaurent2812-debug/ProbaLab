@@ -292,6 +292,70 @@ def _handle_update(update: dict) -> None:
         confirmation = format_confirmation_message(pick)
         _send_message(chat_id, confirmation)
 
+    # ── Cas 1b : Commande /edit → modifier un pick en attente ────
+    elif text.lower().startswith("/edit"):
+        pending = _pending_picks.get(chat_id)
+        if not pending:
+            _send_message(chat_id, "⚠️ Aucun pick en attente. Envoie d'abord un screenshot.")
+            return
+
+        # Parse: /edit <field> <value>
+        parts = text.split(None, 2)  # ["/edit", "field", "value..."]
+        if len(parts) < 3:
+            _send_message(
+                chat_id,
+                "⚠️ *Usage :*\n"
+                "`/edit cote 2.35`\n"
+                "`/edit match PSG vs OM`\n"
+                "`/edit market Over 1.5 Buts`\n"
+                "`/edit joueur Mbappé`\n"
+                "`/edit date 2026-03-25`\n"
+                "`/edit sport nhl`",
+            )
+            return
+
+        field = parts[1].lower()
+        value = parts[2].strip()
+
+        field_map = {
+            "cote": "odds",
+            "odds": "odds",
+            "match": "match_label",
+            "market": "market",
+            "pari": "market",
+            "joueur": "player_name",
+            "player": "player_name",
+            "date": "date",
+            "sport": "sport",
+        }
+
+        pick_key = field_map.get(field)
+        if not pick_key:
+            _send_message(
+                chat_id,
+                f"⚠️ Champ `{field}` inconnu.\n"
+                "Champs disponibles : `cote`, `match`, `market`, `joueur`, `date`, `sport`",
+            )
+            return
+
+        # Special handling for odds: convert to float
+        if pick_key == "odds":
+            try:
+                value = round(float(value.replace(",", ".")), 2)
+            except ValueError:
+                _send_message(chat_id, f"⚠️ Cote invalide : `{value}`. Utilise un nombre, ex: `2.35`")
+                return
+
+        old_value = pending.get(pick_key)
+        pending[pick_key] = value
+
+        # Re-send updated confirmation
+        confirmation = format_confirmation_message(pending)
+        _send_message(
+            chat_id,
+            f"✏️ *{field}* modifié : `{old_value}` → `{value}`\n\n{confirmation}",
+        )
+
     # ── Cas 2 : Confirmation 👍 ──────────────────────────────────
     elif text in ("👍", "✅", "oui", "ok", "yes"):
         pending = _pending_picks.pop(chat_id, None)
@@ -389,6 +453,13 @@ def _handle_update(update: dict) -> None:
             "1. Envoie une capture d'écran de ton pari\n"
             "2. Je te montre le récap du pick détecté\n"
             "3. Réponds *👍* pour publier ou *❌* pour annuler\n\n"
+            "✏️ *Modifier un pick détecté :*\n"
+            "`/edit cote 2.35`\n"
+            "`/edit match PSG vs OM`\n"
+            "`/edit market Over 1.5 Buts`\n"
+            "`/edit joueur Mbappé`\n"
+            "`/edit date 2026-03-25`\n"
+            "`/edit sport nhl`\n\n"
             "🔗 *Pour un combiné multi-screenshots :*\n"
             "1. `/combo` → démarre le mode combiné\n"
             "2. Envoie tes screenshots un par un\n"
