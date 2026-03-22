@@ -2084,6 +2084,11 @@ def get_best_bets_stats(request: Request):
             "model_football": calc_stats(model_football),
             "model_nhl": calc_stats(model_nhl),
             "model_by_market": model_market_breakdown,
+            # Expert predictions only
+            "expert_global": calc_stats(expert_rows),
+            "expert_football": calc_stats(expert_football),
+            "expert_nhl": calc_stats(expert_nhl),
+            "expert_by_market": expert_market_breakdown,
         }
     except Exception as e:
         return {"error": str(e)}

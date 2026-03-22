@@ -500,6 +500,64 @@ function StatsDashboard({ stats, isAdmin }) {
                     </div>
                 </div>
             )}
+
+            {/* ── Expert Prediction Accuracy ──────────────────────── */}
+            {stats.expert_by_market && Object.keys(stats.expert_by_market).length > 0 && (
+                <div className="mt-5">
+                    <div className="flex items-center gap-2 mb-3">
+                        <Target className="w-4 h-4 text-amber-500" />
+                        <span className="text-xs font-bold uppercase tracking-wider">Performance Expert (30 J)</span>
+                        <div className="ml-auto flex items-center gap-1.5">
+                            <span className="text-[10px] font-bold text-muted-foreground uppercase bg-muted px-1.5 py-0.5 rounded">Expert Uniquement</span>
+                        </div>
+                    </div>
+
+                    {/* Expert global cards */}
+                    <div className="grid grid-cols-2 gap-3 mb-3">
+                        {stats.expert_football?.total > 0 && (
+                            <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 overflow-hidden">
+                                <p className="text-[10px] text-muted-foreground mb-1">⚽ Football Expert</p>
+                                <div className="flex items-end gap-1">
+                                    <span className="text-xl font-black leading-tight">{stats.expert_football.win_rate}%</span>
+                                    <span className="text-[9px] text-muted-foreground mb-0.5">réussite</span>
+                                </div>
+                                <div className="flex items-center gap-1.5 mt-1 text-[10px] text-muted-foreground">
+                                    <span className="text-emerald-400 font-semibold">{stats.expert_football.wins}W</span>
+                                    <span className="text-red-400 font-semibold">{stats.expert_football.losses}L</span>
+                                </div>
+                            </div>
+                        )}
+                        {stats.expert_nhl?.total > 0 && (
+                            <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 overflow-hidden">
+                                <p className="text-[10px] text-muted-foreground mb-1">🏒 NHL Expert</p>
+                                <div className="flex items-end gap-1">
+                                    <span className="text-xl font-black leading-tight">{stats.expert_nhl.win_rate}%</span>
+                                    <span className="text-[9px] text-muted-foreground mb-0.5">réussite</span>
+                                </div>
+                                <div className="flex items-center gap-1.5 mt-1 text-[10px] text-muted-foreground">
+                                    <span className="text-emerald-400 font-semibold">{stats.expert_nhl.wins}W</span>
+                                    <span className="text-red-400 font-semibold">{stats.expert_nhl.losses}L</span>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Expert market breakdown */}
+                    <div className="rounded-xl border border-border/60 bg-card overflow-hidden">
+                        <div className="px-4 py-2.5 border-b border-border/40">
+                            <p className="text-xs font-semibold">Précision par type de pari (Expert)</p>
+                        </div>
+                        <div className="divide-y divide-border/30">
+                            {Object.entries(stats.expert_by_market)
+                                .filter(([, data]) => data.total >= 1)
+                                .sort(([, a], [, b]) => b.total - a.total)
+                                .map(([market, data]) => (
+                                    <MarketRow key={market} market={market} data={data} />
+                                ))}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }
@@ -1145,17 +1203,17 @@ function HistoryTable({ filteredHistory, filteredHistoryStats }) {
 
                                                 {/* Match + market */}
                                                 <div className="flex-1 min-w-0">
-                                                    <div className="flex items-center gap-1.5">
-                                                        <span className="text-xs font-medium truncate">
+                                                    <div className="flex flex-col sm:flex-row sm:items-start gap-1.5">
+                                                        <span className="text-xs font-medium leading-relaxed">
                                                             {pick.bet_label || pick.player_name || "—"}
                                                         </span>
                                                         {isExpert && (
-                                                            <span className="shrink-0 px-1.5 py-0.5 rounded text-[8px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/20">
+                                                            <span className="shrink-0 self-start px-1.5 py-0.5 rounded text-[8px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/20 mt-0.5">
                                                                 🎯 Expert
                                                             </span>
                                                         )}
                                                     </div>
-                                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                                    <div className="flex items-center gap-1.5 mt-1">
                                                         <span className="text-[9px] text-muted-foreground">{pick.date}</span>
                                                         <span className="text-[9px] px-1 py-0.5 rounded bg-muted text-muted-foreground">
                                                             {pick.sport === "nhl" ? "🏒" : "⚽"} {pick.market || "—"}

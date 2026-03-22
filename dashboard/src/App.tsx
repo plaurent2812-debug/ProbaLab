@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, NavLink, useNavigate, useLocation } from "react-router-dom"
 import { lazy, Suspense, useState, useEffect, Component } from "react"
-import { Zap, Trophy, Shield, User, LayoutGrid, Target } from "lucide-react"
+import { Zap, Trophy, Shield, User, LayoutGrid, Target, BarChart2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { AuthProvider, useAuth } from "@/lib/auth"
 import { ThemeProvider } from "@/components/theme-provider"
@@ -233,7 +233,10 @@ function BottomNav() {
       { to: "/football", label: "Football", icon: FootballIcon },
       { to: "/nhl", label: "NHL", icon: NHLIcon },
       { to: "/paris-du-soir", label: "Pronos", icon: Trophy },
-      ...(isAdmin ? [{ to: "/admin", label: "Admin", icon: Shield }] : []),
+      ...(isAdmin ? [
+          { to: "/performance", label: "Perf", icon: BarChart2 },
+          { to: "/admin", label: "Admin", icon: Shield }
+      ] : []),
     ]
     : [
       { to: "/", label: "Tous", icon: LayoutGrid, exact: true },
