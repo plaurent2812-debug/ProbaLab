@@ -117,6 +117,26 @@ def run_results(date: str | None = None):
     )
 
 
+def run_monitoring_alerts():
+    """Run post-pipeline monitoring checks and send Telegram alerts."""
+    logger.info("=" * 60)
+    logger.info("🔍 PHASE MONITORING : Vérification qualité")
+    logger.info("=" * 60)
+
+    try:
+        from src.config import supabase
+        from src.monitoring.alerting import check_and_alert
+        from src.notifications import send_telegram
+
+        alerts = check_and_alert(supabase, send_telegram_fn=send_telegram)
+        if alerts:
+            logger.warning("Monitoring: %d alerte(s) envoyée(s)", len(alerts))
+        else:
+            logger.info("✅ Monitoring: aucune alerte")
+    except Exception as e:
+        logger.error("Erreur monitoring: %s", e)
+
+
 if __name__ == "__main__":
     mode = sys.argv[1] if len(sys.argv) > 1 else "full"
 
@@ -136,6 +156,7 @@ if __name__ == "__main__":
     if mode in ("full", "all"):
         run_data_pipeline()
         run_analysis()
+        run_monitoring_alerts()
     elif mode == "data":
         run_data_pipeline()
     elif mode == "analyze":

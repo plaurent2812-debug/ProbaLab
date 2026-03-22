@@ -6,6 +6,8 @@ Serves prediction data from Supabase to the React frontend.
 
 from __future__ import annotations
 
+import hmac
+import logging
 import math
 import os
 import subprocess
@@ -57,12 +59,21 @@ except ImportError:
     RATE_LIMITING = False
     limiter = None
 
+
+def _rate_limit(limit_string: str):
+    """Apply rate limiting if slowapi is available, otherwise no-op."""
+    if RATE_LIMITING and limiter:
+        return limiter.limit(limit_string)
+    return lambda f: f
+
 from api.routers import nhl, players, stripe_webhook, telegram as telegram_router, trigger
 from api.routers import push as push_router
 from api.schemas import (
     EmailPayload, SaveBetRequest, UpdateBetResultRequest,
     DateRequest, ResolveBetsRequest, ResolveExpertPicksRequest, RunPipelineRequest,
 )
+
+logger = logging.getLogger(__name__)
 
 
 # ── Scheduler ────────────────────────────────────────────────
@@ -351,7 +362,24 @@ app.include_router(telegram_router.router)
 app.include_router(push_router.router)
 app.include_router(players.router, prefix="/api/players", tags=["Players"])
 
-origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:4173").split(",")
+_raw_origins = os.getenv("ALLOWED_ORIGINS", "")
+if not _raw_origins:
+    logger.warning("ALLOWED_ORIGINS not set — falling back to localhost dev origins")
+    _raw_origins = "http://localhost:5173,http://localhost:4173"
+
+from urllib.parse import urlparse as _urlparse
+
+origins = []
+for _o in _raw_origins.split(","):
+    _o = _o.strip()
+    _parsed = _urlparse(_o)
+    if _parsed.scheme in ("http", "https") and _parsed.netloc:
+        origins.append(_o)
+    elif _o:
+        logger.warning("Ignoring invalid CORS origin: %s", _o)
+
+if not origins:
+    origins = ["http://localhost:5173", "http://localhost:4173"]
 
 app.add_middleware(
     CORSMiddleware,
@@ -370,7 +398,7 @@ def _verify_cron_auth(authorization: str | None) -> None:
     if not CRON_SECRET:
         raise HTTPException(status_code=500, detail="CRON_SECRET not configured")
     expected = f"Bearer {CRON_SECRET}"
-    if authorization != expected:
+    if not authorization or not hmac.compare_digest(authorization, expected):
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
@@ -765,6 +793,7 @@ def get_football_meta_analysis(
 
 
 @app.get("/api/best-bets")
+@_rate_limit("30/minute")
 def get_best_bets(
     request: Request,
     date: str | None = Query(None, description="ISO date YYYY-MM-DD"),
@@ -1434,8 +1463,8 @@ def update_bet_result(
         )
         return {"ok": True, "updated": resp.data}
     except Exception as e:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Endpoint error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.post("/api/best-bets/save")
@@ -1458,13 +1487,14 @@ def save_best_bets(body: SaveBetRequest, authorization: str = Header(None)):
         resp = supabase.table("best_bets").insert(bet_data).execute()
         return {"ok": True, "id": resp.data[0]["id"] if resp.data else None}
     except Exception as e:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Endpoint error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 
 @app.post("/api/nhl/fetch-game-stats")
-def nhl_fetch_game_stats(body: dict, authorization: str = Header(None)):
+@_rate_limit("10/minute")
+def nhl_fetch_game_stats(body: dict, request: Request, authorization: str = Header(None)):
     """
     Called by Trigger.dev before resolve: fetches actual player stats
     from the NHL API boxscore and stores them in nhl_player_game_stats.
@@ -1485,7 +1515,8 @@ def nhl_fetch_game_stats(body: dict, authorization: str = Header(None)):
 
 
 @app.post("/api/nhl/fetch-odds")
-def nhl_fetch_odds(body: dict, authorization: str = Header(None)):
+@_rate_limit("10/minute")
+def nhl_fetch_odds(body: dict, request: Request, authorization: str = Header(None)):
     """
     Fetches real NHL player prop odds from The Odds API and stores in nhl_odds.
     Called by the NHL pipeline (schedule-nhl-pipeline or admin trigger).
@@ -1506,7 +1537,8 @@ def nhl_fetch_odds(body: dict, authorization: str = Header(None)):
 
 
 @app.post("/api/best-bets/resolve")
-def resolve_best_bets(body: ResolveBetsRequest, authorization: str = Header(None)):
+@_rate_limit("10/minute")
+def resolve_best_bets(body: ResolveBetsRequest, request: Request, authorization: str = Header(None)):
     """
     Called by Trigger.dev scheduled tasks to auto-resolve PENDING bets.
     Checks match results and updates best_bets table with WIN/LOSS/VOID.
@@ -1807,6 +1839,7 @@ def resolve_best_bets(body: ResolveBetsRequest, authorization: str = Header(None
 
 
 @app.get("/api/best-bets/stats")
+@_rate_limit("30/minute")
 def get_best_bets_stats(request: Request):
     """Return win rate and ROI stats for both model predictions (best_bets) and expert picks."""
     try:
@@ -2288,11 +2321,13 @@ def delete_expert_pick(pick_id: int):
         supabase.table("expert_picks").delete().eq("id", pick_id).execute()
         return {"deleted": True, "id": pick_id}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Endpoint error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.post("/api/expert-picks/backfill")
-def backfill_expert_picks(body: dict, authorization: str = Header(None)):
+@_rate_limit("10/minute")
+def backfill_expert_picks(body: dict, request: Request, authorization: str = Header(None)):
     """Admin-only: bulk insert expert picks (bypass RLS via server-side supabase client)."""
     _verify_cron_auth(authorization)
     picks = body.get("picks", [])
@@ -2327,7 +2362,8 @@ def get_latest_expert_pick():
 
 
 @app.post("/api/expert-picks/resolve")
-def resolve_expert_picks(body: ResolveExpertPicksRequest, authorization: str = Header(None)):
+@_rate_limit("10/minute")
+def resolve_expert_picks(body: ResolveExpertPicksRequest, request: Request, authorization: str = Header(None)):
     """
     Auto-resolve PENDING expert picks by matching to finished fixtures
     and using Gemini to evaluate WIN/LOSS from free-text bet descriptions.
@@ -2557,6 +2593,7 @@ Réponds UNIQUEMENT par un JSON: {{"result": "WIN"}} ou {{"result": "LOSS"}}
 
 
 @app.get("/api/predictions")
+@_rate_limit("30/minute")
 def get_predictions(
     request: Request,
     date: str | None = Query(None, description="ISO date YYYY-MM-DD"),
@@ -2992,6 +3029,97 @@ def get_monitoring():
         return {"error": str(e), "health_score": 0}
 
 
+@app.get("/api/monitoring/health")
+def monitoring_health():
+    """Quick data-quality health check — lightweight, no heavy computation.
+
+    Returns prediction counts, last prediction timestamp, fixture
+    coverage, and a simple boolean ``healthy`` flag.
+    """
+    try:
+        today = datetime.now().strftime("%Y-%m-%d")
+        yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+
+        # Today's predictions
+        preds_today_resp = (
+            supabase.table("predictions")
+            .select("id, created_at", count="exact")
+            .gte("created_at", today)
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        preds_today = (
+            preds_today_resp.count
+            if preds_today_resp.count is not None
+            else len(preds_today_resp.data or [])
+        )
+        last_prediction_at = (
+            preds_today_resp.data[0]["created_at"]
+            if preds_today_resp.data
+            else None
+        )
+
+        # Yesterday's fixture coverage
+        fixtures_yesterday = (
+            supabase.table("fixtures")
+            .select("id", count="exact")
+            .gte("date", yesterday)
+            .lt("date", today)
+            .execute()
+        )
+        fix_count = (
+            fixtures_yesterday.count
+            if fixtures_yesterday.count is not None
+            else len(fixtures_yesterday.data or [])
+        )
+
+        preds_yesterday_resp = (
+            supabase.table("predictions")
+            .select("id", count="exact")
+            .gte("created_at", yesterday)
+            .lt("created_at", today)
+            .execute()
+        )
+        preds_yesterday = (
+            preds_yesterday_resp.count
+            if preds_yesterday_resp.count is not None
+            else len(preds_yesterday_resp.data or [])
+        )
+        coverage_pct = (
+            round(preds_yesterday / fix_count * 100, 1) if fix_count > 0 else None
+        )
+
+        # Evaluated results count
+        eval_count_resp = (
+            supabase.table("prediction_results")
+            .select("id", count="exact")
+            .execute()
+        )
+        evaluated_total = (
+            eval_count_resp.count
+            if eval_count_resp.count is not None
+            else len(eval_count_resp.data or [])
+        )
+
+        # Quick healthy heuristic
+        healthy = preds_today > 0 or datetime.now().hour < 10
+
+        return {
+            "healthy": healthy,
+            "predictions_today": preds_today,
+            "last_prediction_at": last_prediction_at,
+            "yesterday_coverage_pct": coverage_pct,
+            "yesterday_fixtures": fix_count,
+            "yesterday_predictions": preds_yesterday,
+            "evaluated_results_total": evaluated_total,
+            "checked_at": datetime.now().isoformat(),
+        }
+    except Exception as e:
+        logger.error("Monitoring health check error: %s", e)
+        return {"healthy": False, "error": "Internal error", "checked_at": datetime.now().isoformat()}
+
+
 @app.get("/api/performance")
 def get_performance(days: int = Query(0, description="Rolling window in days (0 = all-time)")):
     """Get model performance metrics over the last N days (0 = all-time, capped at 180)."""
@@ -3172,10 +3300,8 @@ def get_performance(days: int = Query(0, description="Rolling window in days (0 
         }
 
     except Exception as e:
-        import traceback
-
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Endpoint error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ─── Team History ──────────────────────────────────────────────
@@ -3385,10 +3511,14 @@ _pipeline_state = {
 }
 _pipeline_lock = threading.Lock()
 
+_ALLOWED_PIPELINE_MODES = ("full", "data", "analyze", "results", "nhl")
+
 
 def _run_pipeline_background(mode: str):
     """Run the pipeline in a background thread and capture output."""
     global _pipeline_state
+    if mode not in _ALLOWED_PIPELINE_MODES:
+        raise ValueError(f"Invalid pipeline mode: {mode}")
     project_dir = str(Path(__file__).resolve().parent.parent)
 
     if mode == "nhl":
@@ -3447,7 +3577,8 @@ def _run_pipeline_background(mode: str):
 
 
 @app.post("/api/cron/run-pipeline")
-def cron_run_pipeline(body: RunPipelineRequest, authorization: str = Header(None)):
+@_rate_limit("10/minute")
+def cron_run_pipeline(body: RunPipelineRequest, request: Request, authorization: str = Header(None)):
     """
     Trigger the pipeline via Trigger.dev scheduled tasks.
     Authenticated via CRON_SECRET (not Supabase JWT).
@@ -3480,7 +3611,9 @@ def cron_run_pipeline(body: RunPipelineRequest, authorization: str = Header(None
 
 
 @app.post("/api/admin/run-pipeline")
+@_rate_limit("10/minute")
 def admin_run_pipeline(
+    request: Request,
     mode: str = Query("full", description="Pipeline mode: full, data, analyze, results, or nhl"),
     authorization: str | None = Header(None),
 ):
@@ -3510,7 +3643,8 @@ def admin_run_pipeline(
 
 
 @app.post("/api/admin/stop-pipeline")
-def admin_stop_pipeline(authorization: str | None = Header(None)):
+@_rate_limit("10/minute")
+def admin_stop_pipeline(request: Request, authorization: str | None = Header(None)):
     """Stop the running pipeline (admin only, requires Supabase JWT)."""
     _require_admin(authorization)
 
@@ -3525,7 +3659,8 @@ def admin_stop_pipeline(authorization: str | None = Header(None)):
                 _pipeline_state["status"] = "cancelled"
                 return {"message": "Démarrage de l'arrêt du pipeline en cours..."}
             except Exception as e:
-                raise HTTPException(status_code=500, detail=f"Failed to stop process: {e}")
+                logger.error("Failed to stop pipeline process: %s", e, exc_info=True)
+                raise HTTPException(status_code=500, detail="Internal server error")
 
         # Fallback if status is running but no process found
         _pipeline_state["status"] = "cancelled"
@@ -3535,7 +3670,8 @@ def admin_stop_pipeline(authorization: str | None = Header(None)):
 
 
 @app.get("/api/admin/pipeline-status")
-def admin_pipeline_status(authorization: str | None = Header(None)):
+@_rate_limit("10/minute")
+def admin_pipeline_status(request: Request, authorization: str | None = Header(None)):
     """Get current pipeline status (admin only, requires Supabase JWT)."""
     _require_admin(authorization)
 
@@ -3547,7 +3683,9 @@ def admin_pipeline_status(authorization: str | None = Header(None)):
 
 
 @app.post("/api/admin/update-scores")
+@_rate_limit("10/minute")
 def admin_update_scores(
+    request: Request,
     date: str | None = Query(None, description="Date YYYY-MM-DD (default: today)"),
     authorization: str | None = Header(None),
 ):

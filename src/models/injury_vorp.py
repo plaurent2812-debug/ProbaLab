@@ -35,7 +35,10 @@ def calculate_vorp_impact(missing_players: list[dict], team_stats: dict) -> tupl
         minutes = int(p.get("minutes_played") or 0)
         
         # If the player didn't play much, their absence has low impact
-        if minutes < 200 and rating < 6.8:
+        # Threshold depends on position: defenders/GKs need fewer minutes to be considered impactful
+        position = p.get("position", "Unknown")
+        min_minutes = 100 if position in ("Goalkeeper", "Defender") else 150
+        if minutes < min_minutes and rating < 6.8:
             continue
 
         # Calculate raw positive vorp

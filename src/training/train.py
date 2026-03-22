@@ -80,19 +80,29 @@ def load_data() -> list[dict] | None:
     return all_data
 
 
-def prepare_features(data: list[dict], feature_cols: list[str]) -> tuple[np.ndarray, SimpleImputer]:
-    """Build the feature matrix and fit a median imputer.
+def prepare_features(
+    data: list[dict],
+    feature_cols: list[str],
+    imputer: SimpleImputer | None = None,
+) -> tuple[np.ndarray, SimpleImputer]:
+    """Build the feature matrix, optionally applying an existing imputer.
 
     Extracts numerical feature columns from *data*, converts missing values
-    to ``np.nan``, then applies median imputation.
+    to ``np.nan``.  If *imputer* is provided it is used to transform only
+    (no fitting).  Otherwise a new ``SimpleImputer`` is **created but NOT
+    fitted** — the caller is responsible for fitting it on the training
+    split to avoid data leakage.
 
     Args:
         data: List of training-data row dicts.
         feature_cols: Ordered list of column names to include.
+        imputer: An already-fitted ``SimpleImputer`` to apply.  When
+            ``None`` (default) a fresh unfitted imputer is returned.
 
     Returns:
-        A tuple ``(X, imputer)`` where *X* is the imputed feature matrix
-        and *imputer* is the fitted ``SimpleImputer``.
+        A tuple ``(X, imputer)`` where *X* is the feature matrix (imputed
+        only when *imputer* was provided) and *imputer* is the
+        ``SimpleImputer`` instance.
     """
     X: list[list[float]] = []
     for row in data:
@@ -107,9 +117,12 @@ def prepare_features(data: list[dict], feature_cols: list[str]) -> tuple[np.ndar
 
     X_arr = np.array(X, dtype=np.float32)
 
-    # Imputation des valeurs manquantes
-    imputer = SimpleImputer(strategy="median")
-    X_arr = imputer.fit_transform(X_arr)
+    if imputer is not None:
+        # Apply existing imputer (inference / transform-only path)
+        X_arr = imputer.transform(X_arr)
+    else:
+        # Training path: return unfitted imputer — caller fits on train split
+        imputer = SimpleImputer(strategy="median")
 
     return X_arr, imputer
 
@@ -271,6 +284,11 @@ def train_classifier(
     X_train, X_test = X_valid[train_idx], X_valid[test_idx]
     y_train, y_test = y_valid[train_idx], y_valid[test_idx]
 
+    # Fit imputer on train split ONLY to prevent data leakage
+    fold_imputer = SimpleImputer(strategy="median")
+    X_train = fold_imputer.fit_transform(X_train)
+    X_test = fold_imputer.transform(X_test)
+
     logger.info(f"  TimeSeriesSplit : train={len(X_train)}, test={len(X_test)}")
 
     # Hyperparamètres XGBoost — Optuna ou fallback
@@ -307,7 +325,7 @@ def train_classifier(
     # Cross-validation temporelle (5 folds) — with balanced sample weights
     cv_scores = cross_val_score(
         model, X_train, y_train, cv=tscv, scoring="accuracy",
-        params={"sample_weight": sample_weight_train},
+        fit_params={"sample_weight": sample_weight_train},
     )
     logger.info(f"  CV Accuracy (temporal, balanced) : {cv_scores.mean():.4f} ± {cv_scores.std():.4f}")
 
@@ -415,6 +433,11 @@ def train_regressor(
     train_idx, test_idx = split_indices[-1]
     X_train, X_test = X_valid[train_idx], X_valid[test_idx]
     y_train, y_test = y_valid[train_idx], y_valid[test_idx]
+
+    # Fit imputer on train split ONLY to prevent data leakage
+    fold_imputer = SimpleImputer(strategy="median")
+    X_train = fold_imputer.fit_transform(X_train)
+    X_test = fold_imputer.transform(X_test)
 
     logger.info(f"  TimeSeriesSplit : train={len(X_train)}, test={len(X_test)}")
 
@@ -544,10 +567,15 @@ def run() -> None:
         )
         return
 
-    # Préparer les features
+    # Préparer les features (X still contains NaN — imputation happens after split)
     X, imputer = prepare_features(data, FEATURE_COLS)
     logger.info(f"  Features : {X.shape[1]} colonnes, {X.shape[0]} lignes")
-    logger.info(f"  NaN restants : {np.isnan(X).sum()}")
+    logger.info(f"  NaN avant imputation : {np.isnan(X).sum()}")
+
+    # Fit a global imputer on ALL data for inference-time use (saved with models).
+    # Training uses per-fold imputers to avoid leakage — this one is only for serving.
+    imputer.fit(X)
+    logger.info(f"  Imputer global fit pour inférence (médiane sur {X.shape[0]} lignes)")
 
     # ── 1. Résultat 1X2 ──────────────────────────────────────────
     y_1x2 = prepare_target_classification(data, "result")

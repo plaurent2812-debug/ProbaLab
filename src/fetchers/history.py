@@ -16,6 +16,7 @@ from src.config import (
     LEAGUES,
     SEASON,
     api_get,
+    api_get_with_retry,
     get_request_count,
     logger,
     reset_request_count,
@@ -123,7 +124,9 @@ def fetch_events_for_fixtures(fixture_ids: list[int]) -> None:
         if (i + 1) % 50 == 0 or i == 0:
             logger.info(f"  Events : {i + 1}/{len(ids_to_fetch)}...")
 
-        data = api_get("fixtures/events", {"fixture": fid})
+        data = api_get_with_retry(
+            "fixtures/events", {"fixture": fid}, label=f"events fixture {fid}"
+        )
         if not data or not data.get("response"):
             continue
 
@@ -156,8 +159,8 @@ def fetch_events_for_fixtures(fixture_ids: list[int]) -> None:
                 # Insert simple si pas de contrainte unique
                 try:
                     supabase.table("match_events").insert(batch).execute()
-                except Exception:
-                    pass  # Events déjà insérés
+                except Exception as e:
+                    logger.error("Failed to insert match_events for fixture %s: %s", fid, e)
 
     logger.info("  ✅ Events importés.")
 
@@ -212,7 +215,9 @@ def fetch_lineups_for_fixtures(fixture_ids: list[int]) -> None:
         if (i + 1) % 50 == 0 or i == 0:
             logger.info(f"  Lineups : {i + 1}/{len(ids_to_fetch)}...")
 
-        data = api_get("fixtures/lineups", {"fixture": fid})
+        data = api_get_with_retry(
+            "fixtures/lineups", {"fixture": fid}, label=f"lineups fixture {fid}"
+        )
         if not data or not data.get("response"):
             continue
 
@@ -255,8 +260,8 @@ def fetch_lineups_for_fixtures(fixture_ids: list[int]) -> None:
                 supabase.table("match_lineups").upsert(
                     batch, on_conflict="fixture_api_id,team_api_id,player_api_id"
                 ).execute()
-            except Exception:
-                pass  # Lineups déjà insérées
+            except Exception as e:
+                logger.error("Failed to upsert match_lineups for fixture %s: %s", fid, e)
 
     logger.info("  ✅ Compositions importées.")
 
@@ -314,7 +319,9 @@ def fetch_team_stats_for_fixtures(fixture_ids: list[int]) -> None:
         if (i + 1) % 50 == 0 or i == 0:
             logger.info(f"  Stats : {i + 1}/{len(ids_to_fetch)}...")
 
-        data = api_get("fixtures/statistics", {"fixture": fid})
+        data = api_get_with_retry(
+            "fixtures/statistics", {"fixture": fid}, label=f"statistics fixture {fid}"
+        )
         if not data or not data.get("response"):
             continue
 
@@ -349,8 +356,8 @@ def fetch_team_stats_for_fixtures(fixture_ids: list[int]) -> None:
                 supabase.table("match_team_stats").upsert(
                     batch, on_conflict="fixture_api_id,team_api_id"
                 ).execute()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error("Failed to upsert match_team_stats for fixture %s: %s", fid, e)
 
     logger.info("  ✅ Stats équipe importées.")
 

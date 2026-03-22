@@ -108,6 +108,12 @@ def train_stacking_ensemble(
     X_train, X_test = X_valid[train_idx], X_valid[test_idx]
     y_train, y_test = y_valid[train_idx], y_valid[test_idx]
 
+    # Fit imputer on train split ONLY to prevent data leakage
+    from sklearn.impute import SimpleImputer
+    fold_imputer = SimpleImputer(strategy="median")
+    X_train = fold_imputer.fit_transform(X_train)
+    X_test = fold_imputer.transform(X_test)
+
     logger.info(f"  TimeSeriesSplit : train={len(X_train)}, test={len(X_test)}")
 
     # ── Couche 1 : Base Learners ─────────────────────────────────
@@ -505,7 +511,10 @@ def predict_ensemble(
         proba_map = dict(zip(classes, final_probas))
     else:
         if n_classes == 3:
-            proba_map = {"H": final_probas[0], "D": final_probas[1], "A": final_probas[2]}
+            # LabelEncoder required — sklearn sorts alphabetically ['A','D','H'],
+            # so probas order is [p_away, p_draw, p_home]. Without le, we can't guarantee order.
+            logger.error("No LabelEncoder found — cannot map probabilities safely. Falling back to alphabetical order.")
+            proba_map = {"A": final_probas[0], "D": final_probas[1], "H": final_probas[2]}
         else:
             proba_map = {1: final_probas[1]}
 

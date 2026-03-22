@@ -177,8 +177,11 @@ def _impute(X: NDArray[np.float32], model_name: str) -> NDArray[np.float32]:
     if payload and payload.get("imputer"):
         try:
             X = payload["imputer"].transform(X)
-        except Exception:
+        except Exception as e:
+            logger.warning("Imputer transform failed, using fallback: %s", e)
             # Fallback : remplacer NaN par la médiane globale
+            # Note: for a single sample, nanmedian returns the sample itself (not a useful median).
+            # Fallback to 0.0 for remaining NaN values (may be far from true median).
             col_medians: NDArray[np.floating] = np.nanmedian(X, axis=0)
             for i in range(X.shape[1]):
                 if np.isnan(X[0, i]):
@@ -230,7 +233,10 @@ def predict_1x2(context: dict) -> dict[str, int] | None:
         classes: NDArray = le.classes_  # ['A', 'D', 'H'] typiquement
         proba_map: dict[str, float] = dict(zip(classes, probas))
     else:
-        proba_map = {"H": probas[0], "D": probas[1], "A": probas[2]}
+        # LabelEncoder required — sklearn sorts classes alphabetically ['A','D','H'],
+        # so probas order is [p_away, p_draw, p_home]. Without le, we can't guarantee order.
+        logger.error("No LabelEncoder found — cannot map probabilities safely. Falling back to alphabetical order.")
+        proba_map = {"A": probas[0], "D": probas[1], "H": probas[2]}
 
     ml_home = round(proba_map.get("H", 0.33) * 100)
     ml_draw = round(proba_map.get("D", 0.33) * 100)

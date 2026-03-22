@@ -157,8 +157,8 @@ def update_football_live() -> dict:
                 supabase.table("fixtures").update({
                     "live_stats_json": stats_payload,
                 }).eq("id", internal_id).execute()
-            except Exception:
-                pass  # column may not exist yet — non-critical
+            except Exception as e:
+                logger.warning("Failed to update live_stats_json for fixture %s: %s", fid, e)
 
     logger.info(f"[Live/Football] ✅ {updated} scores | {total_events} events")
     return {"updated": updated, "events": total_events}

@@ -8,6 +8,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { fetchPredictions, fetchFootballMetaAnalysis } from "@/lib/api"
+import { getStatValue } from "@/lib/statsHelper"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useWatchlist } from "@/lib/useWatchlist"
@@ -174,31 +175,31 @@ function TopMarketsCard({ matches }) {
             key: 'btts',
             label: 'BTTS',
             emoji: '🔄',
-            getProba: (m) => m.prediction?.proba_btts,
+            getProba: (m) => getStatValue(m.prediction, 'proba_btts'),
         },
         {
             key: 'over05',
             label: '+0.5',
             emoji: '⚽',
-            getProba: (m) => m.prediction?.stats_json?.proba_over_05 ?? m.prediction?.proba_over_05,
+            getProba: (m) => getStatValue(m.prediction, 'proba_over_05'),
         },
         {
             key: 'over15',
             label: '+1.5',
             emoji: '🎯',
-            getProba: (m) => m.prediction?.stats_json?.proba_over_15 ?? m.prediction?.proba_over_15,
+            getProba: (m) => getStatValue(m.prediction, 'proba_over_15'),
         },
         {
             key: 'over25',
             label: '+2.5',
             emoji: '🔥',
-            getProba: (m) => m.prediction?.proba_over_2_5 ?? m.prediction?.proba_over_25,
+            getProba: (m) => getStatValue(m.prediction, 'proba_over_25'),
         },
         {
             key: 'over35',
             label: '+3.5',
             emoji: '💥',
-            getProba: (m) => m.prediction?.stats_json?.proba_over_35 ?? m.prediction?.proba_over_35,
+            getProba: (m) => getStatValue(m.prediction, 'proba_over_35'),
         },
     ]
 

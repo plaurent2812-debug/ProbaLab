@@ -30,6 +30,9 @@ def calculate_implied_odds(probability: float) -> float:
     """Implied odds from model probability with ~5% bookmaker margin."""
     if not probability or probability <= 0:
         return 0.0
+    if probability > 100:
+        logger.warning("Probability %.1f%% > 100%% in calculate_implied_odds, clamping", probability)
+        probability = 100.0
     real_prob = max(0.01, probability / 100.0)
     return round((1 / real_prob) * 0.95, 2)
 
@@ -124,6 +127,8 @@ def _build_football_safe(predictions: list, fixture_map: dict, odds_map: dict) -
         if p_dc >= 70 and p15 >= 70:
             o_dc = get_market_odds(real_odds, dc_code, p_dc)
             o_15 = get_market_odds(real_odds, "+1.5", p15)
+            # Corrélation discount: DC et Over ne sont pas indépendants (home win → more goals).
+            # 0.85 = estimation empirique de la réduction de cote due à la corrélation positive.
             o_combo = round(o_dc * o_15 * 0.85, 2)
             p_combo = round((p_dc / 100) * (p15 / 100) * 1.10 * 100, 1)
             p_combo = min(p_combo, max(p_dc, p15))
@@ -138,6 +143,8 @@ def _build_football_safe(predictions: list, fixture_map: dict, odds_map: dict) -
         if p_dc >= 70 and p_btts >= 65:
             o_dc = get_market_odds(real_odds, dc_code, p_dc)
             o_btts = get_market_odds(real_odds, "BTTS", p_btts)
+            # Corrélation discount: DC et BTTS partagent un signal (victoire implique au moins 1 but).
+            # 0.85 = même facteur empirique que DC + Over 1.5.
             o_combo = round(o_dc * o_btts * 0.85, 2)
             p_combo = round((p_dc / 100) * (p_btts / 100) * 1.05 * 100, 1)
             if p_combo >= 50 and 1.30 <= o_combo <= 2.00:
@@ -313,6 +320,8 @@ def _build_football_fun(predictions: list, fixture_map: dict, odds_map: dict) ->
         if p_fav >= 50 and p25 >= 55:
             o_win = get_market_odds(real_odds, m_win, p_win)
             o_25 = get_market_odds(real_odds, "+2.5", p25)
+            # Corrélation discount: victoire + buts sont positivement corrélés.
+            # 0.90 = discount plus léger que SAFE (0.85) car les marchés FUN tolèrent plus de variance.
             o = round(o_win * o_25 * 0.90, 2)
             p = round((p_win / 100) * (p25 / 100) * 100, 1)
             if o >= 2.0:
@@ -322,6 +331,7 @@ def _build_football_fun(predictions: list, fixture_map: dict, odds_map: dict) ->
         if p_fav >= 50 and p_btts >= 55:
             o_win = get_market_odds(real_odds, m_win, p_win)
             o_btts = get_market_odds(real_odds, "BTTS", p_btts)
+            # Corrélation discount: victoire implique >= 1 but, corrélation positive avec BTTS.
             o = round(o_win * o_btts * 0.90, 2)
             p = round((p_win / 100) * (p_btts / 100) * 100, 1)
             if o >= 2.0:
@@ -331,6 +341,7 @@ def _build_football_fun(predictions: list, fixture_map: dict, odds_map: dict) ->
         if p_fav >= 50 and p15 >= 70:
             o_win = get_market_odds(real_odds, m_win, p_win)
             o_15 = get_market_odds(real_odds, "+1.5", p15)
+            # Corrélation discount: victoire + Over 1.5 fortement liés (gagner implique marquer).
             o = round(o_win * o_15 * 0.90, 2)
             p = round((p_win / 100) * (p15 / 100) * 1.1 * 100, 1)
             if o >= 1.80:
@@ -340,6 +351,8 @@ def _build_football_fun(predictions: list, fixture_map: dict, odds_map: dict) ->
         if p_btts >= 60 and p25 >= 55:
             o_btts = get_market_odds(real_odds, "BTTS", p_btts)
             o_25 = get_market_odds(real_odds, "+2.5", p25)
+            # Corrélation discount: BTTS et Over 2.5 très corrélés (BTTS implique >= 2 buts).
+            # 0.85 = discount fort car la dépendance est élevée entre ces deux marchés.
             o = round(o_btts * o_25 * 0.85, 2)
             p = round((p_btts / 100) * (p25 / 100) * 1.15 * 100, 1)
             if o >= 1.80:

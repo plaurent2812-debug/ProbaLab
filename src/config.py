@@ -83,9 +83,9 @@ def _get_current_season() -> int:
     Most European leagues start in August. The season year is the
     calendar year the season started in (e.g. 2025 for 2025-26).
     """
-    from datetime import datetime
+    from datetime import datetime, timezone
 
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     return now.year if now.month >= 8 else now.year - 1
 
 
@@ -198,6 +198,44 @@ def api_get(endpoint: str, params: dict | None = None) -> dict | None:
                 return None
 
     return None  # Should not reach here
+
+
+def api_get_with_retry(
+    endpoint: str, params: dict, max_retries: int = 2, label: str = ""
+) -> dict | None:
+    """Wrapper around api_get with additional retry for empty responses.
+
+    api_get already handles HTTP 429/5xx retries and network errors.
+    This adds a second retry layer for cases where the API returns a
+    successful HTTP 200 but with an empty ``response`` list — common
+    for events, lineups, odds, and h2h endpoints during data propagation
+    delays on the API-Football side.
+
+    Args:
+        endpoint: API path (e.g. ``"fixtures/events"``).
+        params: Query-string parameters.
+        max_retries: Number of additional attempts on empty response.
+        label: Human-readable label for log messages.
+
+    Returns:
+        Parsed JSON dict, or the last (possibly empty) response on failure.
+    """
+    for attempt in range(max_retries + 1):
+        data = api_get(endpoint, params)
+        if data and data.get("response"):
+            return data
+        if attempt < max_retries:
+            delay = 2 ** attempt  # 1s, 2s
+            logger.warning(
+                "Empty response for %s (attempt %d/%d), retrying in %ds...",
+                label or endpoint,
+                attempt + 1,
+                max_retries + 1,
+                delay,
+            )
+            time.sleep(delay)
+    logger.error("All %d attempts failed for %s", max_retries + 1, label or endpoint)
+    return data  # Return last response (even if empty)
 
 
 def get_request_count() -> int:

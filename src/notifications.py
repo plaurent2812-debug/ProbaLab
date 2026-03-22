@@ -12,6 +12,7 @@ Configuration requise dans .env :
 """
 
 
+import html as _html
 import os
 from typing import Any
 
@@ -138,9 +139,9 @@ def format_value_bets(predictions: list[dict[str, Any]]) -> str:
     msg = "🔥 <b>VALUE BETS DÉTECTÉS</b>\n\n"
 
     for bet in value_bets:
-        home = bet.get("home_team", "?")
-        away = bet.get("away_team", "?")
-        prediction = bet.get("prediction", "?")
+        home = _html.escape(str(bet.get("home_team", "?")))
+        away = _html.escape(str(bet.get("away_team", "?")))
+        prediction = _html.escape(str(bet.get("prediction", "?")))
         proba = bet.get("confidence", bet.get("proba_home", "?"))
         odds = bet.get("odds", "?")
         edge = bet.get("edge", "?")
@@ -209,8 +210,8 @@ def format_ticket_result(
     msg = f"{emoji} <b>TICKET {ticket_type.upper()}</b> {type_emojis.get(ticket_type, '🎫')}\n\n"
 
     for pick in picks:
-        match_name = pick.get("match", "?")
-        result = pick.get("result", "?")
+        match_name = _html.escape(str(pick.get("match", "?")))
+        result = _html.escape(str(pick.get("result", "?")))
         pick_ok = pick.get("correct", False)
         icon = "✅" if pick_ok else "❌"
         msg += f"{icon} {match_name} — {result}\n"

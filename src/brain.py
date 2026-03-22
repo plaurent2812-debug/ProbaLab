@@ -1,17 +1,19 @@
 from __future__ import annotations
 
 """
-brain.py v2 — Pipeline hybride : Stats mathématiques + Narration IA Claude.
+brain.py v2 — Pipeline hybride : Stats mathématiques + Narration IA Gemini.
 
 Workflow :
-  1. stats_engine.py calcule les probabilités (Poisson + ELO + facteurs)
+  1. stats_engine.py calcule les probabilités (Poisson + ELO + ML + calibration)
   2. scorer_engine.py identifie le buteur probable + synergies
-  3. Les données sont injectées dans le prompt Claude
-  4. Claude génère l'analyse narrative en s'appuyant sur les vrais chiffres
-  5. Résultat final = 70% stats math + 30% ajustement IA
+  3. Les données sont injectées dans le prompt Gemini
+  4. Gemini génère l'analyse narrative en s'appuyant sur les vrais chiffres
+  5. Résultat final = 100% stats (Phase 1 — le meta-learner IA est désactivé)
+     Les AI features sont sauvegardées pour le futur Phase 2 XGBoost.
 """
 import json
 import re
+import time
 
 from src.config import GEMINI_API_KEY, logger, supabase
 from src.constants import WEIGHT_AI, WEIGHT_STATS
@@ -22,6 +24,14 @@ from src.models.stats_engine import analyze_match, update_elo_from_results
 from src.pipeline.inference import predict_meta
 
 import os
+
+
+def _sanitize_team_name(name: str) -> str:
+    """Strip anything that isn't word chars, spaces, hyphens or dots."""
+    if not name:
+        return "?"
+    return re.sub(r'[^\w\s.\-]', '', str(name))[:80]
+
 
 # ── Client Gemini ─────────────────────────────────────────────
 # Initialisation du client Gemini (reportée à l'utilisation pour éviter les crashs d'import)
@@ -68,6 +78,13 @@ def extract_json(text: str) -> dict | None:
             return json.loads(m.group(1).strip())
         except (json.JSONDecodeError, ValueError):
             pass
+    # Last resort: find all {…} blocks and try parsing each, preferring the first valid one
+    for m in re.finditer(r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}", text, re.DOTALL):
+        try:
+            return json.loads(m.group(0))
+        except (json.JSONDecodeError, ValueError):
+            continue
+    # Ultra-fallback: greedy match (may grab too much but catches nested JSON)
     m = re.search(r"\{[\s\S]*\}", text, re.DOTALL)
     if m:
         try:
@@ -190,11 +207,15 @@ def build_prompt(fixture: dict, stats: dict, scorers: dict | None) -> tuple[str,
     """
     ctx = stats.get("context", {})
 
+    # Sanitize team names before injecting into prompt
+    safe_home = _sanitize_team_name(fixture["home_team"])
+    safe_away = _sanitize_team_name(fixture["away_team"])
+
     # Construire le bloc de contexte factuel
     data_block = f"""
 === DONNÉES STATISTIQUES (calculées par notre modèle) ===
 
-MATCH : {fixture["home_team"]} (DOM) vs {fixture["away_team"]} (EXT)
+MATCH : {safe_home} (DOM) vs {safe_away} (EXT)
 LIGUE : Ligue ID {fixture["league_id"]}  |  DATE : {fixture["date"]}
 
 --- Modèle Poisson ajusté ---
@@ -268,7 +289,7 @@ Marché →  Dom: {market.get("market_home", "?")}%  |  Nul: {market.get("market
 
     # Build match context for semantic learning retrieval
     match_context = (
-        f"{fixture['home_team']} vs {fixture['away_team']}, "
+        f"{safe_home} vs {safe_away}, "
         f"Ligue {fixture['league_id']}, "
         f"xG {stats.get('xg_home', '?')}-{stats.get('xg_away', '?')}, "
         f"ELO {ctx.get('elo_home', '?')} vs {ctx.get('elo_away', '?')}, "
@@ -351,28 +372,32 @@ def ask_gemini(system_prompt: str, user_prompt: str) -> str | None:
     Returns:
         The text content of Gemini's reply, or ``None`` on API error.
     """
-    client = get_gemini_client()
-    if not client:
+    gclient = get_gemini_client()
+    if not gclient:
         return None
 
-    try:
-        response = client.models.generate_content(
-            model=MODEL_NAME,
-            contents=user_prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=system_prompt,
-                temperature=0.2,
-                max_output_tokens=4000,
-                response_mime_type="application/json",
-            ),
-        )
-        text = response.text
-        if text is None:
-            logger.warning(f"Gemini response has no text! Raw response: {response}")
-        return text
-    except Exception as e:
-        logger.error("Erreur Gemini : %s", e)
-        return None
+    # TODO: google-genai SDK does not expose a native per-request timeout param.
+    # Using a simple retry (1 retry) to handle transient failures.
+    for _attempt in range(2):
+        try:
+            response = gclient.models.generate_content(
+                model=MODEL_NAME,
+                contents=user_prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_prompt,
+                    temperature=0.2,
+                    max_output_tokens=4000,
+                    response_mime_type="application/json",
+                ),
+            )
+            if response and response.text:
+                return response.text
+            logger.warning("Gemini attempt %d: response has no text", _attempt + 1)
+        except Exception as e:
+            logger.warning("Gemini attempt %d failed: %s", _attempt + 1, e)
+        if _attempt == 0:
+            time.sleep(2)
+    return None
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -466,7 +491,11 @@ def blend_predictions(stats_result: dict, ai_result: AIFeatures | None) -> dict:
         Merged prediction dict ready for database insertion.
     """
     final = {}
-    
+
+    # Phase 1: 100% stats. If WEIGHT_AI changes, this logic must be updated.
+    if WEIGHT_AI > 0:
+        logger.warning("WEIGHT_AI=%s but Phase 1 uses 100%% stats — IA blend disabled", WEIGHT_AI)
+
     # Phase 1: 100% stats until Phase 2 XGBoost is ready
     fields_to_keep = ["proba_home", "proba_draw", "proba_away", "proba_btts", "proba_over_25"]
     for field in fields_to_keep:
@@ -493,11 +522,14 @@ def blend_predictions(stats_result: dict, ai_result: AIFeatures | None) -> dict:
     # Intégrer les AI Features si présentes
     ai_features_dict = {}
     if ai_result:
-        ai_features_dict = ai_result.model_dump()
+        if hasattr(ai_result, "model_dump"):
+            ai_features_dict = ai_result.model_dump()
+        elif isinstance(ai_result, dict):
+            ai_features_dict = ai_result
         final["ai_features"] = ai_features_dict
-        final["analysis_text"] = ai_result.analysis_text
-        final["likely_scorer"] = ai_result.likely_scorer
-        final["likely_scorer_reason"] = ai_result.likely_scorer_reason
+        final["analysis_text"] = ai_features_dict.get("analysis_text") if isinstance(ai_result, dict) else ai_result.analysis_text
+        final["likely_scorer"] = ai_features_dict.get("likely_scorer") if isinstance(ai_result, dict) else ai_result.likely_scorer
+        final["likely_scorer_reason"] = ai_features_dict.get("likely_scorer_reason") if isinstance(ai_result, dict) else ai_result.likely_scorer_reason
     else:
         final["ai_features"] = {}
         final["analysis_text"] = _build_fallback_analysis(stats_result)
@@ -509,18 +541,8 @@ def blend_predictions(stats_result: dict, ai_result: AIFeatures | None) -> dict:
     # À réactiver après réentraînement du meta-learner avec plus de features.
     final["model_version"] = "hybrid_v3"
 
-    # Soft cap : 80% max on any 1X2 outcome (professional football realistic ceiling)
-    _MAX_WIN = 80
-    if final.get("proba_home", 0) > _MAX_WIN:
-        _excess = final["proba_home"] - _MAX_WIN
-        final["proba_home"] = _MAX_WIN
-        final["proba_draw"] = round(final.get("proba_draw", 10) + _excess * 0.4)
-        final["proba_away"] = 100 - final["proba_home"] - final["proba_draw"]
-    elif final.get("proba_away", 0) > _MAX_WIN:
-        _excess = final["proba_away"] - _MAX_WIN
-        final["proba_away"] = _MAX_WIN
-        final["proba_draw"] = round(final.get("proba_draw", 10) + _excess * 0.4)
-        final["proba_home"] = 100 - final["proba_draw"] - final["proba_away"]
+    # Soft cap already applied in stats_engine.analyze_match() + clamp_probabilities().
+    # No duplicate cap needed here (Phase 1 = 100% stats passthrough).
 
     # Pour l'instant on reprend la recommandation 100% issue des stats (Phase 1)
     final["recommended_bet"] = stats_result.get("recommended_bet", "")
@@ -694,12 +716,12 @@ def run_brain() -> None:
                 ai_result = AIFeatures.model_validate(ai_result_dict)
                 logger.info("   ✅ Analyse Gemini OK (JSON validé)")
             except Exception as e:
-                logger.warning("   ⚠️ JSON invalide pour AIFeatures: %s", e)
+                logger.error("AIFeatures validation failed for %s vs %s: %s",
+                             fix.get("home_team", "?"), fix.get("away_team", "?"), e)
         else:
             logger.warning("   ⚠️ JSON introuvable, stats uniquement")
 
         # Sleep to avoid [Errno 35] Resource temporarily unavailable (API limits)
-        import time
         time.sleep(2.0)
 
         # ── D. Fusion ────────────────────────────────────────────
@@ -755,6 +777,19 @@ def run_brain() -> None:
             for key in extra_probas:
                 if final.get(key) is not None:
                     final["stats_json"][key] = final[key]
+
+            # CLV tracking: save market odds at prediction time so CLV can
+            # be computed later by comparing to closing line.
+            # The odds are already fetched in analyze_match → odds_to_probs.
+            ctx = final.get("context") or {}
+            market_snapshot = ctx.get("market")
+            if market_snapshot:
+                final["stats_json"]["odds_at_prediction"] = {
+                    "market_home": market_snapshot.get("market_home"),
+                    "market_draw": market_snapshot.get("market_draw"),
+                    "market_away": market_snapshot.get("market_away"),
+                    "overround": market_snapshot.get("overround"),
+                }
 
             insert_data = {
                 "fixture_id": fix["id"],

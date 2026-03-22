@@ -125,7 +125,9 @@ def fetch_and_update_results(target_date: str | None = None) -> dict:
     print(f"{'=' * 60}")
 
     # Récupère les fixtures du jour depuis Supabase
-    # On prend une fenêtre large : de minuit à 23h59 UTC
+    # Note: target_date is UTC-based (datetime.now(timezone.utc) above).
+    # Fixture dates stored in DB use Europe/Paris timezone (from matches.py API call),
+    # so this window may miss late-night matches or include previous-day ones near midnight.
     date_start = f"{target_date}T00:00:00"
     date_end = f"{target_date}T23:59:59"
 

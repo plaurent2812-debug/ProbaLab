@@ -45,11 +45,11 @@ if __name__ == "__main__":
     # export TELEGRAM_BOT_TOKEN="your_token"
     # export TELEGRAM_CHANNEL_ID="@your_channel_name"
     # python src/telegram_bot.py
-    if TELEGRAM_BOT_TOKEN and TELEGRAM_CHANNEL_ID:
+    if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_IDS:
         print("Envoi d'un message test...")
         success = send_telegram_message(
             "🤖 <b>Test depuis ProbaLab</b>\nCeci est un message de test automatisé."
         )
         print("Succès :" if success else "Échec")
     else:
-        print("Veuillez configurer TELEGRAM_BOT_TOKEN et TELEGRAM_CHANNEL_ID pour tester.")
+        print("Veuillez configurer TELEGRAM_BOT_TOKEN et TELEGRAM_CHAT_IDS pour tester.")

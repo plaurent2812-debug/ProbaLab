@@ -1,5 +1,7 @@
 from __future__ import annotations
 import datetime
+import io
+import logging
 import math
 import os
 import pickle
@@ -8,6 +10,31 @@ import pandas as pd
 from typing import Any, Dict, List, Optional, Tuple, Union
 from src.config import supabase
 from fastapi import APIRouter, Depends, Header, HTTPException
+
+logger = logging.getLogger(__name__)
+
+
+# ── Safe Pickle Loading ───────────────────────────────────────────
+_PICKLE_ALLOWED_PREFIXES = (
+    "numpy", "pandas", "sklearn", "xgboost", "lightgbm",
+    "_codecs", "builtins", "collections", "copyreg",
+)
+
+
+class _RestrictedUnpickler(pickle.Unpickler):
+    """Unpickler that only allows whitelisted module prefixes."""
+
+    def find_class(self, module: str, name: str) -> Any:
+        if any(module.startswith(p) for p in _PICKLE_ALLOWED_PREFIXES):
+            return super().find_class(module, name)
+        raise pickle.UnpicklingError(
+            f"Blocked deserialization of {module}.{name} — not in whitelist"
+        )
+
+
+def safe_pickle_load(f) -> Any:
+    """Deserialize a file object using the restricted unpickler."""
+    return _RestrictedUnpickler(f).load()
 from src.nhl.calibration import probability_calibrator
 
 # Imports NHL Modules
@@ -84,7 +111,7 @@ def _load_game_win_model():
     if os.path.isfile(model_path):
         try:
             with open(model_path, "rb") as f:
-                data = pickle.load(f)
+                data = safe_pickle_load(f)
             
             _game_win_features = data.get("feature_names", [])
             
@@ -602,10 +629,8 @@ def get_nhl_performance(days: int = 30):
         return metrics
 
     except Exception as e:
-        import traceback
-
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("NHL performance endpoint error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -648,7 +673,8 @@ def get_nhl_match_top_players(fixture_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("NHL match top players endpoint error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
     # 2. Extract players from fixture stats_json
     try:

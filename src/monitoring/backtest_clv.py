@@ -215,7 +215,13 @@ def compute_clv(data: list[dict]) -> dict[str, Any]:
 
 
 def run() -> dict[str, Any]:
-    """Run the full CLV backtest."""
+    """Run the full CLV backtest.
+
+    Data pipeline:
+      prediction_results.fixture_id → fixtures.api_fixture_id → fixture_odds
+    Odds at prediction time are also saved in predictions.stats_json.odds_at_prediction
+    (since 2026-03-22) for future opening-vs-closing line analysis.
+    """
     logger.info("=" * 60)
     logger.info("  CLV BACKTEST — Closing Line Value")
     logger.info("=" * 60)
@@ -223,9 +229,22 @@ def run() -> dict[str, Any]:
     data = _load_predictions_with_odds()
     if not data:
         logger.warning("  No predictions with matching odds found.")
+        logger.warning("  Ensure fixture_odds table is populated (via fetchers/odds).")
         return {"status": "NO_DATA"}
 
-    logger.info(f"  {len(data)} matchs avec cotes disponibles")
+    # Count total predictions to report coverage
+    try:
+        total_preds = supabase.table("prediction_results").select("id", count="exact").execute()
+        n_total = total_preds.count or 0
+        n_matched = len(data)
+        n_missing = n_total - n_matched
+        if n_missing > 0:
+            logger.info(f"  {n_matched}/{n_total} predictions have matching odds ({n_missing} missing)")
+        else:
+            logger.info(f"  {n_matched} matchs avec cotes disponibles")
+    except Exception:
+        logger.info(f"  {len(data)} matchs avec cotes disponibles")
+
     results = compute_clv(data)
 
     logger.info(f"  CLV moyen (best side)  : {results['clv_best_mean']:+.4f}")

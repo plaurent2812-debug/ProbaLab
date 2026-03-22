@@ -7,6 +7,7 @@ import {
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/lib/auth"
 import { fetchPredictionDetail, fetchPredictions } from "@/lib/api"
+import { getStatValue, formatOdds } from "@/lib/statsHelper"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -134,14 +135,6 @@ export default function MatchDetailPage() {
     useEffect(() => {
         fetchPredictionDetail(id)
             .then(raw => {
-                // Flatten stats_json keys to top-level for robust fallback
-                if (raw?.prediction) {
-                    const sj = raw.prediction.stats_json || {}
-                    const merged = { ...sj, ...raw.prediction } // prediction wins over sj
-                    // Also normalise over_2_5 vs over_25
-                    if (!merged.proba_over_25) merged.proba_over_25 = merged.proba_over_2_5
-                    raw = { ...raw, prediction: merged }
-                }
                 setData(raw)
             })
             .catch(e => setError(e.message))
@@ -197,20 +190,18 @@ export default function MatchDetailPage() {
     const time = fixture?.date?.slice(11, 16) || "—"
     const dateStr = fixture?.date ? new Date(fixture.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) : ""
 
-    // Stats from stats_json fallback
-    const sj = p?.stats_json || {}
-    const get = (key, alt) => p?.[key] ?? sj?.[key] ?? p?.[alt] ?? sj?.[alt] ?? null
-
-    const proba_over_05 = get('proba_over_05')
-    const proba_over_15 = get('proba_over_15')
-    const proba_over_25 = get('proba_over_25') ?? get('proba_over_2_5')
-    const proba_over_35 = get('proba_over_35')
-    const proba_btts = get('proba_btts')
-    const proba_penalty = get('proba_penalty')
-    const xg_home = get('xg_home') ?? sj?.xg_home
-    const xg_away = get('xg_away') ?? sj?.xg_away
+    // Stats via centralized helper (resolves stats_json vs top-level)
+    const proba_over_05 = getStatValue(p, 'proba_over_05')
+    const proba_over_15 = getStatValue(p, 'proba_over_15')
+    const proba_over_25 = getStatValue(p, 'proba_over_25')
+    const proba_over_35 = getStatValue(p, 'proba_over_35')
+    const proba_btts = getStatValue(p, 'proba_btts')
+    const proba_penalty = getStatValue(p, 'proba_penalty')
+    const xg_home = getStatValue(p, 'xg_home')
+    const xg_away = getStatValue(p, 'xg_away')
 
     // Scorers
+    const sj = p?.stats_json || {}
     const scorers = p?.top_scorers || sj?.top_scorers || []
 
     return (
@@ -402,7 +393,7 @@ export default function MatchDetailPage() {
                             <div className="text-right">
                                 <p className="text-[10px] uppercase font-bold text-muted-foreground mb-0.5">Cote Réelle</p>
                                 <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
-                                    @ {(oddMap[bestKey] || 0).toFixed(2)}
+                                    @ {formatOdds(oddMap[bestKey] ?? null)}
                                 </span>
                             </div>
                         </CardContent>

@@ -11,13 +11,14 @@ fetch_context.py — Récupère le contexte des matchs à venir :
 + ~65 requêtes OpenWeatherMap (optionnel)
 """
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 
 import requests
 from src.config import (
     LEAGUES,
     SEASON,
     api_get,
+    api_get_with_retry,
     get_request_count,
     logger,
     reset_request_count,
@@ -43,6 +44,7 @@ def fetch_injuries() -> None:
         lid: int = league["id"]
         data = api_get("injuries", {"league": lid, "season": SEASON})
         if not data or not data.get("response"):
+            logger.warning("Empty API response for injuries league %s — skipping (no retry)", lid)
             continue
 
         batch: list[dict] = []
@@ -104,8 +106,8 @@ def fetch_injuries() -> None:
                     supabase.table("players").update({"is_injured": True}).eq(
                         "api_id", pid
                     ).execute()
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.error("Failed to update is_injured for player %s: %s", pid, e)
             logger.info(f"  ✅ {len(injured_ids)} joueurs marqués comme blessés/absents")
         else:
             logger.info("  ℹ️ Aucun joueur blessé détecté pour les matchs à venir")
@@ -140,7 +142,9 @@ def fetch_odds() -> None:
         if (i + 1) % 20 == 0:
             logger.info(f"  Odds : {i + 1}/{len(fixtures)}...")
 
-        data = api_get("odds", {"fixture": fid, "bookmaker": 8})  # 8 = Bet365
+        data = api_get_with_retry(
+            "odds", {"fixture": fid, "bookmaker": 8}, label=f"odds fixture {fid}"
+        )
         if not data or not data.get("response"):
             continue
 
@@ -174,14 +178,17 @@ def fetch_odds() -> None:
                         odds_data["dc_x2_odds"] = safe_float(values.get("Draw/Away"))
                         odds_data["dc_12_odds"] = safe_float(values.get("Home/Away"))
 
+        if odds_data.get("home_win_odds") is None or odds_data.get("draw_odds") is None or odds_data.get("away_win_odds") is None:
+            logger.warning("Incomplete 1X2 odds for fixture %s", fid)
+
         if odds_data.get("home_win_odds"):
             try:
                 supabase.table("fixture_odds").upsert(
                     odds_data, on_conflict="fixture_api_id"
                 ).execute()
                 total += 1
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error("Failed to upsert fixture_odds for fixture %s: %s", fid, e)
 
     logger.info(f"✅ {total} matchs avec cotes importées")
 
@@ -216,6 +223,7 @@ def fetch_h2h() -> None:
         away_id: int | None = name_to_id.get(fix["away_team"])
 
         if not home_id or not away_id:
+            logger.warning("H2H team name mismatch: home=%s away=%s", fix.get("home_team"), fix.get("away_team"))
             continue
 
         # Éviter les doublons (même paire)
@@ -224,7 +232,11 @@ def fetch_h2h() -> None:
             continue
         seen_pairs.add(pair)
 
-        data = api_get("fixtures/headtohead", {"h2h": f"{home_id}-{away_id}", "last": 10})
+        data = api_get_with_retry(
+            "fixtures/headtohead",
+            {"h2h": f"{home_id}-{away_id}", "last": 10},
+            label=f"h2h {home_id}-{away_id}",
+        )
         if not data or not data.get("response"):
             continue
 
@@ -283,8 +295,8 @@ def fetch_h2h() -> None:
                 h2h_data, on_conflict="team_a_api_id,team_b_api_id"
             ).execute()
             total += 1
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error("Failed to upsert h2h_cache for %s-%s: %s", home_id, away_id, e)
 
     logger.info(f"✅ {total} H2H importés")
 
@@ -343,7 +355,8 @@ def fetch_weather() -> None:
             closest = min(
                 weather_data.get("list", []),
                 key=lambda w: abs(
-                    datetime.fromtimestamp(w["dt"]).timestamp() - match_dt.timestamp()
+                    datetime.fromtimestamp(w["dt"], tz=timezone.utc).timestamp()
+                    - match_dt.timestamp()
                 ),
                 default=None,
             )
@@ -362,7 +375,8 @@ def fetch_weather() -> None:
                 ).execute()
                 total += 1
 
-        except Exception:
+        except Exception as e:
+            logger.warning("Weather fetch failed for fixture %s: %s", fix.get("api_fixture_id"), e)
             continue
 
     logger.info(f"✅ Météo récupérée pour {total} matchs")

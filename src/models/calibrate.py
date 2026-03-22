@@ -19,7 +19,14 @@ from collections.abc import Callable
 
 import numpy as np
 from src.config import logger, supabase
-from src.constants import MIN_CALIBRATION_SAMPLES, MIN_ISOTONIC_SAMPLES
+from src.constants import (
+    BASE_RATE_AWAY,
+    BASE_RATE_DRAW,
+    BASE_RATE_HOME,
+    BAYESIAN_SHRINKAGE_K,
+    MIN_CALIBRATION_SAMPLES,
+    MIN_ISOTONIC_SAMPLES,
+)
 from numpy.typing import NDArray
 from sklearn.isotonic import IsotonicRegression
 from sklearn.linear_model import LogisticRegression
@@ -478,6 +485,80 @@ def _get_or_fit_isotonic(bet_type: str, league_id: int | None = None) -> Isotoni
     except Exception:
         _isotonic_cache[cache_key] = None
         return None
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  6. BAYESIAN SHRINKAGE — 1X2 CALIBRATION (low sample count)
+# ═══════════════════════════════════════════════════════════════════
+
+
+def _get_1x2_sample_count() -> int:
+    """Return the number of evaluated 1X2 predictions available for calibration.
+
+    Counts rows in ``prediction_results`` where ``pred_home`` is not null,
+    which indicates a fully evaluated 1X2 prediction.
+
+    Returns:
+        Sample count (0 if query fails or no data).
+    """
+    try:
+        resp = (
+            supabase.table("prediction_results")
+            .select("id", count="exact")
+            .not_.is_("pred_home", "null")
+            .execute()
+        )
+        return resp.count or 0
+    except Exception:
+        return 0
+
+
+def calibrate_1x2_bayesian(
+    proba_home: float,
+    proba_draw: float,
+    proba_away: float,
+    league_id: int | None = None,
+) -> tuple[float, float, float]:
+    """Bayesian shrinkage calibration for 1X2 when sample size < MIN_ISOTONIC_SAMPLES.
+
+    Shrinks extreme predictions toward the base rate (league average).
+    With more data, the shrinkage factor approaches 1.0 and this converges
+    to identity — at which point the Isotonic calibrator takes over.
+
+    Formula: ``calibrated = base_rate + shrinkage * (raw - base_rate)``
+    where ``shrinkage = n / (n + k)``, *n* = sample count, *k* = shrinkage strength.
+
+    Args:
+        proba_home: Raw home win probability (0–100 scale).
+        proba_draw: Raw draw probability (0–100 scale).
+        proba_away: Raw away win probability (0–100 scale).
+        league_id: Optional league id (reserved for future per-league base rates).
+
+    Returns:
+        Tuple of ``(cal_home, cal_draw, cal_away)`` as integers summing to 100.
+    """
+    n = _get_1x2_sample_count()
+    shrinkage = n / (n + BAYESIAN_SHRINKAGE_K) if n > 0 else 0.0
+
+    # Base rates — could be per-league in the future
+    base_home = BASE_RATE_HOME
+    base_draw = BASE_RATE_DRAW
+    base_away = BASE_RATE_AWAY
+
+    cal_home = base_home + shrinkage * (proba_home - base_home)
+    cal_draw = base_draw + shrinkage * (proba_draw - base_draw)
+    cal_away = base_away + shrinkage * (proba_away - base_away)
+
+    # Normalize to exactly 100
+    total = cal_home + cal_draw + cal_away
+    if total > 0:
+        cal_home = round(cal_home / total * 100)
+        cal_draw = round(cal_draw / total * 100)
+        cal_away = 100 - cal_home - cal_draw
+    else:
+        cal_home, cal_draw, cal_away = 45, 27, 28
+
+    return cal_home, cal_draw, cal_away
 
 
 # ═══════════════════════════════════════════════════════════════════

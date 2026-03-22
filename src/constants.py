@@ -56,6 +56,12 @@ HOME_ELO_ADVANTAGE_BY_LEAGUE: dict[int, int] = {
     2: 55,    # Champions League — reduced (neutral-ish)
     3: 55,    # Europa League
     848: 55,  # Conference League
+    # Coupes nationales (knockout, home advantage réduit)
+    45: 55,   # FA Cup — neutral/reduced home advantage
+    66: 55,   # Coupe de France
+    81: 50,   # DFB-Pokal
+    137: 55,  # Coppa Italia
+    143: 55,  # Copa del Rey
 }
 ELO_DECAY_RATE: float = 0.001  # Decay ELO temporel (régression vers 1500)
 
@@ -270,6 +276,8 @@ COMPETITION_XG_FACTOR: dict[int, float] = {
 }
 
 # European competition draw boost (higher stakes → more cautious → more draws)
+# NOTE: CL (2), EL (3), ECL (848) are in DRAW_FACTOR_BY_LEAGUE,
+# so this boost only applies to competitions WITHOUT calibrated draw factors.
 EURO_COMP_DRAW_BOOST: dict[int, float] = {
     2: 0.04,    # Champions League: +4% draw probability
     3: 0.03,    # Europa League: +3% draw probability
@@ -299,6 +307,14 @@ PROB_OVER25_CEIL: int = 80
 
 MIN_CALIBRATION_SAMPLES: int = 100   # Minimum pour Platt scaling fiable
 MIN_ISOTONIC_SAMPLES: int = 500      # Minimum pour Isotonic regression (évite la "fonction en escalier")
+BAYESIAN_SHRINKAGE_K: int = 50       # Shrinkage strength for Bayesian 1X2 calibration
+                                     # At n=50 samples, trust raw 50%; at n=500, trust raw 91%
+                                     # Used when sample count is below MIN_ISOTONIC_SAMPLES
+
+# Base rates for Bayesian 1X2 shrinkage (average across European top leagues)
+BASE_RATE_HOME: float = 45.0   # Average home win rate %
+BASE_RATE_DRAW: float = 27.0   # Average draw rate %
+BASE_RATE_AWAY: float = 28.0   # Average away win rate %
 
 
 # ═══════════════════════════════════════════════════════════════════

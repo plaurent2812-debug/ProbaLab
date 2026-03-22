@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/lib/auth"
 import { API_ROOT } from "@/lib/api"
+import { formatOdds, formatProba, formatEV } from "@/lib/statsHelper"
 
 // ── API helpers ───────────────────────────────────────────────
 async function fetchBestBets(date, sport = null) {
@@ -218,20 +219,20 @@ function BetCard({ bet, sport, date, isAdmin, onResultUpdate }) {
             <div className="flex items-center justify-between mt-3">
                 <div className="flex items-center gap-4 text-xs text-muted-foreground">
                     <span className="font-mono font-bold text-foreground text-base">
-                        {bet.odds?.toFixed(2)}
+                        {formatOdds(bet.odds)}
                     </span>
                     <div className="flex flex-col">
-                        <span>{bet.proba_model?.toFixed(0)}% modèle</span>
+                        <span>{formatProba(bet.proba_model)} modèle</span>
                         {bet.proba_bookmaker != null && (
                             <span className="text-[10px] text-muted-foreground">
-                                {bet.proba_bookmaker.toFixed(0)}% bookmaker
+                                {formatProba(bet.proba_bookmaker)} bookmaker
                             </span>
                         )}
                         <ConfStars conf={bet.confidence} />
                     </div>
                     {bet.ev != null && bet.ev > 0 && (
                         <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-500/15 text-emerald-400">
-                            EV +{(bet.ev * 100).toFixed(1)}%
+                            EV {formatEV(bet.ev)}
                         </span>
                     )}
                     {bet.bookmaker && (
@@ -723,7 +724,7 @@ function ExpertPickCard({ pick, isAdmin = false, onDelete }) {
                                 {selections.length === 1 && pick.odds && (
                                     <div className="shrink-0">
                                         <span className="inline-flex items-center justify-center min-w-[48px] px-2.5 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 text-sm font-bold font-mono">
-                                            {Number(pick.odds).toFixed(2)}
+                                            {formatOdds(pick.odds != null ? Number(pick.odds) : null)}
                                         </span>
                                     </div>
                                 )}
@@ -741,7 +742,7 @@ function ExpertPickCard({ pick, isAdmin = false, onDelete }) {
                         <div className="flex items-center gap-1.5">
                             <span className="text-[10px] text-white/40 uppercase font-medium">Cote totale</span>
                             <span className="px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 text-sm font-bold font-mono">
-                                {Number(pick.odds).toFixed(2)}
+                                {formatOdds(pick.odds != null ? Number(pick.odds) : null)}
                             </span>
                         </div>
                     )}
@@ -1224,7 +1225,7 @@ function HistoryTable({ filteredHistory, filteredHistoryStats }) {
                                                 {/* Odds + P&L */}
                                                 <div className="shrink-0 text-right">
                                                     <div className="text-xs font-bold tabular-nums">
-                                                        @{parseFloat(pick.odds || 0).toFixed(2)}
+                                                        @{formatOdds(pick.odds ? parseFloat(pick.odds) : null)}
                                                     </div>
                                                     <div className={cn(
                                                         "text-[10px] font-semibold tabular-nums",
@@ -1232,7 +1233,7 @@ function HistoryTable({ filteredHistory, filteredHistoryStats }) {
                                                             isLoss ? "text-red-500" :
                                                                 "text-muted-foreground"
                                                     )}>
-                                                        {isWin ? `+${(parseFloat(pick.odds || 0) - 1).toFixed(2)}u` :
+                                                        {isWin ? `+${formatOdds(pick.odds ? parseFloat(pick.odds) - 1 : null)}u` :
                                                             isLoss ? "-1.00u" :
                                                                 isPending ? "⏳" : "—"}
                                                     </div>

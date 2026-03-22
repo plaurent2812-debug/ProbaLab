@@ -63,6 +63,11 @@ def place_bet(
 ) -> dict[str, Any]:
     """Record a new bet in the bankroll tracking table.
 
+    Uses a PostgreSQL RPC function (``place_bet_atomic``) to guarantee
+    atomicity via ``SELECT … FOR UPDATE`` row-level locking.  Falls back
+    to the legacy read-then-write loop when the RPC is not available
+    (e.g. migration not yet applied).
+
     Args:
         ticket_type: ``"safe"``, ``"fun"``, ``"jackpot"``, or ``"single"``.
         stake: Bet amount.
@@ -74,40 +79,107 @@ def place_bet(
     Returns:
         The inserted row as a dict.
     """
-    current = get_current_bankroll()
+    if stake < 0.50:
+        logger.info("Stake %.2f€ below minimum (0.50€), skipping bet", stake)
+        return {"status": "skipped", "reason": "stake_below_minimum"}
 
-    if stake > current:
-        logger.warning("Mise (%.2f) > bankroll (%.2f) — pari refusé", stake, current)
-        return {"error": "Stake exceeds bankroll"}
-
-    row: dict[str, Any] = {
-        "date": date.today().isoformat(),
-        "ticket_type": ticket_type,
-        "bet_description": description,
-        "stake": round(stake, 2),
-        "odds": round(odds, 3),
-        "potential_gain": round(stake * odds, 2),
-        "actual_gain": 0,
-        "status": "pending",
-        "bankroll_before": round(current, 2),
-        "bankroll_after": round(current - stake, 2),  # Stake is deducted immediately
-        "model_version": model_version,
-        "fixture_ids": fixture_ids or [],
-    }
-
+    # ── Atomic path via Supabase RPC ──────────────────────────────
     try:
-        result = supabase.table(TABLE).insert(row).execute()
-        logger.info(
-            "Pari enregistré: %s — %.2f€ @ %.2f (potentiel: %.2f€)",
-            ticket_type,
-            stake,
-            odds,
-            stake * odds,
-        )
-        return result.data[0] if result.data else row
+        result = supabase.rpc("place_bet_atomic", {
+            "p_ticket_type": ticket_type,
+            "p_stake": round(stake, 2),
+            "p_odds": round(odds, 3),
+            "p_description": description,
+            "p_fixture_ids": fixture_ids or [],
+            "p_model_version": model_version,
+        }).execute()
+
+        data = result.data
+        if isinstance(data, list) and len(data) == 1:
+            data = data[0]
+
+        if data and isinstance(data, dict):
+            if "error" in data:
+                logger.warning("Bet rejected by RPC: %s", data["error"])
+                return data
+            logger.info(
+                "Pari enregistré (atomic): %s — %.2f€ @ %.2f (potentiel: %.2f€)",
+                ticket_type,
+                stake,
+                odds,
+                stake * odds,
+            )
+            return data
     except Exception as e:
-        logger.error("Erreur enregistrement pari: %s", e)
-        return {"error": str(e)}
+        logger.error("place_bet_atomic RPC failed: %s — falling back to legacy", e)
+
+    # ── Fallback: legacy non-atomic path ──────────────────────────
+    return _place_bet_legacy(ticket_type, stake, odds, description, fixture_ids, model_version)
+
+
+def _place_bet_legacy(
+    ticket_type: str,
+    stake: float,
+    odds: float,
+    description: str = "",
+    fixture_ids: list[int] | None = None,
+    model_version: str = "hybrid_v3",
+) -> dict[str, Any]:
+    """Legacy non-atomic bet placement (read-then-write with retry).
+
+    Kept as fallback in case the ``place_bet_atomic`` RPC is not yet
+    deployed.  Subject to race conditions under concurrent writes.
+    """
+    MAX_RETRIES = 3
+    for attempt in range(MAX_RETRIES):
+        current = get_current_bankroll()
+
+        if stake > current:
+            logger.warning("Mise (%.2f) > bankroll (%.2f) — pari refusé", stake, current)
+            return {"error": "Stake exceeds bankroll"}
+
+        row: dict[str, Any] = {
+            "date": date.today().isoformat(),
+            "ticket_type": ticket_type,
+            "bet_description": description,
+            "stake": round(stake, 2),
+            "odds": round(odds, 3),
+            "potential_gain": round(stake * odds, 2),
+            "actual_gain": 0,
+            "status": "pending",
+            "bankroll_before": round(current, 2),
+            "bankroll_after": round(current - stake, 2),
+            "model_version": model_version,
+            "fixture_ids": fixture_ids or [],
+        }
+
+        try:
+            result = supabase.table(TABLE).insert(row).execute()
+
+            # Verify bankroll didn't change between read and insert
+            # (optimistic concurrency: re-read and confirm)
+            fresh = get_current_bankroll()
+            expected_after = round(current - stake, 2)
+            if abs(fresh - expected_after) > 0.01 and attempt < MAX_RETRIES - 1:
+                inserted_id = result.data[0].get("id") if result.data else None
+                if inserted_id:
+                    supabase.table(TABLE).delete().eq("id", inserted_id).execute()
+                logger.warning("Bankroll concurrent modification detected, retrying (%d/%d)", attempt + 1, MAX_RETRIES)
+                continue
+
+            logger.info(
+                "Pari enregistré (legacy): %s — %.2f€ @ %.2f (potentiel: %.2f€)",
+                ticket_type,
+                stake,
+                odds,
+                stake * odds,
+            )
+            return result.data[0] if result.data else row
+        except Exception as e:
+            logger.error("Erreur enregistrement pari: %s", e)
+            return {"error": str(e)}
+
+    return {"error": "Failed after max retries (concurrent bankroll modifications)"}
 
 
 # ═══════════════════════════════════════════════════════════════════

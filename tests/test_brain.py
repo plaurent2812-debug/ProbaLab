@@ -118,9 +118,10 @@ class TestBlendPredictions:
         result = blend_predictions(self._make_stats(), self._make_ai())
         assert result["analysis_text"] == "Analyse test"
 
-    def test_ai_recommended_bet_used(self):
+    def test_recommended_bet_from_stats_in_phase1(self):
+        # Phase 1: recommended_bet comes from stats, not AI
         result = blend_predictions(self._make_stats(), self._make_ai())
-        assert result["recommended_bet"] == "BTTS Oui"
+        assert result["recommended_bet"] == "Victoire Domicile"
 
     def test_stats_json_present(self):
         result = blend_predictions(self._make_stats(), self._make_ai())

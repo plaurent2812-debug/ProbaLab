@@ -2,10 +2,12 @@
 Monitoring CLI — Run all prediction quality diagnostics.
 
 Usage:
-    python -m src.monitoring           # Run all checks
-    python -m src.monitoring --clv     # CLV only
-    python -m src.monitoring --brier   # Brier only
-    python -m src.monitoring --features # Feature audit only
+    python -m src.monitoring             # Run all checks
+    python -m src.monitoring --clv       # CLV only
+    python -m src.monitoring --brier     # Brier only
+    python -m src.monitoring --features  # Feature audit only
+    python -m src.monitoring --quality   # Data quality only
+    python -m src.monitoring --alerts    # Run alerting checks (+ send Telegram)
 """
 from __future__ import annotations
 
@@ -21,6 +23,7 @@ def run_all(flags: set[str] | None = None) -> dict[str, Any]:
     run_clv = flags is None or "clv" in flags
     run_brier = flags is None or "brier" in flags
     run_features = flags is None or "features" in flags
+    run_quality = flags is None or "quality" in flags
 
     report: dict[str, Any] = {}
 
@@ -42,6 +45,11 @@ def run_all(flags: set[str] | None = None) -> dict[str, Any]:
     if run_features:
         from src.monitoring.feature_audit import run as feature_run
         report["features"] = feature_run()
+
+    # 4. Data Quality
+    if run_quality:
+        from src.monitoring.data_quality import run as quality_run
+        report["data_quality"] = quality_run()
 
     # ── Consolidated verdict ──────────────────────────────────────
     logger.info("\n" + "=" * 60)
@@ -81,6 +89,15 @@ def run_all(flags: set[str] | None = None) -> dict[str, Any]:
         scores.append(("Features", feat_score, features["status"]))
         logger.info(f"  ML Features  : {feat_score}/10 — {features['status']}")
 
+    # Data quality (0-10)
+    dq = report.get("data_quality", {})
+    if dq.get("status"):
+        dq_score = {"HEALTHY": 10, "OK": 10, "WARNING": 6, "CRITICAL": 3, "ERROR": 2, "NO_DATA": 5}.get(
+            dq["status"], 5
+        )
+        scores.append(("DataQuality", dq_score, dq["status"]))
+        logger.info(f"  Data Quality : {dq_score}/10 — {dq['status']}")
+
     if scores:
         overall = round(sum(s for _, s, _ in scores) / len(scores), 1)
         logger.info(f"\n  OVERALL SCORE: {overall}/10")
@@ -109,8 +126,23 @@ if __name__ == "__main__":
             flags.add("brier")
         if "--features" in args:
             flags.add("features")
+        if "--quality" in args:
+            flags.add("quality")
         if not flags:
             flags = None
+
+    # Run alerting checks
+    if "--alerts" in args:
+        from src.config import supabase
+        from src.monitoring.alerting import check_and_alert
+        from src.notifications import send_telegram
+
+        alerts = check_and_alert(supabase, send_telegram_fn=send_telegram)
+        if alerts:
+            logger.warning("Alerts: %s", alerts)
+        else:
+            logger.info("No alerts triggered.")
+        sys.exit(0)
 
     report = run_all(flags)
 

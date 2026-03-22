@@ -56,10 +56,10 @@ def verify_trigger_auth(authorization: str = Header(None)):
             raise HTTPException(status_code=403, detail="Forbidden: Admin only")
 
     except Exception as e:
-        logger.error(f"[Auth] ❌ token verification failed: {e}")
+        logger.error("[Auth] token verification failed: %s", e, exc_info=True)
         if isinstance(e, HTTPException):
             raise e
-        raise HTTPException(status_code=403, detail=f"Invalid token or unauthorized: {str(e)}")
+        raise HTTPException(status_code=403, detail="Invalid token or unauthorized")
 
     return True
 
@@ -214,8 +214,8 @@ def admin_api_quota():
             "firstname": account.get("firstname", ""),
         }
     except Exception as e:
-        logger.error(f"[Admin] API quota check error: {e}")
-        return {"error": str(e)}
+        logger.error("[Admin] API quota check error: %s", e, exc_info=True)
+        return {"error": "Failed to check API quota"}
 
 
 @router.get("/admin/leagues")
@@ -1132,9 +1132,9 @@ def detect_value_bets():
                         our_draw = fix.get("proba_draw", 0) or 0
                         our_away = fix.get("proba_away", 0) or 0
 
-                        # Value = our probability - implied probability
-                        # If > 15% edge, it's a value bet
-                        MIN_EDGE = 15
+                        # Value = expected ROI: (our_prob/100 * odd) - 1
+                        # If > 10% expected ROI and our_prob >= 40%, it's a value bet
+                        MIN_EV = 0.10  # 10% expected ROI
 
                         checks = [
                             ("Victoire " + fix["home_team"], our_home, implied_home, home_odd),
@@ -1143,8 +1143,9 @@ def detect_value_bets():
                         ]
 
                         for label, our_prob, implied_prob, odd in checks:
-                            edge = our_prob - implied_prob
-                            if edge >= MIN_EDGE and our_prob >= 40:
+                            ev = (our_prob / 100.0) * odd - 1 if odd and odd > 0 else 0
+                            edge = our_prob - implied_prob  # Keep for display
+                            if ev >= MIN_EV and our_prob >= 40:
                                 value_bets.append(
                                     {
                                         "match": f"{fix['home_team']} vs {fix['away_team']}",
@@ -1152,6 +1153,7 @@ def detect_value_bets():
                                         "our_proba": our_prob,
                                         "implied_proba": implied_prob,
                                         "edge": edge,
+                                        "ev": round(ev * 100, 1),  # Expected ROI %
                                         "odd": odd,
                                     }
                                 )

@@ -47,7 +47,7 @@ def get_fixtures_by_date(league_id: int, date_from: str, date_to: str) -> list[d
         "season": str(SEASON),
         "from": date_from,
         "to": date_to,
-        "timezone": "Europe/Paris",
+        "timezone": "Europe/Paris",  # Intentional: API returns dates in CET/CEST for display consistency
     }
 
     try:
@@ -66,12 +66,12 @@ def fetch_and_store(date_from: str = None, date_to: str = None) -> None:
         date_from: Start date (YYYY-MM-DD).
         date_to: End date (YYYY-MM-DD).
     """
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, timezone
 
     if not date_from:
-        date_from = datetime.now().strftime("%Y-%m-%d")
+        date_from = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     if not date_to:
-        date_to = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
+        date_to = (datetime.now(timezone.utc) + timedelta(days=7)).strftime("%Y-%m-%d")
 
     logger.info(f"--- Démarrage de l'importation par date : {date_from} -> {date_to} ---")
     total_imported = 0
@@ -84,10 +84,14 @@ def fetch_and_store(date_from: str = None, date_to: str = None) -> None:
             continue
 
         for item in fixtures_list:
-            fixture = item["fixture"]
-            teams = item["teams"]
-            goals = item["goals"]
-            league = item["league"]
+            fixture = item.get("fixture")
+            teams = item.get("teams")
+            goals = item.get("goals") or {}
+            league = item.get("league") or {}
+
+            if not fixture or not teams:
+                logger.warning("Malformed fixture item: %s", item.get("fixture", {}).get("id", "unknown"))
+                continue
 
             # Upsert Ligue
             try:
@@ -100,8 +104,8 @@ def fetch_and_store(date_from: str = None, date_to: str = None) -> None:
                     },
                     on_conflict="api_id",
                 ).execute()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error("Failed to upsert league %s: %s", league.get("id", "unknown"), e)
 
             # Upsert Match
             try:

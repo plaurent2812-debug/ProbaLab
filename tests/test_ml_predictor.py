@@ -233,10 +233,10 @@ class TestPredict1x2:
         mock_cache.get = lambda k, default=None: payload if k == "xgb_1x2" else default
 
         result = predict_1x2(_full_context())
-        # Without label_encoder: H=probas[0], D=probas[1], A=probas[2]
-        assert result["ml_home"] == 55
+        # Without label_encoder: alphabetical order A=probas[0], D=probas[1], H=probas[2]
+        assert result["ml_away"] == 55
         assert result["ml_draw"] == 25
-        assert result["ml_away"] == 20
+        assert result["ml_home"] == 20
 
 
 # ═══════════════════════════════════════════════════════════════════

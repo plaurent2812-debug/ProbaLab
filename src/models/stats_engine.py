@@ -192,7 +192,7 @@ def poisson_grid(
     # Poisson tends to under-predict draws in tactical leagues (Serie A, CL).
     # Iterative correction: each pass applies a capped diagonal scaling,
     # renormalizes, then checks if the target is reached. 3 passes suffice
-    # because the cap (±15%) is relaxed enough for convergence.
+    # because the cap (±20%) is relaxed enough for convergence.
     target_draw = DRAW_FACTOR_BY_LEAGUE.get(league_id, DRAW_FACTOR) if league_id is not None else None
     if target_draw is not None:
         for _draw_pass in range(3):
@@ -203,7 +203,7 @@ def poisson_grid(
             if error < 0.005:  # Within 0.5% — converged
                 break
             correction = target_draw / predicted_draw
-            correction = max(0.85, min(1.15, correction))  # ±15% max per pass
+            correction = max(0.80, min(1.20, correction))  # ±20% per pass for better convergence
             np.fill_diagonal(grid, np.diag(grid) * correction)
             grid /= grid.sum()  # Renormalise after diagonal shift
 
@@ -371,26 +371,27 @@ def calculate_team_strengths(league_id: int) -> dict | None:
         teams_stats[tid2]["opponents"].append(tid1)
 
     # 2. Itération Bayésienne (Schedule Adjustment / Smoothing)
-    # Lissage sur 5 itérations pour converger vers les vras forces tenant compte du calendrier
+    # Up to 10 iterations with early stop on convergence.
     # xG généré par A = Atk_A * Def_B -> Donc Atk_A = xG généré / Def_B
-    for _ in range(5):
+    for _iteration in range(10):
+        max_delta = 0.0
         new_atk = {}
         new_def = {}
         for tid, stats in teams_stats.items():
             if not stats["opponents"]:
                 continue
-            
+
             # Nouvelle force d'attaque = Moyenne des (xG_marqués / Defense_Adversaire)
             opp_def_sum = sum(teams_stats[opp]["def"] for opp in stats["opponents"])
             opp_atk_sum = sum(teams_stats[opp]["atk"] for opp in stats["opponents"])
-            
+
             # Lissage bayésien avec un prior de 1.0 pour éviter les divisions par zéro sur ptits échantillons
             prior_weight = 3.0
-            
+
             total_atk_val = sum(xg for xg in stats["xg_for"]) + (1.0 * prior_weight)
             total_atk_div = opp_def_sum + prior_weight
             new_atk[tid] = total_atk_val / total_atk_div
-            
+
             # Nouvelle force de défense = Moyenne des (xG_concédés / Attaque_Adversaire)
             total_def_val = sum(xg for xg in stats["xg_against"]) + (1.0 * prior_weight)
             total_def_div = opp_atk_sum + prior_weight
@@ -399,10 +400,21 @@ def calculate_team_strengths(league_id: int) -> dict | None:
         # Normaliser pour que la moyenne reste autour de 1.0
         avg_atk = sum(new_atk.values()) / max(len(new_atk), 1)
         avg_def = sum(new_def.values()) / max(len(new_def), 1)
-        
-        for tid in teams_stats:
+
+        # Check convergence before updating
+        for tid in new_atk:
+            norm_atk = new_atk[tid] / avg_atk
+            norm_def = new_def[tid] / avg_def
+            delta_atk = abs(norm_atk - teams_stats[tid].get("atk", 1.0))
+            delta_def = abs(norm_def - teams_stats[tid].get("def", 1.0))
+            max_delta = max(max_delta, delta_atk, delta_def)
+
+        for tid in new_atk:
             teams_stats[tid]["atk"] = new_atk[tid] / avg_atk
             teams_stats[tid]["def"] = new_def[tid] / avg_def
+
+        if max_delta < 0.005:  # Converged
+            break
 
     # Format output (On simule Home/Away différencié plus tard si on a + de données)
     strengths = {}
@@ -2394,20 +2406,22 @@ def analyze_match(fixture: dict[str, Any]) -> dict[str, Any]:
         context["euro_draw_boost"] = euro_boost
 
     # ── 10. Calibration fine (si disponible) ───────────────────────
-    # ⚠️ 1X2 calibration DISABLED (mars 2026):
-    # With only 74 samples, Platt scaling produces degenerate parameters
-    # (1x2_draw: a=-0.13 → sigmoid always ≈ 24%, crushing all inputs to same output).
-    # This makes ALL matches show ~38/19/43 regardless of actual Poisson/ELO output.
-    # Re-enable once prediction_results table has 500+ samples for Isotonic regression.
+    # 1X2: Bayesian shrinkage (safe with any sample size, converges to identity with more data).
+    # Replaces the disabled Platt scaling which produced degenerate params with <100 samples.
+    # Once MIN_ISOTONIC_SAMPLES (500) is reached, apply_calibration will use Isotonic instead.
+    try:
+        from src.models.calibrate import calibrate_1x2_bayesian
+        final_home, final_draw, final_away = calibrate_1x2_bayesian(
+            final_home, final_draw, final_away, league_id=league_id
+        )
+        context["calibration_1x2"] = "bayesian_shrinkage"
+    except Exception:
+        context["calibration_1x2"] = "skipped"
+
     if CALIBRATION_AVAILABLE:
         try:
             lid = league_id
-            # Skip 1X2 calibration — it destroys per-match differentiation
-            # cal_home = apply_calibration(final_home, "1x2_home", lid)
-            # cal_draw = apply_calibration(final_draw, "1x2_draw", lid)
-            # cal_away = apply_calibration(final_away, "1x2_away", lid)
-
-            # BTTS and Over markets: binary calibration is less harmful
+            # BTTS and Over markets: binary calibration via Platt/Isotonic
             poisson_probs["proba_btts"] = apply_calibration(
                 poisson_probs["proba_btts"], "btts", lid
             )
@@ -2433,13 +2447,24 @@ def analyze_match(fixture: dict[str, Any]) -> dict[str, Any]:
     if final_home > MAX_WIN_PROB:
         excess = final_home - MAX_WIN_PROB
         final_home = MAX_WIN_PROB
-        final_draw = round(final_draw + excess * 0.4)
-        final_away = 100 - final_home - final_draw
+        # Redistribute proportionally to draw and away instead of only to draw
+        total_remaining = final_draw + final_away
+        if total_remaining > 0:
+            final_draw = round(final_draw + excess * (final_draw / total_remaining))
+            final_away = 100 - final_home - final_draw
+        else:
+            final_draw = round(final_draw + excess * 0.5)
+            final_away = 100 - final_home - final_draw
     elif final_away > MAX_WIN_PROB:
         excess = final_away - MAX_WIN_PROB
         final_away = MAX_WIN_PROB
-        final_draw = round(final_draw + excess * 0.4)
-        final_home = 100 - final_draw - final_away
+        total_remaining = final_draw + final_home
+        if total_remaining > 0:
+            final_draw = round(final_draw + excess * (final_draw / total_remaining))
+            final_home = 100 - final_away - final_draw
+        else:
+            final_draw = round(final_draw + excess * 0.5)
+            final_home = 100 - final_away - final_draw
 
     # ── 10. Résultat final ────────────────────────────────────────
     result = {
