@@ -22,3 +22,6 @@
 | 2026-03-22 | datetime.now() sans timezone dans config.py et matches.py — comparaisons naive vs aware impossibles | Toujours utiliser datetime.now(timezone.utc) — jamais datetime.now() nu |
 | 2026-03-22 | place_bet read-then-write non atomique : deux paris simultanés lisent le même bankroll | Pour toute opération read-modify-write sur une ressource partagée, utiliser SELECT FOR UPDATE dans une fonction PostgreSQL (RPC) |
 | 2026-03-22 | BTTS accuracy utilisait total_with_pred comme dénominateur au lieu d'un compteur dédié — les matchs sans proba_btts comptaient comme "No BTTS" | Chaque marché doit avoir son propre compteur total, comme Over/Under le faisait déjà |
+| 2026-03-30 | proba_over_05/15/35 sauvés dans stats_json mais pas en colonnes DB — best-bets les lisait comme NULL, Over 1.5/3.5 jamais générés | Quand une colonne DB existe pour un champ, toujours l'inclure dans insert_data, pas seulement dans stats_json |
+| 2026-03-30 | `get_val("x") or get_val("y")` — si x vaut 0 (falsy), fallback inattendu sur y | Toujours utiliser `if x is None` au lieu de `or` pour des valeurs numériques qui peuvent être 0 |
+| 2026-03-30 | Combo resolve : `all_win = None` écrasait `all_win = False` — combos LOSS restaient PENDING | Séparer les flags booléens : un pour le résultat (all_win), un autre pour les données manquantes (has_unknown) |

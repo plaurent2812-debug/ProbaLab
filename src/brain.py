@@ -763,11 +763,8 @@ def run_brain() -> None:
             if not final.get("stats_json") or not isinstance(final.get("stats_json"), dict):
                 final["stats_json"] = final.get("stats_json") or {}
 
-            # Injecter les probas qui n'ont pas de colonne dédiée en base
+            # Injecter les probas supplémentaires dans stats_json (audit + fallback)
             extra_probas = [
-                "proba_over_05",
-                "proba_over_15",
-                "proba_over_35",
                 "proba_dc_1x",
                 "proba_dc_x2",
                 "proba_dc_12",
@@ -799,6 +796,9 @@ def run_brain() -> None:
                 "proba_away": final["proba_away"],
                 "proba_btts": final["proba_btts"],
                 "proba_over_2_5": final.get("proba_over_25", final.get("proba_over_2_5")),
+                "proba_over_05": final.get("proba_over_05"),
+                "proba_over_15": final.get("proba_over_15"),
+                "proba_over_35": final.get("proba_over_35"),
                 "correct_score": final.get("correct_score"),
                 "recommended_bet": final.get("recommended_bet", ""),
                 "confidence_score": final.get("confidence_score", 5),
@@ -806,7 +806,7 @@ def run_brain() -> None:
                 "likely_scorer_proba": final.get("likely_scorer_proba"),
                 "model_version": final.get("model_version", "hybrid_v3"),
                 "stats_json": final.get("stats_json"),
-                "ai_features": final.get("ai_features", {}),  # Nouveau champ
+                "ai_features": final.get("ai_features", {}),
             }
 
             # Generate semantic embedding for prediction search

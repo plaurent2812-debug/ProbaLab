@@ -1651,16 +1651,21 @@ def resolve_best_bets(body: ResolveBetsRequest, request: Request, authorization:
                 if " + " in actual_market:
                     parts = [p.strip() for p in actual_market.split(" + ")]
                     all_win = True
+                    has_unknown = False
                     for part in parts:
                         part_result = _evaluate_single_football_market(part, h, a)
                         if part_result is None:
-                            all_win = None
-                            break
+                            has_unknown = True
+                            continue
                         if part_result == "LOSS":
                             all_win = False
-                    if all_win is None:
-                        continue  # Unknown sub-market
-                    result_val = "WIN" if all_win else "LOSS"
+                            break  # Un leg LOSS → combo LOSS, pas besoin de continuer
+                    if not all_win:
+                        result_val = "LOSS"
+                    elif has_unknown:
+                        continue  # Tous les legs connus sont WIN mais un leg est inconnu
+                    else:
+                        result_val = "WIN"
                 else:
                     result_val = _evaluate_single_football_market(actual_market, h, a)
                     if result_val is None:
@@ -1844,9 +1849,9 @@ def get_best_bets_stats(request: Request):
     """Return win rate and ROI stats for both model predictions (best_bets) and expert picks."""
     try:
         from collections import defaultdict
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
 
-        cutoff_30d = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+        cutoff_30d = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%d")
 
         def calc_stats(bets):
             resolved = [b for b in bets if b["result"] in ("WIN", "LOSS")]
@@ -3248,7 +3253,9 @@ def get_performance(days: int = Query(0, description="Rolling window in days (0 
                     correct_over_15 += 1
 
             # Over 2.5
-            p_o25 = get_val("proba_over_2_5") or get_val("proba_over_25")
+            p_o25 = get_val("proba_over_2_5")
+            if p_o25 is None:
+                p_o25 = get_val("proba_over_25")
             if p_o25 is not None:
                 total_over_25 += 1
                 if (p_o25 > 50) == (total_goals > 2.5):

@@ -86,6 +86,14 @@
 - [x] __main__.py : --quality flag + data quality dans le rapport consolidé
 - [x] constants.py : BAYESIAN_SHRINKAGE_K, BASE_RATE_HOME/DRAW/AWAY
 
+## Corrigé (2026-03-30) — Comptabilisation Probas
+- [x] ParisDuSoir.tsx : label "Experts + Algo" → "Algo uniquement" (section affichait model_* seulement)
+- [x] main.py best-bets/stats : datetime.now() → datetime.now(timezone.utc) pour cutoff 30j
+- [x] main.py resolve combos : LOSS écrasé par None si leg inconnu → logique has_unknown séparée
+- [x] brain.py insert_data : ajout proba_over_05/15/35 comme colonnes (étaient NULL, best-bets O1.5/O3.5 jamais générés)
+- [x] main.py performance : `or` → `if is None` pour proba_over_2_5 (évite bug falsy-zero)
+- [x] brain.py extra_probas : nettoyage liste (retiré proba_over_05/15/35 qui ont maintenant une colonne)
+
 ## Restant (nécessite données ou réentraînement)
 - [ ] ECE 0.13 : réentraîner calibrateur avec 500+ samples (Isotonic)
 - [x] CLV tracking : coupler fixture_odds aux predictions pour mesurer CLV

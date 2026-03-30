@@ -451,7 +451,7 @@ function StatsDashboard({ stats, isAdmin }) {
                         <TrendingUp className="w-4 h-4 text-emerald-500" />
                         <span className="text-xs font-bold uppercase tracking-wider">Performance (30 J)</span>
                         <div className="ml-auto flex items-center gap-1.5">
-                            <span className="text-[10px] font-bold text-muted-foreground uppercase bg-muted px-1.5 py-0.5 rounded">Experts + Algo</span>
+                            <span className="text-[10px] font-bold text-muted-foreground uppercase bg-muted px-1.5 py-0.5 rounded">Algo uniquement</span>
                         </div>
                     </div>
 
