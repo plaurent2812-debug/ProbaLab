@@ -9,8 +9,8 @@
  */
 
 const API_BASE = import.meta.env.VITE_API_URL || "" // matches API_ROOT from api.js
-// VAPID public key — safe to hardcode (not a secret, it's the public half of the keypair)
-const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY || "BFmgOQVXmIvGAxwFsY5GnwwXakVDRDiGchyecsL1aauh9Oh6Y3sFL5TC2JfYCCXDb1PnA6ZqeCeOQ6N9R2A5LCY"
+// VAPID public key — must be set via VITE_VAPID_PUBLIC_KEY env var
+const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY || ""
 
 /**
  * Convert a URL-safe base64 string to a Uint8Array (for applicationServerKey).

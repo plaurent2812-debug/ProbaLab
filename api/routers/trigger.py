@@ -29,6 +29,8 @@ def _send_telegram_alert(home: str, away: str, analysis: str, bet: str, confiden
     return False
 
 
+import hmac
+
 from fastapi import Depends, Header
 
 CRON_SECRET = os.getenv("CRON_SECRET", "")
@@ -41,7 +43,7 @@ def verify_trigger_auth(authorization: str = Header(None)):
     token = authorization.replace("Bearer ", "").strip()
 
     # 1. Check CRON Secret (for Trigger.dev worker)
-    if token == CRON_SECRET:
+    if CRON_SECRET and hmac.compare_digest(token, CRON_SECRET):
         return True
 
     # 2. Check Admin JWT (for Dashboard)

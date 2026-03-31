@@ -87,10 +87,10 @@ def clamp(x: float, lo: float, hi: float) -> float:
 
 
 def verify_api_key(x_api_key: Optional[str] = Header(None, alias="X-API-Key")):
-    """Vérifie la clé API. BLOQUE si invalide (sauf si non configurée)."""
+    """Vérifie la clé API. BLOQUE si invalide ou non configurée (fail-closed)."""
     if not API_SECRET_KEY:
-        return True
-    if x_api_key != API_SECRET_KEY:
+        raise HTTPException(status_code=503, detail="API key not configured on server")
+    if not x_api_key or not hmac.compare_digest(x_api_key, API_SECRET_KEY):
         raise HTTPException(status_code=403, detail="Invalid API key")
     return True
 

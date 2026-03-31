@@ -14,10 +14,18 @@ import json
 import logging
 import os
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel
 
 from src.config import supabase
+
+PUSH_API_KEY = os.getenv("PUSH_API_KEY", "")
+
+
+def _verify_push_auth(x_api_key: str = Header(None, alias="X-Push-Key")):
+    """Vérifie l'accès aux endpoints push. Fail-open si PUSH_API_KEY non configuré (dev)."""
+    if PUSH_API_KEY and (not x_api_key or x_api_key != PUSH_API_KEY):
+        raise HTTPException(status_code=403, detail="Forbidden")
 
 logger = logging.getLogger("push_router")
 
@@ -38,7 +46,7 @@ class UnsubscribeBody(BaseModel):
     endpoint: str
 
 
-@router.post("/subscribe")
+@router.post("/subscribe", dependencies=[Depends(_verify_push_auth)])
 async def subscribe_push(body: PushSubscriptionBody):
     """Store a push subscription in Supabase."""
     try:
@@ -65,10 +73,10 @@ async def subscribe_push(body: PushSubscriptionBody):
         return {"ok": True}
     except Exception as e:
         logger.error("Push subscribe error: %s", e)
-        return {"ok": False, "error": str(e)}
+        return {"ok": False, "error": "subscription failed"}
 
 
-@router.post("/unsubscribe")
+@router.post("/unsubscribe", dependencies=[Depends(_verify_push_auth)])
 async def unsubscribe_push(body: UnsubscribeBody):
     """Remove a push subscription."""
     try:
@@ -76,7 +84,7 @@ async def unsubscribe_push(body: UnsubscribeBody):
         return {"ok": True}
     except Exception as e:
         logger.error("Push unsubscribe error: %s", e)
-        return {"ok": False, "error": str(e)}
+        return {"ok": False, "error": "unsubscribe failed"}
 
 
 def send_push_to_all(title: str, body: str, url: str = "/paris-du-soir") -> int:

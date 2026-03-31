@@ -4,6 +4,7 @@ Charge les modèles XGBoost entraînés et fournit des prédictions.
 Utilise TRAINING_FEATURES de train_enhanced_model comme source unique de vérité.
 """
 
+import io
 import math
 import os
 import pickle
@@ -11,6 +12,29 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+
+
+# ── Safe Deserialization ──────────────────────────────────────────
+_ALLOWED_PREFIXES = (
+    "numpy", "pandas", "sklearn", "xgboost", "lightgbm",
+    "_codecs", "builtins", "collections", "copyreg",
+)
+
+
+class _RestrictedUnpickler(pickle.Unpickler):
+    def find_class(self, module: str, name: str) -> Any:
+        if any(module.startswith(p) for p in _ALLOWED_PREFIXES):
+            return super().find_class(module, name)
+        raise pickle.UnpicklingError(f"Blocked: {module}.{name}")
+
+
+def _safe_load(f) -> Any:
+    return _RestrictedUnpickler(f).load()
+
+
+def _safe_loads(data: bytes) -> Any:
+    return _RestrictedUnpickler(io.BytesIO(data)).load()
+
 
 # Suppression de la dépendance à train_enhanced_model
 TRAINING_MODULE_AVAILABLE = False
@@ -38,7 +62,7 @@ class EnhancedGoalPredictor:
         try:
             # 1. Load metadata from pickle
             with open(path, "rb") as f:
-                data = pickle.load(f)
+                data = _safe_load(f)
 
             if isinstance(data, dict):
                 self.feature_names = data.get("feature_names", [])

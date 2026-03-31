@@ -22,8 +22,10 @@ Workflow :
   6. Sauvegarde le modèle + métriques dans ml_models
 """
 import base64
+import io
 import pickle
 import warnings
+from typing import Any
 
 import numpy as np
 
@@ -41,6 +43,24 @@ from sklearn.utils.class_weight import compute_sample_weight
 
 # Silence Optuna's verbose output
 optuna.logging.set_verbosity(optuna.logging.WARNING)
+
+# ── Safe Deserialization ──────────────────────────────────────────
+_ALLOWED_PREFIXES = (
+    "numpy", "pandas", "sklearn", "xgboost", "lightgbm",
+    "_codecs", "builtins", "collections", "copyreg",
+)
+
+
+class _RestrictedUnpickler(pickle.Unpickler):
+    def find_class(self, module: str, name: str) -> Any:
+        if any(module.startswith(p) for p in _ALLOWED_PREFIXES):
+            return super().find_class(module, name)
+        raise pickle.UnpicklingError(f"Blocked: {module}.{name}")
+
+
+def _safe_loads(data: bytes) -> Any:
+    return _RestrictedUnpickler(io.BytesIO(data)).load()
+
 
 # ═══════════════════════════════════════════════════════════════════
 #  CHARGEMENT ET PRÉPARATION DES DONNÉES
@@ -660,7 +680,7 @@ def run() -> None:
             continue
         try:
             # Ajouter l'imputer aux weights
-            model_data = pickle.loads(base64.b64decode(result["model_weights"]))
+            model_data = _safe_loads(base64.b64decode(result["model_weights"]))
             model_data["imputer"] = imputer
             result["model_weights"] = base64.b64encode(pickle.dumps(model_data)).decode("utf-8")
 

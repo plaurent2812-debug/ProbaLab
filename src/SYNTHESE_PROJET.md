@@ -152,7 +152,7 @@ Entraînés sur **5 444 matchs** (saisons 2023-2024, 8 ligues) :
 
 ### Déploiement
 - `clasp push --force` depuis `google_apps_script/`
-- Script ID dans `.clasp.json` : `1g5yJ2UWoNMsJR2QyBboAllFKLic1Dl8Pf2vAIcmV6VrbRzGbd2Fxfwn4`
+- Script ID dans `.clasp.json` (voir fichier local, non versionné)
 
 ---
 

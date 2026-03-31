@@ -16,19 +16,40 @@ Flow Combiné (multi-screenshots):
 """
 from __future__ import annotations
 
+import hmac
 import logging
 import os
+import time
+from collections import defaultdict
 from datetime import datetime
 
 import requests
 from fastapi import APIRouter, BackgroundTasks, Request, Response
 
 from src.config import supabase
+
+TELEGRAM_WEBHOOK_SECRET = os.getenv("TELEGRAM_WEBHOOK_SECRET", "")
 from src.telegram_parser import format_confirmation_message, parse_winamax_screenshot
 
 logger = logging.getLogger("telegram_router")
 
 router = APIRouter(prefix="/api/telegram", tags=["Telegram"])
+
+# ── Simple in-memory rate limiter for webhook ────────────────────
+_RATE_LIMIT_WINDOW = 60  # seconds
+_RATE_LIMIT_MAX = 30     # max requests per window per IP
+_rate_hits: dict[str, list[float]] = defaultdict(list)
+
+
+def _is_rate_limited(client_ip: str) -> bool:
+    now = time.monotonic()
+    hits = _rate_hits[client_ip]
+    # Purge old entries
+    _rate_hits[client_ip] = [t for t in hits if now - t < _RATE_LIMIT_WINDOW]
+    if len(_rate_hits[client_ip]) >= _RATE_LIMIT_MAX:
+        return True
+    _rate_hits[client_ip].append(now)
+    return False
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_EXPERT_BOT_TOKEN", "")
 TELEGRAM_API = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
@@ -471,6 +492,17 @@ def _handle_update(update: dict) -> None:
 @router.post("/webhook")
 async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
     """Webhook Telegram — reçoit les updates et les traite en arrière-plan."""
+    # Rate limiting
+    client_ip = request.client.host if request.client else "unknown"
+    if _is_rate_limited(client_ip):
+        logger.warning("Webhook rate-limited: %s", client_ip)
+        return Response(content="rate limited", status_code=429)
+    # Vérifier le secret token Telegram si configuré
+    if TELEGRAM_WEBHOOK_SECRET:
+        token = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
+        if not hmac.compare_digest(token, TELEGRAM_WEBHOOK_SECRET):
+            logger.warning("Webhook rejected: invalid secret token")
+            return Response(content="unauthorized", status_code=403)
     try:
         update = await request.json()
         background_tasks.add_task(_handle_update, update)

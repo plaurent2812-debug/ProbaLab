@@ -7,6 +7,7 @@ et fournit des prédictions de victoire et Over 5.5.
 Fallback sur les probas Poisson si modèle non disponible.
 """
 
+import io
 import pickle
 from pathlib import Path
 from typing import Any
@@ -15,6 +16,24 @@ import numpy as np
 import pandas as pd
 
 from src.config import logger
+
+
+# ── Safe Deserialization ──────────────────────────────────────────
+_ALLOWED_PREFIXES = (
+    "numpy", "pandas", "sklearn", "xgboost", "lightgbm",
+    "_codecs", "builtins", "collections", "copyreg",
+)
+
+
+class _RestrictedUnpickler(pickle.Unpickler):
+    def find_class(self, module: str, name: str) -> Any:
+        if any(module.startswith(p) for p in _ALLOWED_PREFIXES):
+            return super().find_class(module, name)
+        raise pickle.UnpicklingError(f"Blocked: {module}.{name}")
+
+
+def _safe_pickle_load(f) -> Any:
+    return _RestrictedUnpickler(f).load()
 
 MODEL_DIR = Path(__file__).resolve().parent.parent.parent / "models" / "nhl"
 
@@ -34,7 +53,7 @@ def _load_models():
         if path.exists():
             try:
                 with open(path, "rb") as f:
-                    data = pickle.load(f)
+                    data = _safe_pickle_load(f)
                 _models[name] = data
                 logger.info(f"  ✅ NHL ML model '{name}' chargé ({data['metrics']['n_samples']} samples)")
             except Exception as e:
