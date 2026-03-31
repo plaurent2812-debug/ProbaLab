@@ -216,7 +216,7 @@ export default function HomePage() {
     const g = betStats?.global || {}
 
     return (
-        <div className="animate-fade-in-up pb-8 max-w-3xl mx-auto">
+        <div className="animate-fade-in-up pb-8 w-full mx-auto">
 
             {/* ── Hero / Intro Section (Compact) ────────────────────────── */}
             <div className="px-4 py-8 text-center bg-gradient-to-b from-primary/10 to-transparent border-b border-border/30">

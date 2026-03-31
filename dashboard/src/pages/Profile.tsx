@@ -32,7 +32,7 @@ export default function ProfilePage() {
     const isPremium = role === 'premium' || role === 'admin'
 
     return (
-        <div className="max-w-2xl mx-auto py-8 animate-fade-in-up space-y-6">
+        <div className="w-full mx-auto py-8 animate-fade-in-up space-y-6">
             <div className="flex items-center justify-between">
                 <h1 className="text-2xl font-black tracking-tight">Mon Profil</h1>
                 <Button variant="ghost" className="text-destructive hover:text-destructive/90 hover:bg-destructive/10" onClick={handleSignOut} disabled={loading}>

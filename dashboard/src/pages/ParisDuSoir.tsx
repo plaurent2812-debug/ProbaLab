@@ -941,7 +941,7 @@ export default function ParisDuSoir() {
     }
 
     return (
-        <div className="animate-fade-in-up px-3 pt-4 pb-8 max-w-3xl mx-auto">
+        <div className="animate-fade-in-up px-3 pt-4 pb-8 w-full mx-auto">
             {/* Header */}
             <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">

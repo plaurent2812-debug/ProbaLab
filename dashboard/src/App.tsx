@@ -100,7 +100,7 @@ function Header() {
 
   return (
     <header className="sticky top-0 z-50 border-b border-border/60 bg-card">
-      <div className="max-w-[1200px] mx-auto px-3 sm:px-4">
+      <div className="w-full mx-auto px-3 sm:px-4 md:px-8">
         <div className="flex items-center justify-between h-11">
 
           {/* Logo */}
@@ -271,7 +271,7 @@ function BottomNav() {
 function Footer() {
   return (
     <footer className="hidden md:block border-t border-border/40 bg-card/50 mt-auto">
-      <div className="max-w-[1200px] mx-auto px-4 py-3">
+      <div className="w-full mx-auto px-4 md:px-8 py-3">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-1.5">
             <Zap className="w-3 h-3 text-primary" />
@@ -354,7 +354,7 @@ function AppContent() {
       <Header />
       <OfflineBanner />
 
-      <main id="main-content" className="flex-1 max-w-[1200px] mx-auto w-full">
+      <main id="main-content" className="flex-1 w-full mx-auto px-4 md:px-8">
         <Suspense fallback={<PageLoader />}>
           <div className="animate-fade-in-up">
             <Routes>

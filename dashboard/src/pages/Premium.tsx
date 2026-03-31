@@ -55,7 +55,7 @@ export default function PremiumPage() {
     }
 
     return (
-        <div className="max-w-3xl mx-auto space-y-10 py-8 animate-fade-in-up">
+        <div className="w-full mx-auto space-y-10 py-8 animate-fade-in-up">
 
             {/* Header */}
             <div className="text-center">

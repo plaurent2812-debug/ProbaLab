@@ -157,7 +157,7 @@ export default function MatchDetailPage() {
     }, [data?.fixture?.date, id])
 
     if (loading) return (
-        <div className="max-w-2xl mx-auto space-y-4 pb-12 px-3 pt-4">
+        <div className="w-full mx-auto space-y-4 pb-12 px-3 pt-4">
             <div className="flex items-center justify-between">
                 <Skeleton className="h-8 w-32" />
                 <div className="flex gap-2">
@@ -205,7 +205,7 @@ export default function MatchDetailPage() {
     const scorers = p?.top_scorers || sj?.top_scorers || []
 
     return (
-        <div className="max-w-2xl mx-auto space-y-4 animate-fade-in-up pb-12">
+        <div className="w-full mx-auto space-y-4 animate-fade-in-up pb-12">
 
             {/* Back button & Navigation */}
             <div className="flex items-center justify-between mb-2">

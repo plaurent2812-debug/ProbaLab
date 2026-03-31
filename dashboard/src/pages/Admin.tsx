@@ -92,7 +92,7 @@ function AdminDashboard() {
             <div className="absolute inset-0 w-full h-full bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-indigo-900/20 via-background to-background pointer-events-none" />
             <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-indigo-500/5 rounded-full blur-3xl pointer-events-none" />
 
-            <div className="relative z-10 max-w-6xl mx-auto space-y-4 sm:space-y-6 md:space-y-8">
+            <div className="relative z-10 w-full mx-auto space-y-4 sm:space-y-6 md:space-y-8">
                 {/* Header */}
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
                     <div className="flex items-center gap-3">

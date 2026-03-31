@@ -227,7 +227,7 @@ export default function NHLMatchDetailPage() {
     }
 
     return (
-        <div className="max-w-2xl mx-auto space-y-4 animate-fade-in-up pb-12">
+        <div className="w-full mx-auto space-y-4 animate-fade-in-up pb-12">
 
             {/* Back & Navigation */}
             <div className="flex items-center justify-between mb-2">
