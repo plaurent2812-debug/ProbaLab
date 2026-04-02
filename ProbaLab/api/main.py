@@ -43,7 +43,7 @@ RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
 RESEND_FROM = os.getenv("RESEND_FROM", "ProbaLab <noreply@probalab.fr>")
 
 from src.config import supabase
-from src.nhl.constants import NHL_TEAM_NAMES, NHL_NAME_TO_ABBREV as _NHL_NAME_TO_ABBREV
+from src.nhl.constants import NHL_TEAM_NAMES, NHL_NAME_TO_ABBREV as _NHL_NAME_TO_ABBREV, NHL_FINISHED_STATUSES
 from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -1757,7 +1757,7 @@ def resolve_best_bets(body: ResolveBetsRequest, request: Request, authorization:
             .select("id, home_team, away_team, home_score, away_score, status")
             .gte("date", f"{date}T00:00:00Z")
             .lt("date", f"{next_day}T23:59:59Z")
-            .in_("status", ["FT", "Final", "Official", "OFF"])
+            .in_("status", list(NHL_FINISHED_STATUSES))
             .execute()
         )
         finished_nhl = nhl_resp.data or []
@@ -2566,17 +2566,21 @@ def resolve_expert_picks(body: ResolveExpertPicksRequest, request: Request, auth
             .in_("status", ["FT", "AET", "PEN"])
             .execute()
         )
+        for f in (fx_resp.data or []):
+            f["_sport"] = "football"
         finished_fixtures.extend(fx_resp.data or [])
-        
+
     if not sport or sport == "nhl":
         nhl_resp = (
             supabase.table("nhl_fixtures")
             .select("id, home_team, away_team, home_goals, away_goals, status")
             .gte("date", f"{date}T00:00:00Z")
             .lt("date", f"{next_day}T23:59:59Z")
-            .in_("status", ["FT", "Final", "FINAL", "OFF", "Official"])
+            .in_("status", list(NHL_FINISHED_STATUSES))
             .execute()
         )
+        for f in (nhl_resp.data or []):
+            f["_sport"] = "nhl"
         finished_fixtures.extend(nhl_resp.data or [])
 
     if not finished_fixtures:
@@ -2591,6 +2595,7 @@ def resolve_expert_picks(body: ResolveExpertPicksRequest, request: Request, auth
             "home_goals": f.get("home_goals") or 0,
             "away_goals": f.get("away_goals") or 0,
             "status": f["status"],
+            "_sport": f.get("_sport", "football"),
         })
 
     # ── 3. Setup Gemini for evaluation ────────────────────────────
@@ -2662,6 +2667,8 @@ Réponds UNIQUEMENT par un JSON: {{"result": "WIN"}} ou {{"result": "LOSS"}}
             match_label = pick.get("match_label", "")
             market = pick.get("market", "")
             expert_note = pick.get("expert_note", "")
+            pick_sport = pick.get("sport", "football")
+            fx_for_pick = [f for f in fx_list_for_search if f["_sport"] == pick_sport]
 
             # Parse selections for combinés
             selections = []
@@ -2681,7 +2688,7 @@ Réponds UNIQUEMENT par un JSON: {{"result": "WIN"}} ou {{"result": "LOSS"}}
                 for sel in selections:
                     sel_bet = sel.get("bet", "")
                     sel_match = sel.get("match", "")
-                    fx = _fuzzy_match_fixture(sel_match, fx_list_for_search)
+                    fx = _fuzzy_match_fixture(sel_match, fx_for_pick)
                     if not fx:
                         has_unknown = True
                         details.append(f"⏳ {sel_match}: match non trouvé")
@@ -2715,11 +2722,11 @@ Réponds UNIQUEMENT par un JSON: {{"result": "WIN"}} ou {{"result": "LOSS"}}
 
             else:
                 # ── Pari simple ───────────────────────────────────
-                fx = _fuzzy_match_fixture(match_label, fx_list_for_search)
+                fx = _fuzzy_match_fixture(match_label, fx_for_pick)
                 if not fx:
                     # Try with selections[0].match if available
                     if selections and selections[0].get("match"):
-                        fx = _fuzzy_match_fixture(selections[0]["match"], fx_list_for_search)
+                        fx = _fuzzy_match_fixture(selections[0]["match"], fx_for_pick)
                 if not fx:
                     continue  # Match not finished yet
 
@@ -3298,26 +3305,30 @@ def monitoring_health():
 
 @app.get("/api/performance")
 def get_performance(days: int = Query(0, description="Rolling window in days (0 = all-time)")):
-    """Get model performance metrics over the last N days (0 = all-time, capped at 180)."""
+    """Get model performance metrics over the last N days (0 = all-time)."""
     try:
+        cutoff = None
         if days > 0:
             cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
-            query = (
+
+        # Paginated fetch — Supabase caps at 1000 rows per request
+        finished = []
+        page_size = 1000
+        offset = 0
+        while True:
+            q = (
                 supabase.table("fixtures")
                 .select("id, home_team, away_team, home_goals, away_goals, date, status")
                 .in_("status", ["FT", "AET", "PEN"])
-                .gte("date", cutoff)
-                .order("date")
             )
-        else:
-            query = (
-                supabase.table("fixtures")
-                .select("id, home_team, away_team, home_goals, away_goals, date, status")
-                .in_("status", ["FT", "AET", "PEN"])
-                .order("date")
-            )
-            
-        finished = query.execute().data or []
+            if cutoff:
+                q = q.gte("date", cutoff)
+            q = q.order("date").range(offset, offset + page_size - 1)
+            batch = q.execute().data or []
+            finished.extend(batch)
+            if len(batch) < page_size:
+                break
+            offset += page_size
 
         fixture_ids = [f["id"] for f in finished]
         if not fixture_ids:

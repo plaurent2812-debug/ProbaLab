@@ -84,7 +84,7 @@ def update_nhl_fixture_results(days_back: int = 3) -> dict:
         game_state = boxscore.get("gameState", "")
         # NHL API states: "FUT" (future), "LIVE", "CRIT" (critical), "OFF" (official/final)
         from src.nhl.constants import NHL_FINISHED_STATUSES
-        if game_state not in NHL_FINISHED_STATUSES and game_state not in ("OFF", "FINAL"):
+        if game_state not in NHL_FINISHED_STATUSES:
             continue
 
         # Extract final scores
