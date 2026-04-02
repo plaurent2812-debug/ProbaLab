@@ -25,3 +25,5 @@
 | 2026-03-30 | proba_over_05/15/35 sauvés dans stats_json mais pas en colonnes DB — best-bets les lisait comme NULL, Over 1.5/3.5 jamais générés | Quand une colonne DB existe pour un champ, toujours l'inclure dans insert_data, pas seulement dans stats_json |
 | 2026-03-30 | `get_val("x") or get_val("y")` — si x vaut 0 (falsy), fallback inattendu sur y | Toujours utiliser `if x is None` au lieu de `or` pour des valeurs numériques qui peuvent être 0 |
 | 2026-03-30 | Combo resolve : `all_win = None` écrasait `all_win = False` — combos LOSS restaient PENDING | Séparer les flags booléens : un pour le résultat (all_win), un autre pour les données manquantes (has_unknown) |
+| 2026-04-02 | Railway déployait le code racine au lieu de ProbaLab/ — tous les fixes récents étaient invisibles en prod | Quand un projet est réorganisé dans un sous-dossier, toujours supprimer les fichiers racine de git ET configurer Railway Root Directory |
+| 2026-04-02 | Fichiers dupliqués racine/ProbaLab désynchronisés — 11 fichiers divergeaient silencieusement | Une seule source de vérité : jamais de doublons dans le repo, supprimer les copies obsolètes immédiatement |

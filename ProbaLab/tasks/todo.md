@@ -18,28 +18,29 @@
 - **Bug** : `.eq("status", "FT")` exclut les matchs terminés en prolongation (AET) et tirs au but (PEN)
 - **Fix** : Remplacer par `.in_("status", ["FT", "AET", "PEN"])`
 - **Impact** : +5-15% de matchs de coupe récupérés
-- [ ] Corriger le filtre status
+- [x] Corriger le filtre status (déjà corrigé dans ProbaLab/)
 
 ### 1.2 — Déplacer le filtre date côté SQL dans best-bets/stats
 - **Fichier** : `api/main.py:1963-2036`
 - **Bug** : `.limit(500)` + filtre 30j appliqué en Python après le fetch → troncature silencieuse
 - **Fix** : Ajouter `.gte("date", cutoff_30d)` côté SQL, supprimer `.limit(500)`
 - **Impact** : +10-40% de paris récupérés dans les stats Pronos
-- [ ] Corriger requête expert_picks
-- [ ] Corriger requête best_bets
-- [ ] Corriger requête history (limit 300 même problème)
+- [x] Corriger requête expert_picks (déjà corrigé dans ProbaLab/)
+- [x] Corriger requête best_bets (déjà corrigé dans ProbaLab/)
+- [x] Corriger requête history (déjà corrigé dans ProbaLab/)
 
 ### 1.3 — Supprimer le cap 180j pour le filtre "Tout"
 - **Fichier** : `api/main.py:3132-3134`
 - **Bug** : `days=0` (bouton "Tout") converti silencieusement en 180j
 - **Fix** : Si `days == 0`, ne pas appliquer de cutoff date
-- [ ] Corriger le cap
+- [x] Corriger le cap (déjà corrigé dans ProbaLab/)
 
-### 1.4 — Ajouter pagination NHL performance
-- **Fichier** : `api/routers/nhl.py:535-543`
-- **Bug** : Pas de `.limit()` → Supabase retourne max 1000 lignes par défaut
-- **Fix** : Ajouter `.limit(5000)` ou implémenter pagination
-- [ ] Corriger la limite
+### 1.4 — Ajouter pagination NHL + Football performance
+- **Fichiers** : `api/routers/nhl.py:535-543`, `api/main.py:3320`
+- **Bug** : Pas de pagination → Supabase retourne max 1000 lignes par défaut
+- **Fix** : Pagination par batches de 1000 avec `.range()`
+- [x] Corriger NHL (commit dbb6af6)
+- [x] Corriger Football (commit c94fe11)
 
 ### 1.5 — Élargir fetch_game_stats NHL à J-1/J-2/J-3
 - **Fichier** : `api/main.py:165`
@@ -51,20 +52,20 @@
 - **Fichiers** : `fetch_nhl_results.py:36`, `api/main.py:1709`, `update_nhl_results.py:58`, `live.py`
 - **Bug** : Chaque module utilise un sous-ensemble différent (`"FINAL"` vs `"Final"` vs `"OFF"` vs `"FT"`)
 - **Fix** : Créer une constante `NHL_FINISHED_STATUSES = {"FT", "Final", "FINAL", "OFF", "Official"}` partagée
-- [ ] Créer la constante dans `src/nhl/constants.py` ou `src/constants.py`
-- [ ] Remplacer tous les hardcoded statuses
+- [x] Constante créée dans `src/nhl/constants.py`
+- [x] Remplacé hardcoded statuses dans api/main.py (2 endroits) + update_nhl_results.py
 
 ### 1.7 — Débloquer les matchs NHL post-LIVE
 - **Fichier** : `src/fetchers/update_nhl_results.py:58`
 - **Bug** : Filtre `status="NS"` uniquement → matchs passés par LIVE/CRIT jamais retraités
 - **Fix** : Filtrer sur `status NOT IN (NHL_FINISHED_STATUSES)` au lieu de `status = "NS"`
-- [ ] Corriger le filtre
+- [x] Corrigé (déjà dans ProbaLab/)
 
 ### 1.8 — Router les expert picks NHL vers nhl_fixtures
 - **Fichier** : `api/main.py:2404-2412`
 - **Bug** : `/expert-picks/resolve` cherche dans `fixtures` (football) même pour `sport="nhl"`
 - **Fix** : Si `sport == "nhl"`, chercher dans `nhl_fixtures`
-- [ ] Ajouter le branchement par sport
+- [x] Ajouté sport tagging + filtrage par sport dans fuzzy match (commit c94fe11)
 
 ---
 
