@@ -3312,6 +3312,9 @@ def get_performance(days: int = Query(0, description="Rolling window in days (0 
         if days > 0:
             cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
 
+        # Only count leagues where predictions are generated
+        from src.fetchers.matches import LEAGUES_TO_FETCH
+
         # Paginated fetch — Supabase caps at 1000 rows per request
         finished = []
         page_size = 1000
@@ -3321,6 +3324,7 @@ def get_performance(days: int = Query(0, description="Rolling window in days (0 
                 supabase.table("fixtures")
                 .select("id, home_team, away_team, home_goals, away_goals, date, status")
                 .in_("status", ["FT", "AET", "PEN"])
+                .in_("league_id", LEAGUES_TO_FETCH)
             )
             if cutoff:
                 q = q.gte("date", cutoff)
