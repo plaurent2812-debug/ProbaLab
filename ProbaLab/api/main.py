@@ -18,14 +18,7 @@ import xml.etree.ElementTree as ET
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-try:
-    import pytz
-    from apscheduler.schedulers.background import BackgroundScheduler
-    from apscheduler.triggers.cron import CronTrigger
-
-    SCHEDULER_AVAILABLE = True
-except ImportError:
-    SCHEDULER_AVAILABLE = False
+# APScheduler removed — all scheduling handled by Trigger.dev
 
 # Add the parent package to the path so we can import config
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -76,277 +69,10 @@ from api.schemas import (
 logger = logging.getLogger(__name__)
 
 
-# ── Scheduler ────────────────────────────────────────────────
-def _scheduled_update_scores():
-    """Called by APScheduler every 15 min — update FT scores."""
-    try:
-        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-        from datetime import date
-
-        from src.fetchers.results import fetch_and_update_results
-
-        print(f"[scheduler] Mise à jour des scores — {date.today()}")
-        fetch_and_update_results()
-    except Exception as e:
-        print(f"[scheduler] Erreur: {e}")
-
-
-def _scheduled_live_update():
-    """Called by APScheduler every 5 min — live scores + events + stats."""
-    try:
-        from src.fetchers.live import run as live_run
-        live_run()
-    except Exception as e:
-        print(f"[scheduler] Erreur live: {e}")
-
-
-def _startup_update_scores():
-    """Run on startup: update scores for the last 3 days (catch up)."""
-    try:
-        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-        from datetime import date, timedelta
-
-        from src.fetchers.results import fetch_and_update_results
-
-        print("[scheduler] 🚀 Rattrapage des scores au démarrage (J, J-1, J-2)...")
-        for delta in range(3):
-            d = (date.today() - timedelta(days=delta)).isoformat()
-            fetch_and_update_results(d)
-        print("[scheduler] ✅ Rattrapage terminé.")
-    except Exception as e:
-        print(f"[scheduler] Erreur rattrapage: {e}")
-
-
-def _scheduled_telegram_tickets():
-    """Disabled — Telegram ticket notifications removed."""
-    pass
-
-
-def _scheduled_nhl_tickets():
-    """Disabled — Telegram ticket notifications removed."""
-    pass
-
-
-def _scheduled_nhl_pipeline():
-    """Called by APScheduler at 16h00 and 22h00 Paris — full NHL pipeline + DeepThink."""
-    try:
-        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-        from datetime import date
-
-        from src.fetchers.nhl_pipeline import run_nhl_pipeline
-
-        print(f"[scheduler] 🏒 Pipeline NHL automatique — {date.today()}")
-        result = run_nhl_pipeline()
-        n_matches = result.get("matches", 0)
-        n_players = result.get("players_analyzed", 0)
-        print(f"[scheduler] 🏒 ✅ NHL terminé: {n_matches} matchs, {n_players} joueurs")
-    except Exception as e:
-        print(f"[scheduler] 🏒 ❌ Erreur NHL pipeline: {e}")
-
-
-def _scheduled_nhl_evaluation():
-    """Called daily at 8h00 Paris — update NHL scores + evaluate + resolve bets.
-
-    NHL games from last night (18h-04h Paris) are now finished.
-    We update scores, evaluate predictions, and resolve best_bets picks.
-    """
-    try:
-        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-        from datetime import date, timedelta
-        from src.fetchers.fetch_nhl_results import evaluate_nhl_predictions
-
-        print("[scheduler] 🏒 Évaluation NHL automatique...")
-        result = evaluate_nhl_predictions(days_back=3)
-        total = result.get("total_evaluations", 0)
-        wins = result.get("total_wins", 0)
-        print(f"[scheduler] 🏒 ✅ NHL évaluation: {total} prédictions, {wins} hits")
-
-        # Also fetch game stats for last 3 days (fixes shots data)
-        from src.nhl.fetch_game_stats import fetch_and_store_game_stats
-        for df in [1, 2, 3]:
-            dt = (date.today() - timedelta(days=df)).isoformat()
-            fetch_and_store_game_stats(dt)
-    except Exception as e:
-        print(f"[scheduler] 🏒 ❌ Erreur évaluation NHL: {e}")
-
-
-def _scheduled_football_evaluation():
-    """Called daily at 8h30 Paris — evaluate football predictions + recalibrate."""
-    try:
-        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-        from src.training.evaluate import run_evaluation
-        from src.models.calibrate import run_calibration
-
-        print("[scheduler] ⚽ Évaluation football automatique...")
-        run_evaluation()
-        print("[scheduler] ⚽ Recalibration...")
-        run_calibration()
-        print("[scheduler] ⚽ ✅ Évaluation + calibration terminées")
-    except Exception as e:
-        print(f"[scheduler] ⚽ ❌ Erreur évaluation football: {e}")
-
-    # Resolve expert picks + best_bets for the last 3 days
-    try:
-        from datetime import date, timedelta
-        for delta in range(3):
-            d = (date.today() - timedelta(days=delta)).isoformat()
-            for sport in ["football", "nhl"]:
-                try:
-                    # Resolve best_bets
-                    pending_bets = (
-                        supabase.table("best_bets")
-                        .select("id").eq("date", d).eq("sport", sport).eq("result", "PENDING")
-                        .execute().data or []
-                    )
-                    if pending_bets:
-                        import requests as _req
-                        _req.post(
-                            f"http://localhost:{os.environ.get('PORT', '8000')}/api/best-bets/resolve",
-                            json={"date": d, "sport": sport},
-                            headers={"Authorization": f"Bearer {os.environ.get('CRON_SECRET', '')}"},
-                            timeout=30,
-                        )
-                    # Resolve expert picks
-                    pending_expert = (
-                        supabase.table("expert_picks")
-                        .select("id").eq("date", d).eq("result", "PENDING")
-                        .execute().data or []
-                    )
-                    if pending_expert:
-                        import requests as _req
-                        _req.post(
-                            f"http://localhost:{os.environ.get('PORT', '8000')}/api/expert-picks/resolve",
-                            json={"date": d, "sport": sport},
-                            headers={"Authorization": f"Bearer {os.environ.get('CRON_SECRET', '')}"},
-                            timeout=30,
-                        )
-                except Exception:
-                    pass
-        print("[scheduler] ✅ Résolution best_bets + expert_picks terminée")
-    except Exception as e:
-        print(f"[scheduler] ⚠️ Résolution picks: {e}")
-
-
 @asynccontextmanager
 async def lifespan(app_instance):
-    """Start/stop APScheduler with the FastAPI app."""
-    scheduler = None
-    if SCHEDULER_AVAILABLE:
-        try:
-            paris_tz = pytz.timezone("Europe/Paris")
-            scheduler = BackgroundScheduler(timezone=paris_tz)
-            # Live scores + events + stats : toutes les 5 min (12h-01h Paris)
-            scheduler.add_job(
-                _scheduled_live_update,
-                trigger=CronTrigger(
-                    hour="12-23,0",
-                    minute="*/5",
-                    timezone=paris_tz,
-                ),
-                id="live_update",
-                name="Live scores + events + stats",
-                replace_existing=True,
-                misfire_grace_time=120,
-                max_instances=1,
-                coalesce=True,
-            )
-
-            # Résultats FT : toutes les 15 min (12h-01h Paris)
-            scheduler.add_job(
-                _scheduled_update_scores,
-                trigger=CronTrigger(
-                    hour="12-23,0",
-                    minute="0,15,30,45",
-                    timezone=paris_tz,
-                ),
-                id="update_scores",
-                name="Mise à jour scores FT football",
-                replace_existing=True,
-                misfire_grace_time=300,
-            )
-
-            # Telegram ticket jobs removed (notifications disabled)
-
-            # 🏒 NHL Pipeline — 16h00 Paris (premier scan)
-            scheduler.add_job(
-                _scheduled_nhl_pipeline,
-                trigger=CronTrigger(
-                    hour="16",
-                    minute="0",
-                    timezone=paris_tz,
-                ),
-                id="nhl_pipeline_16h",
-                name="NHL Pipeline 16h (premier scan)",
-                replace_existing=True,
-                misfire_grace_time=900,  # 15 min de tolérance
-            )
-
-            # 🏒 NHL Pipeline — 22h00 Paris (mise à jour lineups)
-            scheduler.add_job(
-                _scheduled_nhl_pipeline,
-                trigger=CronTrigger(
-                    hour="22",
-                    minute="0",
-                    timezone=paris_tz,
-                ),
-                id="nhl_pipeline_22h",
-                name="NHL Pipeline 22h (MAJ lineups)",
-                replace_existing=True,
-                misfire_grace_time=900,
-            )
-
-            # 🏒 NHL Results + Evaluation — 8h00 Paris (after US night games)
-            scheduler.add_job(
-                _scheduled_nhl_evaluation,
-                trigger=CronTrigger(
-                    hour="8",
-                    minute="0",
-                    timezone=paris_tz,
-                ),
-                id="nhl_evaluation",
-                name="NHL scores + évaluation complète",
-                replace_existing=True,
-                misfire_grace_time=900,
-            )
-
-            # ⚽ Football evaluation + calibration — 8h30 Paris
-            scheduler.add_job(
-                _scheduled_football_evaluation,
-                trigger=CronTrigger(
-                    hour="8",
-                    minute="30",
-                    timezone=paris_tz,
-                ),
-                id="football_evaluation",
-                name="Football évaluation + calibration",
-                replace_existing=True,
-                misfire_grace_time=900,
-            )
-
-            # Rattrapage immédiat 10s après le démarrage
-            from datetime import datetime as _dt
-            from datetime import timedelta as _td
-
-            scheduler.add_job(
-                _startup_update_scores,
-                trigger="date",
-                run_date=_dt.now() + _td(seconds=10),
-                id="startup_catchup",
-                name="Rattrapage scores au démarrage",
-            )
-            scheduler.start()
-            print("[scheduler] ✅ Démarré — live */5min + FT */15min + NHL (16h+22h) + eval (8h+8h30) + rattrapage 10s")
-        except Exception as e:
-            print(f"[scheduler] ⚠️  Impossible de démarrer: {e}")
-            scheduler = None
-    else:
-        print("[scheduler] ⚠️  APScheduler non disponible (pip install apscheduler pytz)")
-
-    yield  # L'app tourne ici
-
-    if scheduler and scheduler.running:
-        scheduler.shutdown(wait=False)
-        print("[scheduler] Arrêté.")
+    """App lifespan — scheduling handled by Trigger.dev."""
+    yield
 
 
 app = FastAPI(title="ProbaLab API", version="1.0.0", lifespan=lifespan)
@@ -3348,14 +3074,20 @@ def get_performance(days: int = Query(0, description="Rolling window in days (0 
             }
 
         # Fetch predictions in chunks (Supabase URL limit on in_())
+        # Order by created_at to ensure deterministic deduplication
         predictions = []
         CHUNK = 100
         for i in range(0, len(fixture_ids), CHUNK):
             chunk = fixture_ids[i : i + CHUNK]
-            page = supabase.table("predictions").select("*").in_("fixture_id", chunk).execute().data or []
+            page = supabase.table("predictions").select("*").in_("fixture_id", chunk).order("created_at").execute().data or []
             predictions.extend(page)
 
-        pred_by_fixture = {str(p["fixture_id"]): p for p in predictions}
+        # Deduplicate: keep FIRST prediction per fixture (oldest = original prediction)
+        pred_by_fixture: dict[str, dict] = {}
+        for p in predictions:
+            fid = str(p["fixture_id"])
+            if fid not in pred_by_fixture:
+                pred_by_fixture[fid] = p
 
         correct_1x2 = 0
         correct_btts = 0
@@ -3371,6 +3103,9 @@ def get_performance(days: int = Query(0, description="Rolling window in days (0 
         total_over_35 = 0
         total_score = 0
         total_with_pred = 0
+        total_1x2_countable = 0  # predictions with valid 1X2 probas (no ties)
+        skipped_null_probas = 0
+        skipped_ties = 0
         total_conf = 0
         value_bets_count = 0
         brier_sum = 0
@@ -3390,20 +3125,24 @@ def get_performance(days: int = Query(0, description="Rolling window in days (0 
                     return val
                 return stats_json.get(key, default)
 
-            total_with_pred += 1
-            total_conf += pred.get("confidence_score", 5)
-
             hg = f.get("home_goals", 0) or 0
             ag = f.get("away_goals", 0) or 0
             total_goals = hg + ag
             actual_result = "H" if hg > ag else ("D" if hg == ag else "A")
             actual_btts = hg > 0 and ag > 0
 
-            # 1X2 accuracy & Brier Score
-            ph = get_val("proba_home", 33)
-            pd_val = get_val("proba_draw", 33)
-            pa = get_val("proba_away", 33)
-            
+            # 1X2 accuracy & Brier Score — skip predictions with NULL probas
+            ph = get_val("proba_home")
+            pd_val = get_val("proba_draw")
+            pa = get_val("proba_away")
+
+            if ph is None or pd_val is None or pa is None:
+                skipped_null_probas += 1
+                continue
+
+            total_with_pred += 1
+            total_conf += pred.get("confidence_score", 5)
+
             # Normalize to 0-1
             p_h = ph / 100.0
             p_d = pd_val / 100.0
@@ -3418,9 +3157,22 @@ def get_performance(days: int = Query(0, description="Rolling window in days (0 
             brier_match = (p_h - o_h)**2 + (p_d - o_d)**2 + (p_a - o_a)**2
             brier_sum += brier_match
 
-            predicted_result = "H" if ph >= pd_val and ph >= pa else ("A" if pa >= pd_val else "D")
-            if predicted_result == actual_result:
-                correct_1x2 += 1
+            # 1X2 prediction: use strict > to avoid Home bias on ties
+            if ph > pd_val and ph > pa:
+                predicted_result = "H"
+            elif pa > ph and pa > pd_val:
+                predicted_result = "A"
+            elif pd_val > ph and pd_val > pa:
+                predicted_result = "D"
+            else:
+                # Tie between two or more outcomes — don't count in accuracy
+                skipped_ties += 1
+                predicted_result = None
+
+            if predicted_result is not None:
+                total_1x2_countable += 1
+                if predicted_result == actual_result:
+                    correct_1x2 += 1
 
             # BTTS accuracy (only count matches with actual BTTS data)
             p_btts = get_val("proba_btts")
@@ -3469,13 +3221,14 @@ def get_performance(days: int = Query(0, description="Rolling window in days (0 
             if pred.get("value_bet") or pred.get("is_value_bet"):
                 value_bets_count += 1
 
-            # Daily aggregation
+            # Daily aggregation (only count matches with a clear predicted result)
             day = f["date"][:10] if f.get("date") else "unknown"
             if day not in daily:
                 daily[day] = {"date": day, "total": 0, "correct": 0}
-            daily[day]["total"] += 1
-            if predicted_result == actual_result:
-                daily[day]["correct"] += 1
+            if predicted_result is not None:
+                daily[day]["total"] += 1
+                if predicted_result == actual_result:
+                    daily[day]["correct"] += 1
 
         def _pct(correct: int, total: int) -> float:
             return round(correct / total * 100, 1) if total else 0
@@ -3483,7 +3236,8 @@ def get_performance(days: int = Query(0, description="Rolling window in days (0 
         return {
             "days": days,
             "total_matches": total_with_pred,
-            "accuracy_1x2": _pct(correct_1x2, total_with_pred),
+            # 1X2 accuracy: based on matches with a clear predicted result (no ties)
+            "accuracy_1x2": _pct(correct_1x2, total_1x2_countable),
             "accuracy_btts": _pct(correct_btts, total_btts),
             "accuracy_over_05": _pct(correct_over_05, total_over_05),
             "accuracy_over_15": _pct(correct_over_15, total_over_15),
@@ -3496,9 +3250,21 @@ def get_performance(days: int = Query(0, description="Rolling window in days (0 
             "brier_score_1x2": round(brier_sum / total_with_pred, 3) if total_with_pred else 0,
             "brier_score_1x2_normalized": round(brier_sum / total_with_pred / 2, 3) if total_with_pred else 0,
             "daily_stats": sorted(daily.values(), key=lambda x: x["date"]),
-            # Coverage info: how many finished fixtures had predictions
+            # Coverage info
             "total_finished": len(finished),
             "total_without_prediction": len(finished) - total_with_pred,
+            "skipped_null_probas": skipped_null_probas,
+            "skipped_ties": skipped_ties,
+            # Market coverage: how many predictions have data for each market
+            "coverage": {
+                "total_1x2_countable": total_1x2_countable,
+                "total_btts": total_btts,
+                "total_over_05": total_over_05,
+                "total_over_15": total_over_15,
+                "total_over_25": total_over_25,
+                "total_over_35": total_over_35,
+                "total_score": total_score,
+            },
         }
 
     except Exception as e:
