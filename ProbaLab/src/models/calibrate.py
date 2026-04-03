@@ -18,19 +18,19 @@ sauvegardés dans la table `calibration` de Supabase.
 from collections.abc import Callable
 
 import numpy as np
+from numpy.typing import NDArray
+from sklearn.isotonic import IsotonicRegression
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import brier_score_loss
+
 from src.config import logger, supabase
 from src.constants import (
     BASE_RATE_AWAY,
     BASE_RATE_DRAW,
     BASE_RATE_HOME,
     BAYESIAN_SHRINKAGE_K,
-    MIN_CALIBRATION_SAMPLES,
     MIN_ISOTONIC_SAMPLES,
 )
-from numpy.typing import NDArray
-from sklearn.isotonic import IsotonicRegression
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import brier_score_loss
 
 # Seuil minimum pour que les algorithmes de fitting fonctionnent correctement
 MIN_SAMPLES: int = 20  # Seuil bas pour fit_platt_scaling / fit_isotonic_calibration
@@ -43,6 +43,7 @@ _isotonic_cache: dict[str, IsotonicRegression | None] = {}
 
 # Cache TTL — auto-invalidate after 1 hour (3600 seconds)
 import time as _time
+
 _CACHE_TTL_SECONDS: int = 3600
 _cache_created_at: float = _time.monotonic()
 
@@ -622,8 +623,8 @@ def _save_and_print(rows: list[dict]) -> None:
     for row in rows:
         try:
             supabase.table("calibration").upsert(row, on_conflict="bet_type,league_id").execute()
-        except Exception as e:
-            logger.warning(f"  ⚠️ Erreur sauvegarde {row['bet_type']}: {e}")
+        except Exception:
+            logger.warning("Calibration save failed for bet_type=%s", row.get("bet_type"), exc_info=True)
 
         bias_str: str = f"+{row['bias']}" if row["bias"] > 0 else str(row["bias"])
         logger.info(
@@ -633,6 +634,128 @@ def _save_and_print(rows: list[dict]) -> None:
             f"bias={bias_str}  "
             f"platt=[{row['platt_a']:.3f}, {row['platt_b']:.3f}]"
         )
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  7. RECALIBRATION AUTO DES DRAW FACTORS
+# ═══════════════════════════════════════════════════════════════════
+
+from datetime import datetime
+from datetime import timezone as _tz
+
+
+def recalibrate_draw_factors(months: int = 6) -> dict[int, float]:
+    """Compute recommended draw factors per league from recent results.
+
+    Loads completed fixtures (status FT/AET/PEN) from the last *months*
+    months, computes the observed draw rate per league, and compares it
+    to the current ``DRAW_FACTOR_BY_LEAGUE`` values in ``constants.py``.
+
+    Recommendations are logged but ``constants.py`` is never modified
+    automatically — apply them manually after review.
+
+    Args:
+        months: Lookback window in months (default 6).
+
+    Returns:
+        Dict mapping ``league_id`` to the recommended new draw factor
+        (rounded to 2 decimal places).  Only leagues with enough data
+        (>=50 completed matches) are included.
+    """
+    from src.constants import DRAW_FACTOR_BY_LEAGUE
+
+    cutoff = datetime.now(_tz.utc).replace(
+        day=1, hour=0, minute=0, second=0, microsecond=0
+    )
+    # Step back `months` months
+    year = cutoff.year
+    month = cutoff.month - months
+    while month <= 0:
+        month += 12
+        year -= 1
+    cutoff = cutoff.replace(year=year, month=month)
+    cutoff_str = cutoff.strftime("%Y-%m-%d")
+
+    logger.info("Recalibration draw factors depuis %s", cutoff_str)
+
+    try:
+        rows = (
+            supabase.table("fixtures")
+            .select("league_id, goals_home, goals_away")
+            .in_("status", ["FT", "AET", "PEN"])
+            .gte("date", cutoff_str)
+            .execute()
+            .data
+        )
+    except Exception:
+        logger.exception("Erreur chargement fixtures pour draw recalibration")
+        return {}
+
+    if not rows:
+        logger.warning("Aucun fixture trouvé pour la recalibration draw factors")
+        return {}
+
+    # Agrégation par ligue
+    league_stats: dict[int, dict[str, int]] = {}
+    for row in rows:
+        lid = row.get("league_id")
+        gh = row.get("goals_home")
+        ga = row.get("goals_away")
+        if lid is None or gh is None or ga is None:
+            continue
+        try:
+            lid = int(lid)
+            gh = int(gh)
+            ga = int(ga)
+        except (TypeError, ValueError):
+            continue
+
+        if lid not in league_stats:
+            league_stats[lid] = {"total": 0, "draws": 0}
+        league_stats[lid]["total"] += 1
+        if gh == ga:
+            league_stats[lid]["draws"] += 1
+
+    MIN_MATCHES = 50  # Minimum for a statistically meaningful rate
+    recommendations: dict[int, float] = {}
+
+    logger.info("=" * 60)
+    logger.info("  DRAW FACTOR RECALIBRATION — derniers %d mois", months)
+    logger.info("=" * 60)
+    logger.info("  %-8s  %-8s  %-10s  %-12s  %-12s  %s", "league", "matches", "draw_rate", "current_df", "recommended", "delta")
+
+    for lid, stats in sorted(league_stats.items()):
+        total = stats["total"]
+        if total < MIN_MATCHES:
+            logger.debug("  Ligue %d: seulement %d matchs — ignorée (min=%d)", lid, total, MIN_MATCHES)
+            continue
+
+        observed_rate = round(stats["draws"] / total, 2)
+        current_df = DRAW_FACTOR_BY_LEAGUE.get(lid, 0.28)
+
+        # Smooth recommendation: blend 70% observed + 30% current (Bayesian prior)
+        # This avoids overreacting to short-term variance in a 6-month window.
+        recommended = round(0.70 * observed_rate + 0.30 * current_df, 2)
+        delta = round(recommended - current_df, 2)
+        delta_str = f"+{delta}" if delta > 0 else str(delta)
+
+        recommendations[lid] = recommended
+        change_marker = " <-- UPDATE RECOMMENDED" if abs(delta) >= 0.02 else ""
+        logger.info(
+            "  %-8d  %-8d  %-10.2f  %-12.2f  %-12.2f  %s%s",
+            lid, total, observed_rate, current_df, recommended, delta_str, change_marker
+        )
+
+    logger.info("=" * 60)
+    logger.info(
+        "  %d ligues analysées, %d mises à jour recommandées (delta >= 0.02)",
+        len(recommendations),
+        sum(1 for lid, rec in recommendations.items() if abs(rec - DRAW_FACTOR_BY_LEAGUE.get(lid, 0.28)) >= 0.02),
+    )
+    logger.info("  Pour appliquer, mettre à jour DRAW_FACTOR_BY_LEAGUE dans src/constants.py")
+    logger.info("=" * 60)
+
+    return recommendations
 
 
 if __name__ == "__main__":

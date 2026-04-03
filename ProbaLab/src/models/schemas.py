@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 schemas.py — Pydantic validation models for API-Football responses.
 
@@ -14,8 +15,9 @@ Usage:
 
 from typing import Any
 
-from src.config import logger
 from pydantic import BaseModel, Field, ValidationError
+
+from src.config import logger
 
 # ═══════════════════════════════════════════════════════════════════
 #  API-Football Response Schemas

@@ -16,13 +16,9 @@ Usage:
 """
 from __future__ import annotations
 
-import base64
-import io
-import pickle
 from typing import Any
 
 from src.config import logger, supabase
-from src.constants import FEATURE_COLS
 
 MARKET_FEATURES = {"market_home_prob", "market_draw_prob", "market_away_prob"}
 

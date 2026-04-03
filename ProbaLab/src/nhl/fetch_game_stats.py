@@ -12,15 +12,12 @@ NHL API used:
   https://api-web.nhle.com/v1/gamecenter/{game_id}/boxscore
 """
 
-import sys
-import time
 import argparse
-from pathlib import Path
+import time
 from datetime import datetime, timedelta, timezone
 
 import httpx
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 from src.config import logger, supabase
 from src.nhl.constants import NHL_NAME_TO_ABBREV
 
@@ -153,4 +150,4 @@ if __name__ == "__main__":
                         help="Game date YYYY-MM-DD (default: yesterday)")
     args = parser.parse_args()
     result = fetch_and_store_game_stats(args.date)
-    print(result)
+    logger.info("Result: %s", result)

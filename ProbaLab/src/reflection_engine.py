@@ -1,7 +1,3 @@
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 from src.brain import ask_gemini, extract_json
 from src.config import logger, supabase
 

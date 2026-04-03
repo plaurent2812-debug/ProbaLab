@@ -22,7 +22,6 @@ from datetime import datetime
 from src.config import LEAGUES, logger, supabase
 from src.constants import KELLY_FRACTION, KELLY_MAX_BET_FRACTION, MIN_VALUE_EDGE
 
-
 # ═══════════════════════════════════════════════════════════════════
 #  DATA LOADING
 # ═══════════════════════════════════════════════════════════════════
@@ -475,12 +474,12 @@ def run_backtest() -> dict:
         # Standard multi-class Brier (NOT /3): random baseline = 0.667
         grade = "EXCELLENT" if brier < 0.50 else "BON" if brier < 0.58 else "MOYEN" if brier < 0.63 else "FAIBLE"
         logger.info(f"  Brier Score moyen  : {brier:.4f}  [{grade}]")
-        logger.info(f"    (réf: random=0.667, <0.50 excellent, <0.58 bon, <0.63 moyen)")
+        logger.info("    (réf: random=0.667, <0.50 excellent, <0.58 bon, <0.63 moyen)")
     if cal["avg_log_loss"] is not None:
         ll = cal["avg_log_loss"]
         grade = "EXCELLENT" if ll < 0.9 else "BON" if ll < 1.05 else "MOYEN" if ll < 1.2 else "FAIBLE"
         logger.info(f"  Log Loss moyen     : {ll:.4f}  [{grade}]")
-        logger.info(f"    (réf: random=1.099, <0.90 excellent, <1.05 bon, <1.20 moyen)")
+        logger.info("    (réf: random=1.099, <0.90 excellent, <1.05 bon, <1.20 moyen)")
 
     # ── 3. Reliability Diagram ───────────────────────────────────
     _print_section("3. COURBE DE CALIBRATION (Reliability Diagram)")
@@ -515,7 +514,7 @@ def run_backtest() -> dict:
         logger.info(f"  Ignorés (pas de cotes) : {kelly['skipped_no_odds']}")
         logger.info(f"  Ignorés (pas d'edge)   : {kelly['skipped_no_edge']}")
     else:
-        logger.info(f"  Aucun pari simulé (pas de cotes disponibles ou pas d'edge)")
+        logger.info("  Aucun pari simulé (pas de cotes disponibles ou pas d'edge)")
         logger.info(f"  Ignorés: {kelly['skipped_no_odds']} sans cotes, {kelly['skipped_no_edge']} sans edge")
 
     # ── 5. By League ─────────────────────────────────────────────

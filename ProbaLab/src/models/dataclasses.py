@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 dataclasses.py — Structures de données typées pour le projet Football IA.
 

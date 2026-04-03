@@ -7,6 +7,10 @@ Toutes les interactions Supabase sont mockées.
 
 from __future__ import annotations
 
+import pytest
+
+pytestmark = pytest.mark.integration
+
 from unittest.mock import MagicMock, patch
 
 # We patch supabase at the module level where it is imported

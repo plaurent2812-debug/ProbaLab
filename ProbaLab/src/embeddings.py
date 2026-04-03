@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import math
 import os
-from typing import Any
 
 from src.config import GEMINI_API_KEY, logger, supabase
 

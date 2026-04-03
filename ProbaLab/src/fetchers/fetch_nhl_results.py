@@ -21,14 +21,12 @@ Workflow :
 Usage :
     python -m src.fetchers.fetch_nhl_results [days_back]
 """
-import os
 import sys
 import time
 from datetime import datetime, timedelta
 
 import httpx
 
-sys.path.insert(0, str(os.path.join(os.path.dirname(__file__), "..")))
 from src.config import logger, supabase
 from src.fetchers.update_nhl_results import update_nhl_fixture_results
 

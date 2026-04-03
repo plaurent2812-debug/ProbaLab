@@ -1,134 +1,38 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { fetchPerformance } from "@/lib/api"
 import {
-    BarChart3, Target, TrendingUp, Percent, Calendar,
-    CheckCircle2, XCircle, Trophy, Zap, Activity, Swords, Info
+    BarChart3, Target, TrendingUp, Percent,
+    CheckCircle2, XCircle, Trophy, Zap, Activity, Swords, Info,
 } from "lucide-react"
 import { useState, useEffect } from "react"
-import {
-    BarChart, Bar, XAxis, YAxis, CartesianGrid,
-    Tooltip, ResponsiveContainer, Cell
-} from "recharts"
 import { cn } from "@/lib/utils"
 
-
-/* ── Accuracy ring (circular progress) ─────────────────────── */
-function AccuracyRing({ value, size = 52, strokeWidth = 5 }) {
-    const radius = (size - strokeWidth) / 2
-    const circumference = 2 * Math.PI * radius
-    const offset = circumference - (value / 100) * circumference
-
-    const color = value >= 70
-        ? "stroke-emerald-500"
-        : value >= 50
-            ? "stroke-amber-400"
-            : "stroke-red-400"
-
-    return (
-        <svg width={size} height={size} className="shrink-0 -rotate-90">
-            <circle
-                cx={size / 2} cy={size / 2} r={radius}
-                className="stroke-secondary"
-                strokeWidth={strokeWidth}
-                fill="none"
-            />
-            <circle
-                cx={size / 2} cy={size / 2} r={radius}
-                className={color}
-                strokeWidth={strokeWidth}
-                fill="none"
-                strokeDasharray={circumference}
-                strokeDashoffset={offset}
-                strokeLinecap="round"
-                style={{ transition: "stroke-dashoffset 1s ease-out" }}
-            />
-        </svg>
-    )
-}
-
-
-/* ── Market accuracy card ──────────────────────────────────── */
-function MarketCard({ label, accuracy, icon: Icon, color, isAdmin }) {
-    return (
-        <div className="flex items-center gap-3 p-3.5 rounded-xl bg-card/50 border border-border/40 hover:border-border/70 transition-colors">
-            <div className="relative">
-                <AccuracyRing value={accuracy} />
-                <span className="absolute inset-0 flex items-center justify-center text-xs font-bold tabular-nums rotate-0">
-                    {accuracy}%
-                </span>
-            </div>
-            <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold truncate">{label}</p>
-                <div className="flex items-center gap-1 mt-0.5">
-                    <Icon className={cn("w-3 h-3", color)} />
-                    {isAdmin && (
-                        <span className={cn("text-[11px] font-medium",
-                            accuracy >= 70 ? "text-emerald-400" : accuracy >= 50 ? "text-amber-400" : "text-red-400"
-                        )}>
-                            {accuracy >= 70 ? "Excellent" : accuracy >= 50 ? "Correct" : "À améliorer"}
-                        </span>
-                    )}
-                </div>
-            </div>
-        </div>
-    )
-}
-
-
-/* ── Stat tile (header KPIs) ───────────────────────────────── */
-function StatTile({ value, label, icon: Icon, accent }) {
-    return (
-        <div className="flex items-center gap-3 p-4 rounded-xl bg-card/50 border border-border/40">
-            <div className={cn("p-2 rounded-lg", accent)}>
-                <Icon className="w-5 h-5" />
-            </div>
-            <div>
-                <p className="text-2xl font-black tabular-nums">{value}</p>
-                <p className="text-[11px] text-muted-foreground font-medium">{label}</p>
-            </div>
-        </div>
-    )
-}
-
-
-/* ── Custom tooltip for charts ─────────────────────────────── */
-function ChartTooltip({ active, payload, label }) {
-    if (!active || !payload?.length) return null
-    return (
-        <div className="rounded-lg border border-border bg-card p-3 shadow-xl">
-            <p className="text-[11px] text-muted-foreground font-medium mb-1">📅 {label}</p>
-            {payload.map((p, i) => (
-                <p key={i} className="text-sm font-semibold">
-                    <span className="inline-block w-2 h-2 rounded-full mr-1.5" style={{ background: p.color }} />
-                    {p.name}: <span className="tabular-nums">{p.value}</span>
-                </p>
-            ))}
-        </div>
-    )
-}
+import { StatTile, MarketCard, InfoTooltip } from "@/components/performance/ui"
+import { BrierCard } from "@/components/performance/BrierCard"
+import { CoverageSection } from "@/components/performance/CoverageSection"
+import { BenchmarksSection } from "@/components/performance/BenchmarksSection"
+import { DailyChart } from "@/components/performance/DailyChart"
 
 
 /* ═══════════════════════════════════════════════════════════
    Performance Page
    ═══════════════════════════════════════════════════════════ */
 export default function PerformancePage() {
-    const [data, setData] = useState(null)
-    const [jours, setJours] = useState(90)  // default 90j (covers full history)
-    const [sport, setSport] = useState("football") // 'football' | 'nhl'
+    const [data, setData] = useState<any>(null)
+    const [jours, setJours] = useState(90)
+    const [sport, setSport] = useState("football")
     const [loading, setLoading] = useState(true)
-    const [error, setError] = useState(null)
+    const [error, setError] = useState<string | null>(null)
     const [retryKey, setRetryKey] = useState(0)
 
     useEffect(() => {
         setLoading(true)
         setError(null)
 
-        // Dynamically import API functions based on selected sport to avoid full rework
         import('@/lib/api').then(({ fetchPerformance, fetchNHLPerformance }) => {
             const fetcher = sport === 'nhl' ? fetchNHLPerformance : fetchPerformance
             fetcher(jours)
                 .then(setData)
-                .catch(err => {
+                .catch((err: Error) => {
                     console.error(err)
                     setError(err.message)
                 })
@@ -158,7 +62,7 @@ export default function PerformancePage() {
                     onClick={() => { setError(null); setRetryKey(k => k + 1) }}
                     className="px-4 py-2 bg-secondary rounded-md text-sm font-medium hover:bg-secondary/80"
                 >
-                    Réessayer
+                    Reessayer
                 </button>
             </div>
         )
@@ -166,27 +70,32 @@ export default function PerformancePage() {
 
     if (!data) return null
 
-    const chartData = data.daily_stats.map(d => ({
+    const chartData = data.daily_stats.map((d: any) => ({
         ...d,
         accuracy: d.total > 0 ? Math.round((d.correct / d.total) * 100) : 0,
-        date_short: d.date?.slice(5) || d.date
+        date_short: d.date?.slice(5) || d.date,
     }))
+
+    const coverage = data.coverage ?? {}
+    const benchmarks = data.benchmarks ?? null
 
     // Market accuracy data for the grid based on sport
     const markets = sport === 'football' ? [
-        { label: "Résultat 1X2", accuracy: data.accuracy_1x2, icon: Swords, color: "text-indigo-400" },
-        { label: "But des 2 équipes", accuracy: data.accuracy_btts, icon: Percent, color: "text-emerald-400" },
-        { label: "Plus de 0.5 buts", accuracy: data.accuracy_over_05 ?? "—", icon: TrendingUp, color: "text-blue-400" },
-        { label: "Plus de 1.5 buts", accuracy: data.accuracy_over_15 ?? "—", icon: TrendingUp, color: "text-blue-400" },
-        { label: "Plus de 2.5 buts", accuracy: data.accuracy_over_25 ?? "—", icon: TrendingUp, color: "text-amber-400" },
-        { label: "Plus de 3.5 buts", accuracy: data.accuracy_over_35 ?? "—", icon: TrendingUp, color: "text-orange-400" },
-        { label: "Score exact (expérimental)", accuracy: data.accuracy_score ?? "—", icon: Target, color: "text-purple-400" },
+        { label: "Resultat 1X2", accuracy: data.accuracy_1x2, icon: Swords, color: "text-indigo-400", total: coverage.total_1x2_countable },
+        { label: "But des 2 equipes", accuracy: data.accuracy_btts, icon: Percent, color: "text-emerald-400", total: coverage.total_btts },
+        { label: "Plus de 0.5 buts", accuracy: data.accuracy_over_05 ?? "—", icon: TrendingUp, color: "text-blue-400", total: coverage.total_over_05 },
+        { label: "Plus de 1.5 buts", accuracy: data.accuracy_over_15 ?? "—", icon: TrendingUp, color: "text-blue-400", total: coverage.total_over_15 },
+        { label: "Plus de 2.5 buts", accuracy: data.accuracy_over_25 ?? "—", icon: TrendingUp, color: "text-amber-400", total: coverage.total_over_25 },
+        { label: "Plus de 3.5 buts", accuracy: data.accuracy_over_35 ?? "—", icon: TrendingUp, color: "text-orange-400", total: coverage.total_over_35 },
+        { label: "Score exact (exp.)", accuracy: data.accuracy_score ?? "—", icon: Target, color: "text-purple-400", total: coverage.total_score },
     ].filter(m => m.accuracy !== "—") : [
-        { label: "Taux Buts (Top 1)", accuracy: data.accuracy_goal, icon: Target, color: "text-emerald-400" },
-        { label: "Taux Passes (Top 1)", accuracy: data.accuracy_assist, icon: Target, color: "text-blue-400" },
-        { label: "Taux Points (Top 1)", accuracy: data.accuracy_point, icon: Target, color: "text-amber-400" },
-        { label: "Taux Tirs (Top 1)", accuracy: data.accuracy_shot, icon: Target, color: "text-orange-400" },
+        { label: "Taux Buts (Top 1)", accuracy: data.accuracy_goal, icon: Target, color: "text-emerald-400", total: undefined },
+        { label: "Taux Passes (Top 1)", accuracy: data.accuracy_assist, icon: Target, color: "text-blue-400", total: undefined },
+        { label: "Taux Points (Top 1)", accuracy: data.accuracy_point, icon: Target, color: "text-amber-400", total: undefined },
+        { label: "Taux Tirs (Top 1)", accuracy: data.accuracy_shot, icon: Target, color: "text-orange-400", total: undefined },
     ].filter(m => m.accuracy !== "—")
+
+    const brierScore: number | null = data.brier_score_1x2_normalized ?? data.brier_score_1x2 ?? null
 
     return (
         <div className="space-y-6 pb-12">
@@ -195,7 +104,7 @@ export default function PerformancePage() {
                 <div>
                     <h1 className="text-2xl font-black tracking-tight">Performance</h1>
                     <p className="text-sm text-muted-foreground mt-0.5">
-                        Taux de réussite sur les {jours} derniers jours
+                        Taux de reussite sur les {jours > 0 ? `${jours} derniers jours` : "toute la periode"}
                     </p>
                 </div>
 
@@ -246,7 +155,7 @@ export default function PerformancePage() {
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <StatTile
                     value={data.total_finished ? `${data.total_matches}/${data.total_finished}` : data.total_matches}
-                    label="Matchs analysés"
+                    label="Matchs analyses"
                     icon={BarChart3}
                     accent="bg-indigo-500/10 text-indigo-400"
                 />
@@ -255,7 +164,7 @@ export default function PerformancePage() {
                     <>
                         <StatTile
                             value={`${data.accuracy_1x2}%`}
-                            label="Précision 1X2"
+                            label="Precision 1X2"
                             icon={Target}
                             accent="bg-emerald-500/10 text-emerald-400"
                         />
@@ -274,7 +183,7 @@ export default function PerformancePage() {
                                     <div className="group relative">
                                         <Info className="w-3 h-3 text-muted-foreground cursor-help" />
                                         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-card border border-border rounded-lg shadow-xl text-[10px] text-muted-foreground w-52 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                                            <strong className="text-foreground">Brier Score normalisé</strong> — qualité des probabilités sur une échelle 0→1.
+                                            <strong className="text-foreground">Brier Score normalise</strong> — qualite des probabilites sur une echelle 0 a 1.
                                             <br /><span className="text-emerald-400">0 = parfait</span> · 0.25 = hasard · <span className="text-red-400">0.5 = mauvais</span>.
                                             <br />Moins c'est bas, mieux c'est.
                                         </div>
@@ -326,7 +235,14 @@ export default function PerformancePage() {
                 <CardHeader className="pb-3">
                     <CardTitle className="flex items-center gap-2 text-sm">
                         <Activity className="w-4 h-4 text-primary" />
-                        Taux de réussite par marché
+                        Taux de reussite par marche
+                        <InfoTooltip content={
+                            <>
+                                <strong className="text-foreground block mb-1">Intervalle de confiance Wilson 95%</strong>
+                                La marge (±x%) indique l'incertitude statistique due a la taille de l'echantillon.
+                                Un grand echantillon = marge faible = metrique fiable.
+                            </>
+                        } />
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -338,96 +254,39 @@ export default function PerformancePage() {
                                 accuracy={m.accuracy}
                                 icon={m.icon}
                                 color={m.color}
-                                isAdmin={true}
+                                total={m.total}
                             />
                         ))}
                     </div>
                 </CardContent>
             </Card>
 
-            {/* Chart: Daily accuracy + volume (combined) */}
-            {chartData.length > 0 && (
-                <Card className="bg-card/50 border-border/50">
-                    <CardHeader className="pb-3">
-                        <CardTitle className="flex items-center gap-2 text-sm">
-                            <Calendar className="w-4 h-4 text-primary" />
-                            Résultats jour par jour
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="h-[280px]">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={chartData} barGap={2}>
-                                    <CartesianGrid
-                                        strokeDasharray="3 3"
-                                        stroke="oklch(0.25 0.008 260)"
-                                        vertical={false}
-                                    />
-                                    <XAxis
-                                        dataKey="date_short"
-                                        tick={{ fontSize: 11, fill: "oklch(0.6 0.01 260)" }}
-                                        axisLine={false}
-                                        tickLine={false}
-                                    />
-                                    <YAxis
-                                        tick={{ fontSize: 11, fill: "oklch(0.6 0.01 260)" }}
-                                        axisLine={false}
-                                        tickLine={false}
-                                    />
-                                    <Tooltip content={<ChartTooltip />} cursor={{ fill: "oklch(0.25 0.008 260 / 0.3)" }} />
-                                    <Bar
-                                        dataKey="total"
-                                        name="Analysés"
-                                        radius={[4, 4, 0, 0]}
-                                        maxBarSize={32}
-                                    >
-                                        {chartData.map((entry, i) => (
-                                            <Cell
-                                                key={i}
-                                                fill="oklch(0.35 0.01 260)"
-                                            />
-                                        ))}
-                                    </Bar>
-                                    <Bar
-                                        dataKey="correct"
-                                        name="Corrects"
-                                        radius={[4, 4, 0, 0]}
-                                        maxBarSize={32}
-                                    >
-                                        {chartData.map((entry, i) => {
-                                            const acc = entry.total > 0 ? entry.correct / entry.total : 0
-                                            return (
-                                                <Cell
-                                                    key={i}
-                                                    fill={acc >= 0.6
-                                                        ? "oklch(0.7 0.18 155)"
-                                                        : acc >= 0.4
-                                                            ? "oklch(0.75 0.16 85)"
-                                                            : "oklch(0.65 0.2 260)"
-                                                    }
-                                                />
-                                            )
-                                        })}
-                                    </Bar>
-                                </BarChart>
-                            </ResponsiveContainer>
-                        </div>
-                        {/* Legend */}
-                        <div className="flex items-center justify-center gap-6 mt-3">
-                            <div className="flex items-center gap-1.5">
-                                <div className="w-3 h-3 rounded-sm" style={{ background: "oklch(0.35 0.01 260)" }} />
-                                <span className="text-[11px] text-muted-foreground">Matchs analysés</span>
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                                <div className="w-3 h-3 rounded-sm" style={{ background: "oklch(0.7 0.18 155)" }} />
-                                <span className="text-[11px] text-muted-foreground">Corrects</span>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
+            {/* Brier score detail — football only */}
+            {sport === 'football' && brierScore != null && (
+                <BrierCard score={brierScore} />
             )}
+
+            {/* Benchmarks — football only */}
+            {sport === 'football' && benchmarks && (
+                <BenchmarksSection
+                    benchmarks={benchmarks}
+                    modelAccuracy={data.accuracy_1x2}
+                />
+            )}
+
+            {/* Coverage — football only */}
+            {sport === 'football' && data.total_finished != null && (
+                <CoverageSection
+                    totalMatches={data.total_matches}
+                    totalFinished={data.total_finished}
+                    skippedNullProbas={data.skipped_null_probas ?? 0}
+                    skippedTies={data.skipped_ties ?? 0}
+                    coverage={coverage}
+                />
+            )}
+
+            {/* Chart: Daily accuracy + volume */}
+            <DailyChart chartData={chartData} />
         </div>
     )
 }
-
-

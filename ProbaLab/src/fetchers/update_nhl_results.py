@@ -13,9 +13,8 @@ Ce script DOIT tourner avant fetch_nhl_results.py (évaluation).
 Usage :
     python -m src.fetchers.update_nhl_results [--days 3]
 """
-import sys
-import time
 import argparse
+import time
 from datetime import datetime, timedelta, timezone
 
 import httpx
@@ -120,4 +119,4 @@ if __name__ == "__main__":
     parser.add_argument("--days", type=int, default=3)
     args = parser.parse_args()
     result = update_nhl_fixture_results(args.days)
-    print(result)
+    logger.info("Result: %s", result)

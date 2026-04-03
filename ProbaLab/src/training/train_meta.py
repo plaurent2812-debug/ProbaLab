@@ -1,10 +1,13 @@
 import os
-import pandas as pd
+
 import numpy as np
+import pandas as pd
+from sklearn.metrics import accuracy_score, log_loss
 from sklearn.model_selection import TimeSeriesSplit
-from sklearn.metrics import log_loss, accuracy_score
-from src.models.meta_learner import XGBMetaLearner
+
 from src.config import logger
+from src.models.meta_learner import XGBMetaLearner
+
 
 def train_meta_model(target_name: str, num_classes: int, dataset_path: str = "meta_dataset.csv", model_dir: str = "models/football"):
     """
@@ -26,7 +29,7 @@ def train_meta_model(target_name: str, num_classes: int, dataset_path: str = "me
     feature_cols = [
         "ai_motivation", "ai_media_pressure", "ai_injury_impact", "ai_cohesion", "ai_style_risk"
     ]
-    
+
     if target_name == "target_1x2":
         feature_cols.extend(["proba_home", "proba_draw", "proba_away"])
         file_name = "meta_1x2_model.ubj"
@@ -52,12 +55,12 @@ def train_meta_model(target_name: str, num_classes: int, dataset_path: str = "me
 
     # On s'assure qu'il n'y a pas de NaNs dans les probas de base
     X.fillna(0, inplace=True)
-    
+
     logger.info(f"Dataset chargé pour {target_name}: {len(X)} échantillons, {len(feature_cols)} features.")
 
     # Time Series Split
     tscv = TimeSeriesSplit(n_splits=5)
-    
+
     # Paramètres avec objective multi-class ou binary logistic
     objective = 'multi:softprob' if num_classes > 2 else 'binary:logistic'
     params = {
@@ -70,7 +73,7 @@ def train_meta_model(target_name: str, num_classes: int, dataset_path: str = "me
         'eval_metric': 'mlogloss' if num_classes > 2 else 'logloss',
         'random_state': 42
     }
-    
+
     if num_classes > 2:
         params['num_class'] = num_classes
 
@@ -83,9 +86,9 @@ def train_meta_model(target_name: str, num_classes: int, dataset_path: str = "me
 
         model = XGBMetaLearner(params=params)
         model.fit(X_train, y_train)
-        
+
         y_pred_proba = model.predict(X_test)
-        
+
         # OOF Log Loss et Accuracy handling
         if num_classes > 2:
             loss = log_loss(y_test, y_pred_proba, labels=[0, 1, 2])
@@ -94,7 +97,7 @@ def train_meta_model(target_name: str, num_classes: int, dataset_path: str = "me
             loss = log_loss(y_test, y_pred_proba)
             # y_pred_proba is a 1D array of probabilities for class 1 in binary classification
             y_pred_class = (y_pred_proba >= 0.5).astype(int)
-            
+
         log_losses.append(loss)
         acc = accuracy_score(y_test, y_pred_class)
         accuracies.append(acc)
@@ -127,27 +130,27 @@ def train_meta_model(target_name: str, num_classes: int, dataset_path: str = "me
 def train_all_meta_models():
     """Entraîne tous les méta-modèles disponibles."""
     results = []
-    
+
     # 1X2 (3 classes : Away=0, Draw=1, Home=2)
     res_1x2 = train_meta_model("target_1x2", num_classes=3)
     if res_1x2: results.append(res_1x2)
-        
+
     # BTTS (2 classes : No=0, Yes=1)
     res_btts = train_meta_model("target_btts", num_classes=2)
     if res_btts: results.append(res_btts)
-        
+
     # Over 1.5 (2 classes : Under=0, Over=1)
     res_o15 = train_meta_model("target_over_15", num_classes=2)
     if res_o15: results.append(res_o15)
-        
+
     # Over 2.5 (2 classes : Under=0, Over=1)
     res_o25 = train_meta_model("target_over_25", num_classes=2)
     if res_o25: results.append(res_o25)
-        
+
     logger.info("🎯 Récapitulatif de l'entraînement META :")
     for r in results:
         logger.info(f"  - {r['target']}: Acc={r['accuracy']:.2f} | LogLoss={r['log_loss']:.4f}")
-        
+
     return results
 
 if __name__ == "__main__":

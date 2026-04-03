@@ -11,15 +11,14 @@ Usage :
   python worker.py
 """
 
-import time
 import logging
+
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-)
+from src.logging_config import setup_logging
+
+setup_logging()
 logger = logging.getLogger("worker")
 
 
@@ -28,8 +27,8 @@ def job_live() -> None:
     try:
         from src.fetchers.live import run
         run()
-    except Exception as e:
-        logger.error(f"[job_live] {e}")
+    except Exception:
+        logger.exception("[job_live] Error")
 
 
 def job_results() -> None:
@@ -37,8 +36,8 @@ def job_results() -> None:
     try:
         from src.fetchers.results import fetch_and_update_results
         fetch_and_update_results()
-    except Exception as e:
-        logger.error(f"[job_results] {e}")
+    except Exception:
+        logger.exception("[job_results] Error")
 
 
 def job_matches() -> None:
@@ -46,8 +45,8 @@ def job_matches() -> None:
     try:
         from src.fetchers.matches import fetch_and_store
         fetch_and_store()
-    except Exception as e:
-        logger.error(f"[job_matches] {e}")
+    except Exception:
+        logger.exception("[job_matches] Error")
 
 
 def job_brain() -> None:
@@ -55,8 +54,8 @@ def job_brain() -> None:
     try:
         from src.brain import run_brain
         run_brain()
-    except Exception as e:
-        logger.error(f"[job_brain] {e}")
+    except Exception:
+        logger.exception("[job_brain] Error")
 
 
 def job_nhl_evaluation() -> None:
@@ -64,19 +63,86 @@ def job_nhl_evaluation() -> None:
     try:
         from src.fetchers.fetch_nhl_results import evaluate_nhl_predictions
         evaluate_nhl_predictions(days_back=3)
-    except Exception as e:
-        logger.error(f"[job_nhl_eval] {e}")
+    except Exception:
+        logger.exception("[job_nhl_eval] Error")
 
 
 def job_football_evaluation() -> None:
-    """Tous les jours à 8h30 — évaluation foot + recalibration."""
+    """Tous les jours à 8h30 — évaluation foot + recalibration + draw factor audit."""
     try:
+        from src.models.calibrate import recalibrate_draw_factors, run_calibration
         from src.training.evaluate import run_evaluation
-        from src.models.calibrate import run_calibration
         run_evaluation()
         run_calibration()
-    except Exception as e:
-        logger.error(f"[job_football_eval] {e}")
+        recalibrate_draw_factors(months=6)
+    except Exception:
+        logger.exception("[job_football_eval] Error")
+
+
+def job_drift_check() -> None:
+    """Tous les jours à 9h00 — detection drift Brier 7j vs 30j."""
+    try:
+        from src.monitoring.drift_detector import check_drift
+        result = check_drift()
+        if result.get("drifted"):
+            logger.warning(
+                "[job_drift_check] Drift detecte — Brier 7j=%s, 30j=%s, delta=%s",
+                result["brier_7d"], result["brier_30d"], result["delta"],
+            )
+        else:
+            logger.info(
+                "[job_drift_check] Pas de drift — Brier 7j=%s, 30j=%s",
+                result["brier_7d"], result["brier_30d"],
+            )
+    except Exception:
+        logger.exception("[job_drift_check] Error")
+
+
+def job_football_picks() -> None:
+    """Tous les jours à 14h — génération pronos football (singles + double + fun)."""
+    try:
+        from src.ticket_generator import generate_football_picks
+        result = generate_football_picks()
+        logger.info(
+            "[job_football_picks] %s: %d singles, %d double, %d fun",
+            result["date"], result["singles"], result["double"], result["fun"],
+        )
+    except Exception:
+        logger.exception("[job_football_picks] Error")
+
+
+def job_nhl_picks() -> None:
+    """Tous les jours à 22h — génération pronos NHL (singles + double + fun)."""
+    try:
+        from src.ticket_generator import generate_nhl_picks
+        result = generate_nhl_picks()
+        logger.info(
+            "[job_nhl_picks] %s: %d singles, %d double, %d fun",
+            result["date"], result["singles"], result["double"], result["fun"],
+        )
+    except Exception:
+        logger.exception("[job_nhl_picks] Error")
+
+
+def job_weekly_retrain() -> None:
+    """Chaque dimanche à 3h00 — retraining complet des modeles ML."""
+    try:
+        from src.training.build_data import run as build_data_run
+        from src.training.evaluate import run_evaluation
+        from src.training.train import run as train_run
+
+        logger.info("[job_weekly_retrain] Etape 1/3 — rebuild features...")
+        build_data_run(rebuild=False)
+
+        logger.info("[job_weekly_retrain] Etape 2/3 — entrainement des modeles...")
+        train_run()
+
+        logger.info("[job_weekly_retrain] Etape 3/3 — evaluation post-entrainement...")
+        run_evaluation()
+
+        logger.info("[job_weekly_retrain] Retraining hebdomadaire termine.")
+    except Exception:
+        logger.exception("[job_weekly_retrain] Error")
 
 
 def main() -> None:
@@ -100,6 +166,18 @@ def main() -> None:
     # Tous les jours à 8h30 — évaluation foot + recalibration
     scheduler.add_job(job_football_evaluation, CronTrigger(hour=8, minute=30), id="football_eval", max_instances=1, coalesce=True)
 
+    # Tous les jours à 9h00 — drift detection Brier 7j vs 30j
+    scheduler.add_job(job_drift_check, CronTrigger(hour=9, minute=0), id="drift_check", max_instances=1, coalesce=True)
+
+    # Tous les jours à 14h00 — pronos football quotidiens
+    scheduler.add_job(job_football_picks, CronTrigger(hour=14, minute=0), id="football_picks", max_instances=1, coalesce=True)
+
+    # Tous les jours à 22h00 — pronos NHL quotidiens
+    scheduler.add_job(job_nhl_picks, CronTrigger(hour=22, minute=0), id="nhl_picks", max_instances=1, coalesce=True)
+
+    # Chaque dimanche à 3h00 — retraining hebdomadaire complet
+    scheduler.add_job(job_weekly_retrain, CronTrigger(day_of_week="sun", hour=3, minute=0), id="weekly_retrain", max_instances=1, coalesce=True)
+
     logger.info("=" * 50)
     logger.info("  ⚙️  Worker démarré")
     logger.info("  - Live scores    : */5 min")
@@ -108,6 +186,10 @@ def main() -> None:
     logger.info("  - Pipeline brain : 6h00 quotidien")
     logger.info("  - NHL évaluation : 8h00 quotidien")
     logger.info("  - Foot éval+calib: 8h30 quotidien")
+    logger.info("  - Drift check    : 9h00 quotidien")
+    logger.info("  - Picks football : 14h00 quotidien")
+    logger.info("  - Picks NHL      : 22h00 quotidien")
+    logger.info("  - ML retrain     : dimanche 3h00")
     logger.info("=" * 50)
 
     try:

@@ -11,34 +11,28 @@ from pathlib import Path
 import requests
 from dotenv import load_dotenv
 
+from src.logging_config import setup_logging
 from supabase import Client, create_client
 
 
 # ── Logging structuré ────────────────────────────────────────────
 def setup_logger(name: str = "football_ia", level: int = logging.INFO) -> logging.Logger:
-    """Create (or retrieve) a timestamped console logger.
+    """Configure centralized JSON logging and return a named logger.
 
-    If the logger already has handlers attached, no new handler is added
-    so that duplicate output is avoided when called multiple times.
+    Delegates to :func:`src.logging_config.setup_logging` to ensure all
+    modules share the same JSON formatter and root handler configuration.
+    Kept for backward compatibility — existing callers can continue to use
+    ``setup_logger()``.
 
     Args:
         name: Logger name passed to :func:`logging.getLogger`.
-        level: Logging level (e.g. ``logging.INFO``, ``logging.DEBUG``).
+        level: Logging level for the root logger (e.g. ``logging.INFO``).
 
     Returns:
-        Configured :class:`logging.Logger` instance.
+        Named :class:`logging.Logger` instance.
     """
-    log: logging.Logger = logging.getLogger(name)
-    if not log.handlers:
-        handler: logging.StreamHandler = logging.StreamHandler()
-        formatter: logging.Formatter = logging.Formatter(
-            "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-            datefmt="%H:%M:%S",
-        )
-        handler.setFormatter(formatter)
-        log.addHandler(handler)
-    log.setLevel(level)
-    return log
+    setup_logging(level)
+    return logging.getLogger(name)
 
 
 logger: logging.Logger = setup_logger()

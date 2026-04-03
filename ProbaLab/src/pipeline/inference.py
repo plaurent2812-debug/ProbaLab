@@ -1,8 +1,9 @@
 import os
+
 import pandas as pd
-from typing import Optional
-from src.models.meta_learner import XGBMetaLearner
+
 from src.config import logger
+from src.models.meta_learner import XGBMetaLearner
 
 # Singleton pour garder les modèles en RAM
 _MODELS = {
@@ -12,7 +13,7 @@ _MODELS = {
     "over_25": None
 }
 
-def get_meta_model(model_name: str) -> Optional[XGBMetaLearner]:
+def get_meta_model(model_name: str) -> XGBMetaLearner | None:
     global _MODELS
     if _MODELS[model_name] is None:
         file_map = {
@@ -24,7 +25,7 @@ def get_meta_model(model_name: str) -> Optional[XGBMetaLearner]:
         model_path = os.path.join("models/football", file_map[model_name])
         if not os.path.exists(model_path):
             return None
-        
+
         try:
             model = XGBMetaLearner()
             model.model.load_model(model_path)
@@ -33,16 +34,16 @@ def get_meta_model(model_name: str) -> Optional[XGBMetaLearner]:
         except Exception as e:
             logger.error(f"Erreur lors du chargement du Meta-Modèle {model_name}: {e}")
             return None
-            
+
     return _MODELS[model_name]
 
-def predict_meta(stats_result: dict, ai_features: dict) -> Optional[dict]:
+def predict_meta(stats_result: dict, ai_features: dict) -> dict | None:
     """
     Prend les prédictions de base (stats) et les features IA,
     et utilise les Meta-Modèles XGBoost pour prédire toutes les probabilités ajustées.
     """
     results = {}
-    
+
     # Base AI features used by all models
     base_feats = {
         "ai_motivation": ai_features.get("motivation_score", 0.0),
@@ -70,7 +71,7 @@ def predict_meta(stats_result: dict, ai_features: dict) -> Optional[dict]:
             results["proba_away_meta"] = round(float(preds_1x2[0]) * 100)
             results["proba_draw_meta"] = round(float(preds_1x2[1]) * 100)
             results["proba_home_meta"] = round(float(preds_1x2[2]) * 100)
-            
+
         # 2. Prediction BTTS
         model_btts = get_meta_model("btts")
         if model_btts:
@@ -81,7 +82,7 @@ def predict_meta(stats_result: dict, ai_features: dict) -> Optional[dict]:
             preds_btts = model_btts.predict(df_btts)[0]
             # Binary logistic returns proba of class 1 (Yes)
             results["proba_btts_meta"] = round(float(preds_btts) * 100)
-            
+
         # 3. Prediction Over 1.5
         model_o15 = get_meta_model("over_15")
         if model_o15:
@@ -91,7 +92,7 @@ def predict_meta(stats_result: dict, ai_features: dict) -> Optional[dict]:
             df_o15 = pd.DataFrame([row_o15])[cols_o15].fillna(0)
             preds_o15 = model_o15.predict(df_o15)[0]
             results["proba_over_15_meta"] = round(float(preds_o15) * 100)
-            
+
         # 4. Prediction Over 2.5
         model_o25 = get_meta_model("over_25")
         if model_o25:
@@ -103,7 +104,7 @@ def predict_meta(stats_result: dict, ai_features: dict) -> Optional[dict]:
             results["proba_over_25_meta"] = round(float(preds_o25) * 100)
 
         return results if results else None
-        
+
     except Exception as e:
         logger.error(f"Erreur inattendue lors de l'inférence Meta-Modèle: {e}")
         return None

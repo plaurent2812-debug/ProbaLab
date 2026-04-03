@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 ab_testing.py — A/B testing pour comparer des versions de modèles.
 
@@ -16,6 +17,7 @@ Usage :
 from typing import Any
 
 import numpy as np
+
 from src.config import logger, supabase
 
 TABLE: str = "ab_test_predictions"

@@ -10,7 +10,6 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-
 # ─── Email Endpoints ─────────────────────────────────────────────
 
 class EmailPayload(BaseModel):
@@ -66,3 +65,13 @@ class RunPipelineRequest(BaseModel):
     mode: Literal["full", "data", "analyze", "results", "nhl"] = Field(
         "full", description="Pipeline mode: full, data, analyze, results, nhl"
     )
+
+
+# ─── Rebuild models to resolve forward references (required with from __future__ import annotations) ──
+EmailPayload.model_rebuild()
+SaveBetRequest.model_rebuild()
+UpdateBetResultRequest.model_rebuild()
+DateRequest.model_rebuild()
+ResolveBetsRequest.model_rebuild()
+ResolveExpertPicksRequest.model_rebuild()
+RunPipelineRequest.model_rebuild()

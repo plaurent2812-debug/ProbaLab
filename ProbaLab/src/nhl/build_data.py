@@ -5,15 +5,11 @@ va chercher le boxscore officiel NHL pour les résultats réels (labels),
 et génère le dataset CSV.
 """
 
-import sys
 import time
-from pathlib import Path
 
 import httpx
 import pandas as pd
 
-# Ajouter la racine au path pour les imports
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.config import logger, supabase
 
 NHL_API = "https://api-web.nhle.com/v1"

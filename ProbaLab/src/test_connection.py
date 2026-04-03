@@ -1,8 +1,8 @@
 import os
 
-from src.config import logger
 from dotenv import load_dotenv
 
+from src.config import logger
 from supabase import Client, create_client
 
 # Charger les variables d'environnement depuis .env

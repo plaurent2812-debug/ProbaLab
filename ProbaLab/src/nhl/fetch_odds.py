@@ -13,7 +13,6 @@ Free plan: 500 req/mois (suffisant pour ~31 req/mois à raison de 1 fetch/soir)
 from __future__ import annotations
 
 import argparse
-import logging
 import os
 import time
 from datetime import datetime, timedelta, timezone
@@ -202,4 +201,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     result = run(args.date)
-    print(result)
+    logger.info("Result: %s", result)

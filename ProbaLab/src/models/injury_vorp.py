@@ -1,4 +1,3 @@
-import math
 
 def calculate_vorp_impact(missing_players: list[dict], team_stats: dict) -> tuple[float, float]:
     """
@@ -33,7 +32,7 @@ def calculate_vorp_impact(missing_players: list[dict], team_stats: dict) -> tupl
         rating = float(p.get("rating") or REPLACEMENT_RATING)
         # Weight by importance in squad (minutes played)
         minutes = int(p.get("minutes_played") or 0)
-        
+
         # If the player didn't play much, their absence has low impact
         # Threshold depends on position: defenders/GKs need fewer minutes to be considered impactful
         position = p.get("position", "Unknown")
@@ -43,7 +42,7 @@ def calculate_vorp_impact(missing_players: list[dict], team_stats: dict) -> tupl
 
         # Calculate raw positive vorp
         vorp = max(0.0, rating - REPLACEMENT_RATING)
-        
+
         # Determine if player is offensive or defensive biased
         pos = p.get("position", "Unknown").lower()
         if pos in ["attacker", "forward", "winger", "midfielder", "amc"]:

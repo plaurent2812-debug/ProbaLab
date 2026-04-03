@@ -13,7 +13,7 @@ from __future__ import annotations
 import time
 
 from src.config import logger, supabase
-from src.embeddings import build_match_profile_text, get_embedding
+from src.embeddings import get_embedding
 
 
 def backfill_learnings() -> int:

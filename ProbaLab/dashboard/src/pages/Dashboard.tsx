@@ -7,7 +7,7 @@ import {
     Activity, Target, BrainCircuit, Brain, Sparkles
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { fetchPredictions, fetchFootballMetaAnalysis } from "@/lib/api"
+import { usePredictions, useFootballMetaAnalysis } from "@/lib/queries"
 import { getStatValue } from "@/lib/statsHelper"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -55,22 +55,9 @@ function DateBar({ date, setDate }) {
 
 /* ── DeepThink Meta-Analysis Card ──────────────────────────── */
 function FootballMetaAnalysisCard({ date }) {
-    const [analysis, setAnalysis] = useState(null)
-    const [loading, setLoading] = useState(true)
     const [expanded, setExpanded] = useState(false)
-
-    useEffect(() => {
-        setLoading(true)
-        setAnalysis(null)
-        fetchFootballMetaAnalysis(date)
-            .then(data => {
-                if (data?.ok && data.analysis) {
-                    setAnalysis(data.analysis)
-                }
-            })
-            .catch(() => console.warn("Impossible de charger la méta-analyse football"))
-            .finally(() => setLoading(false))
-    }, [date])
+    const { data: metaData, isLoading: loading } = useFootballMetaAnalysis(date)
+    const analysis = (metaData?.ok && metaData.analysis) ? metaData.analysis : null
 
     if (loading) {
         return (
@@ -485,30 +472,12 @@ function LeagueSection({ leagueName, leagueId, countryName, matches, isStarred, 
    ═══════════════════════════════════════════════════════════ */
 export default function FootballPage({ date, setDate, selectedLeague, setSelectedLeague }) {
     const navigate = useNavigate()
-    const [matches, setMatches] = useState([])
-    const [loading, setLoading] = useState(true)
     const [minConfidence, setMinConfidence] = useState(0)
     const [valueOnly, setValueOnly] = useState(false)
     const { isStarred, toggleMatch } = useWatchlist()
 
-    useEffect(() => {
-        setLoading(true)
-        fetchPredictions(date)
-            .then(r => setMatches(r.matches || []))
-            .catch(console.error)
-            .finally(() => setLoading(false))
-
-        // Auto-refresh every 30s for live matches (skip cache, only when tab visible)
-        const interval = setInterval(() => {
-            if (document.visibilityState === 'visible') {
-                fetchPredictions(date, true)
-                    .then(r => setMatches(r.matches || []))
-                    .catch(console.error)
-            }
-        }, 30_000)
-
-        return () => clearInterval(interval)
-    }, [date])
+    const { data, isLoading: loading } = usePredictions(date)
+    const matches = data?.matches ?? []
 
     // Filter matches
     const filteredMatches = matches.filter(m => {

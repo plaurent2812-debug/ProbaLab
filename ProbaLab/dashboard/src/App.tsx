@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, NavLink, useNavigate, useLocation } from "react-router-dom"
 import { lazy, Suspense, useState, useEffect, Component } from "react"
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { Zap, Trophy, Shield, User, LayoutGrid, Target, BarChart2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { AuthProvider, useAuth } from "@/lib/auth"
@@ -7,6 +8,16 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { ModeToggle } from "@/components/mode-toggle"
 import SemanticSearch from "@/components/SemanticSearch"
 import "./App.css"
+
+// ── React Query client ────────────────────────────────────────
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+})
 
 // ── Error Boundary ────────────────────────────────────────────
 class ErrorBoundary extends Component {
@@ -398,13 +409,15 @@ function AppContent() {
 function App() {
   return (
     <ErrorBoundary>
-      <AuthProvider>
-        <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
-          <BrowserRouter>
-            <AppContent />
-          </BrowserRouter>
-        </ThemeProvider>
-      </AuthProvider>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
+            <BrowserRouter>
+              <AppContent />
+            </BrowserRouter>
+          </ThemeProvider>
+        </AuthProvider>
+      </QueryClientProvider>
     </ErrorBoundary>
   )
 }

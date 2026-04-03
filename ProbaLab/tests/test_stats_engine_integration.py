@@ -6,6 +6,9 @@ import math
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+pytestmark = pytest.mark.integration
+
 from src.models.stats_engine import (
     analyze_match,
     calculate_form,

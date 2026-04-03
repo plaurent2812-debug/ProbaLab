@@ -4,6 +4,7 @@ Tests unitaires pour training/build_data.py — Feature engineering avancé.
 Tests de _advanced_features_from_mem (Phase 5).
 """
 
+import pytest
 from src.training.build_data import _advanced_features_from_mem
 
 
@@ -51,14 +52,17 @@ class TestAdvancedFeatures:
         for key in expected_keys:
             assert key in result, f"Missing key: {key}"
 
-    def test_empty_history_defaults(self):
+    @pytest.mark.parametrize("field", [
+        "home_momentum",
+        "away_momentum",
+        "home_goal_diff_avg",
+        "home_result_variance",
+        "home_clean_sheet_rate",
+    ])
+    def test_empty_history_defaults_to_zero(self, field):
         data = _make_data([])
         result = _advanced_features_from_mem(data, "TeamA", "TeamB", "2025-01-10")
-        assert result["home_momentum"] == 0.0
-        assert result["away_momentum"] == 0.0
-        assert result["home_goal_diff_avg"] == 0.0
-        assert result["home_result_variance"] == 0.0
-        assert result["home_clean_sheet_rate"] == 0.0
+        assert result[field] == 0.0, f"{field}: expected 0.0, got {result[field]}"
 
     def test_clean_sheet_rate(self):
         fixtures = [

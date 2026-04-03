@@ -10,6 +10,8 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './src'),
     },
+    // Prefer .ts/.tsx over .js/.jsx so api.ts is found before api.js
+    extensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
   },
   server: {
     proxy: {

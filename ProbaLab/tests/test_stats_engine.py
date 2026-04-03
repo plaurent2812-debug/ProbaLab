@@ -5,6 +5,7 @@ Ces tests ne nécessitent PAS de connexion Supabase.
 Ils testent les calculs de Poisson, ELO, météo, régression.
 """
 
+import pytest
 from src.models.stats_engine import (
     calculate_roi,
     calculate_xg,
@@ -102,11 +103,16 @@ class TestEloExpected:
     def test_equal_elos_give_50_percent(self):
         assert abs(elo_expected(1500, 1500) - 0.5) < 0.01
 
-    def test_higher_elo_wins_more(self):
-        assert elo_expected(1700, 1500) > 0.5
-
-    def test_lower_elo_wins_less(self):
-        assert elo_expected(1500, 1700) < 0.5
+    @pytest.mark.parametrize("home_elo,away_elo,expected_relation", [
+        (1700, 1500, "greater"),
+        (1500, 1700, "less"),
+    ])
+    def test_elo_advantage_direction(self, home_elo, away_elo, expected_relation):
+        prob = elo_expected(home_elo, away_elo)
+        if expected_relation == "greater":
+            assert prob > 0.5
+        else:
+            assert prob < 0.5
 
     def test_symmetry(self):
         p1 = elo_expected(1600, 1400)
@@ -207,21 +213,15 @@ class TestWeatherImpact:
         factor = get_weather_impact({"rain_mm": 0, "wind_speed": 3, "temp": 18})
         assert factor == 1.0
 
-    def test_heavy_rain_reduces_goals(self):
-        factor = get_weather_impact({"rain_mm": 10, "wind_speed": 0, "temp": 15})
-        assert factor < 1.0
-
-    def test_strong_wind_reduces_goals(self):
-        factor = get_weather_impact({"rain_mm": 0, "wind_speed": 15, "temp": 15})
-        assert factor < 1.0
-
-    def test_extreme_cold_reduces_goals(self):
-        factor = get_weather_impact({"rain_mm": 0, "wind_speed": 0, "temp": -5})
-        assert factor < 1.0
-
-    def test_extreme_heat_reduces_goals(self):
-        factor = get_weather_impact({"rain_mm": 0, "wind_speed": 0, "temp": 40})
-        assert factor < 1.0
+    @pytest.mark.parametrize("weather,label", [
+        ({"rain_mm": 10, "wind_speed": 0, "temp": 15}, "heavy_rain"),
+        ({"rain_mm": 0, "wind_speed": 15, "temp": 15}, "strong_wind"),
+        ({"rain_mm": 0, "wind_speed": 0, "temp": -5}, "extreme_cold"),
+        ({"rain_mm": 0, "wind_speed": 0, "temp": 40}, "extreme_heat"),
+    ])
+    def test_adverse_weather_reduces_goals(self, weather, label):
+        factor = get_weather_impact(weather)
+        assert factor < 1.0, f"{label}: expected factor < 1.0, got {factor}"
 
     def test_cumulative_bad_weather(self):
         rain_only = get_weather_impact({"rain_mm": 8, "wind_speed": 0, "temp": 15})
@@ -274,30 +274,32 @@ class TestCalculateXg:
 class TestDixonColes:
     """Tests for the Dixon-Coles correction factor."""
 
-    def test_0_0_increases_with_negative_rho(self):
-        # With negative rho, 0-0 becomes MORE likely (Poisson under-estimates draws)
-        factor = dixon_coles_correction(0, 0, 1.5, 1.2, rho=-0.13)
-        assert factor > 1.0
+    @pytest.mark.parametrize("home_goals,away_goals,label", [
+        (0, 0, "0-0"),
+        (1, 1, "1-1"),
+    ])
+    def test_low_draw_score_increases_with_negative_rho(self, home_goals, away_goals, label):
+        # With negative rho, 0-0 and 1-1 become MORE likely (Poisson under-estimates draws)
+        factor = dixon_coles_correction(home_goals, away_goals, 1.5, 1.2, rho=-0.13)
+        assert factor > 1.0, f"{label}: expected factor > 1.0 with negative rho, got {factor}"
 
-    def test_1_1_increases_with_negative_rho(self):
-        # 1-1 also becomes more likely with negative rho
-        factor = dixon_coles_correction(1, 1, 1.5, 1.2, rho=-0.13)
-        assert factor > 1.0
+    @pytest.mark.parametrize("home_goals,away_goals,label", [
+        (0, 1, "0-1"),
+        (1, 0, "1-0"),
+    ])
+    def test_one_sided_low_score_decreases_with_negative_rho(self, home_goals, away_goals, label):
+        # 0-1 and 1-0 become LESS likely with negative rho
+        factor = dixon_coles_correction(home_goals, away_goals, 1.5, 1.2, rho=-0.13)
+        assert factor < 1.0, f"{label}: expected factor < 1.0 with negative rho, got {factor}"
 
-    def test_0_1_decreases_with_negative_rho(self):
-        # 0-1 becomes LESS likely (negative rho reduces 0-1 and 1-0)
-        factor = dixon_coles_correction(0, 1, 1.5, 1.2, rho=-0.13)
-        assert factor < 1.0
-
-    def test_1_0_decreases_with_negative_rho(self):
-        factor = dixon_coles_correction(1, 0, 1.5, 1.2, rho=-0.13)
-        assert factor < 1.0
-
-    def test_high_score_no_correction(self):
+    @pytest.mark.parametrize("home_goals,away_goals", [
+        (2, 1),
+        (3, 0),
+        (2, 3),
+    ])
+    def test_high_score_no_correction(self, home_goals, away_goals):
         """For scorelines > 1, correction should be 1.0."""
-        assert dixon_coles_correction(2, 1, 1.5, 1.2) == 1.0
-        assert dixon_coles_correction(3, 0, 1.5, 1.2) == 1.0
-        assert dixon_coles_correction(2, 3, 1.5, 1.2) == 1.0
+        assert dixon_coles_correction(home_goals, away_goals, 1.5, 1.2) == 1.0
 
     def test_zero_rho_gives_identity(self):
         """With rho=0, all corrections should be 1.0."""
@@ -324,15 +326,17 @@ class TestEloDecay:
     def test_no_decay_when_zero_days(self):
         assert elo_with_decay(1600, 0) == 1600
 
-    def test_decay_pulls_toward_baseline(self):
-        """A team above 1500 should decay downward."""
-        decayed = elo_with_decay(1700, 60)
-        assert 1500 < decayed < 1700
-
-    def test_decay_pulls_up_below_baseline(self):
-        """A team below 1500 should decay upward."""
-        decayed = elo_with_decay(1300, 60)
-        assert 1300 < decayed < 1500
+    @pytest.mark.parametrize("initial_elo,days,expected_direction,bound", [
+        (1700, 60, "down", (1500, 1700)),
+        (1300, 60, "up", (1300, 1500)),
+    ])
+    def test_decay_pulls_toward_baseline(self, initial_elo, days, expected_direction, bound):
+        """Teams above 1500 decay down; teams below 1500 decay up."""
+        decayed = elo_with_decay(initial_elo, days)
+        low, high = bound
+        assert low < decayed < high, (
+            f"ELO {initial_elo} after {days} days: expected between {low} and {high}, got {decayed}"
+        )
 
     def test_longer_inactivity_more_decay(self):
         d30 = elo_with_decay(1700, 30)
@@ -352,20 +356,14 @@ class TestEloDecay:
 class TestKellyAndROI:
     """Tests for value betting functions."""
 
-    def test_roi_positive_value_bet(self):
-        # Model says 60%, odds 2.0 → ROI = 0.6*2 - 1 = 0.2 (+20%)
-        roi = calculate_roi(60, 2.0)
-        assert abs(roi - 0.2) < 0.001
-
-    def test_roi_negative_bad_bet(self):
-        # Model says 30%, odds 2.0 → ROI = 0.3*2 - 1 = -0.4 (-40%)
-        roi = calculate_roi(30, 2.0)
-        assert roi < 0
-
-    def test_roi_break_even(self):
-        # Model says 50%, odds 2.0 → ROI = 0
-        roi = calculate_roi(50, 2.0)
-        assert abs(roi) < 0.001
+    @pytest.mark.parametrize("proba,odds,expected_roi,label", [
+        (60, 2.0, 0.2, "positive value bet"),
+        (30, 2.0, -0.4, "negative bad bet"),
+        (50, 2.0, 0.0, "break even"),
+    ])
+    def test_roi_calculation(self, proba, odds, expected_roi, label):
+        roi = calculate_roi(proba, odds)
+        assert abs(roi - expected_roi) < 0.001, f"{label}: expected {expected_roi}, got {roi}"
 
     def test_kelly_zero_when_no_edge(self):
         # Model says 40%, odds 2.0 → edge = -0.2 → no bet
@@ -412,12 +410,12 @@ class TestAsianHandicaps:
         result = poisson_grid(1.5, 1.0)
         assert result["ah_home_minus_05"] == result["proba_home"]
 
-    def test_ah_complementary(self):
-        """AH home + AH away should sum to ~100%."""
+    @pytest.mark.parametrize("line", ["05", "10", "15"])
+    def test_ah_complementary(self, line):
+        """AH home + AH away should sum to ~100% for each handicap line."""
         result = poisson_grid(1.5, 1.2)
-        for line in ["05", "10", "15"]:
-            total = result[f"ah_home_minus_{line}"] + result[f"ah_away_plus_{line}"]
-            assert 95 <= total <= 105, f"AH ±{line}: {total}% not ~100"
+        total = result[f"ah_home_minus_{line}"] + result[f"ah_away_plus_{line}"]
+        assert 95 <= total <= 105, f"AH ±{line}: {total}% not ~100"
 
     def test_ah_hierarchy(self):
         """Bigger handicap should be harder to cover."""

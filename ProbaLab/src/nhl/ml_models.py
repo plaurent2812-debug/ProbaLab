@@ -5,6 +5,7 @@ Utilise TRAINING_FEATURES de train_enhanced_model comme source unique de vérit�
 """
 
 import io
+import logging
 import math
 import os
 import pickle
@@ -13,6 +14,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+logger = logging.getLogger(__name__)
 
 # ── Safe Deserialization ──────────────────────────────────────────
 _ALLOWED_PREFIXES = (
@@ -57,7 +59,7 @@ class EnhancedGoalPredictor:
     def load(self, path: str) -> bool:
         """Charge le modèle depuis un fichier (pickle pour metadata + ubj pour booster)."""
         if not os.path.isfile(path):
-            print(f"   ⚠️ Modèle non trouvé: {path}")
+            logger.warning("   Modele non trouve: %s", path)
             return False
         try:
             # 1. Load metadata from pickle
@@ -69,31 +71,31 @@ class EnhancedGoalPredictor:
                 self.model_metadata = data.get("metrics", {})
                 if "training_date" in data:
                     self.model_metadata["training_date"] = data["training_date"]
-                
+
                 # Check for UBJ version
                 ubj_path = path.replace(".pkl", ".ubj")
                 if os.path.isfile(ubj_path):
                     from xgboost import XGBClassifier
                     self.model = XGBClassifier()
                     self.model.load_model(ubj_path)
-                    print(f"   ✅ Modèle UBJ chargé: {ubj_path}")
+                    logger.info("   Modele UBJ charge: %s", ubj_path)
                 else:
                     self.model = data.get("model")
-                    print(f"   ✅ Modèle Pickle chargé (legacy): {path}")
+                    logger.info("   Modele Pickle charge (legacy): %s", path)
             else:
                 # Ancien format (modèle seul)
                 self.model = data
                 self.feature_names = ["algo_score_goal", "python_vol", "is_home"]
-                print(f"   ✅ Modèle brut chargé (legacy): {path}")
+                logger.info("   Modele brut charge (legacy): %s", path)
 
             market = self.model_metadata.get("market", os.path.basename(path))
             acc = self.model_metadata.get("accuracy", 0)
             auc = self.model_metadata.get("roc_auc", 0)
             if acc > 0:
-                print(f"      Acc={acc:.2%}, AUC={auc:.3f}, Features={len(self.feature_names)}")
+                logger.info("      Acc=%.2f%%, AUC=%.3f, Features=%d", 100 * acc, auc, len(self.feature_names))
             return True
         except Exception as e:
-            print(f"   ❌ Erreur chargement {path}: {e}")
+            logger.error("   Erreur chargement %s: %s", path, e)
             self.model = None
             return False
 

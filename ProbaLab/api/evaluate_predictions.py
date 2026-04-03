@@ -1,10 +1,5 @@
 import math
-import sys
 from datetime import datetime
-from pathlib import Path
-
-# Add the parent package to the path so we can import config
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.config import supabase
 
@@ -195,12 +190,12 @@ def evaluate_recent_matches(days_back=7):
     try:
         total_res = supabase.table("prediction_results").select("id", count="exact").execute()
         total_count = total_res.count or 0
-        
+
         # We'll use 126 as the baseline (last big batch)
         # We alert every 30 matches above that baseline
         baseline = 126
         diff = total_count - baseline
-        
+
         if diff >= 30:
             from src.notifications import send_telegram
             msg = (

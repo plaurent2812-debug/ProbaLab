@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 #!/usr/bin/env python3
 """
 fetchers/results.py — Mise à jour des scores et statuts des matchs du jour.
@@ -16,10 +17,13 @@ Usage :
 """
 
 
+import logging
 import os
 import sys
 import time
 from datetime import datetime, timezone
+
+logger = logging.getLogger(__name__)
 
 import requests
 from dotenv import load_dotenv
@@ -33,7 +37,7 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 API_KEY = os.getenv("API_FOOTBALL_KEY")
 
 if not API_KEY:
-    print("ERREUR: API_FOOTBALL_KEY manquante")
+    logger.error("ERREUR: API_FOOTBALL_KEY manquante")
     sys.exit(1)
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -64,7 +68,7 @@ def fetch_fixture_from_api(api_fixture_id: int) -> dict | None:
         results = data.get("response", [])
         return results[0] if results else None
     except Exception as e:
-        print(f"  [API ERROR] fixture {api_fixture_id}: {e}")
+        logger.error("  [API ERROR] fixture %s: %s", api_fixture_id, e)
         return None
 
 
@@ -97,11 +101,12 @@ def update_fixture_in_db(fixture_id: int, api_data: dict) -> None:
         update_payload["stats_json"] = existing_stats
 
         supabase.table("fixtures").update(update_payload).eq("id", fixture_id).execute()
-        print(
-            f"  ✅ Fixture {fixture_id} mis à jour : {goals.get('home')}-{goals.get('away')} ({status_short})"
+        logger.info(
+            "  Fixture %s mis a jour : %s-%s (%s)",
+            fixture_id, goals.get("home"), goals.get("away"), status_short,
         )
     except Exception as e:
-        print(f"  [DB ERROR] fixture {fixture_id}: {e}")
+        logger.error("  [DB ERROR] fixture %s: %s", fixture_id, e)
 
 
 def fetch_and_update_results(target_date: str | None = None) -> dict:
@@ -120,9 +125,9 @@ def fetch_and_update_results(target_date: str | None = None) -> dict:
     if not target_date:
         target_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-    print(f"\n{'=' * 60}")
-    print(f"🔄 Mise à jour des scores — {target_date}")
-    print(f"{'=' * 60}")
+    logger.info("=" * 60)
+    logger.info("Mise a jour des scores — %s", target_date)
+    logger.info("=" * 60)
 
     # Récupère les fixtures du jour depuis Supabase
     # Note: target_date is UTC-based (datetime.now(timezone.utc) above).
@@ -147,10 +152,10 @@ def fetch_and_update_results(target_date: str | None = None) -> dict:
             or []
         )
     except Exception as e:
-        print(f"[SUPABASE ERROR] {e}")
+        logger.error("[SUPABASE ERROR] %s", e)
         return {"updated": 0, "skipped": 0, "errors": 1}
 
-    print(f"📋 {len(fixtures)} fixtures trouvés pour le {target_date}")
+    logger.info("%d fixtures trouves pour le %s", len(fixtures), target_date)
 
     now_utc = datetime.now(timezone.utc)
     updated = 0
@@ -188,7 +193,7 @@ def fetch_and_update_results(target_date: str | None = None) -> dict:
         ):
             # Déjà terminé avec score → skip
             skipped += 1
-            print(f"  ⏭  {home_team} vs {away_team} — déjà FT ({home_goals}-{away_goals})")
+            logger.debug("  %s vs %s — deja FT (%s-%s)", home_team, away_team, home_goals, away_goals)
             continue
 
         if current_status in FINISHED_STATUSES and (home_goals is None or away_goals is None):
@@ -213,7 +218,7 @@ def fetch_and_update_results(target_date: str | None = None) -> dict:
                 continue
 
         if should_fetch:
-            print(f"  🔍 {home_team} vs {away_team} [{reason}] — appel API...")
+            logger.info("  %s vs %s [%s] — appel API...", home_team, away_team, reason)
             api_data = fetch_fixture_from_api(api_id)
             if api_data:
                 update_fixture_in_db(fixture_id, api_data)
@@ -223,9 +228,9 @@ def fetch_and_update_results(target_date: str | None = None) -> dict:
             # Petite pause pour ne pas surcharger l'API
             time.sleep(0.3)
 
-    print(f"\n{'=' * 60}")
-    print(f"✅ Terminé : {updated} mis à jour | {skipped} ignorés | {errors} erreurs")
-    print(f"{'=' * 60}\n")
+    logger.info("=" * 60)
+    logger.info("Termine : %d mis a jour | %d ignores | %d erreurs", updated, skipped, errors)
+    logger.info("=" * 60)
 
     return {"updated": updated, "skipped": skipped, "errors": errors}
 

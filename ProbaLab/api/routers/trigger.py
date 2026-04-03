@@ -1,14 +1,11 @@
 from __future__ import annotations
 
 import os
-import sys
 from datetime import datetime
-from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 from src.brain import ask_gemini, extract_json
 from src.config import api_get, logger, supabase
 
@@ -513,7 +510,7 @@ def update_live_scores(detail: bool = Query(False, description="Fetch events & s
     for lf in live_fixtures:
         api_fixture_id = lf.get("fixture", {}).get("id")
         if not api_fixture_id: continue
-        
+
         live_api_ids.add(api_fixture_id)
         internal_id = existing_map.get(str(api_fixture_id))
         if not internal_id: continue # Match not in our DB, ignore
@@ -737,15 +734,16 @@ def retrain_meta_model():
     """Endpoint for Trigger.dev to trigger XGBoost Meta-Model training (Phase 2 & 3)."""
     logger.info("[MLOps] 🚀 Déclenchement du réentrainement Méta-Modèle XGBoost...")
     try:
-        from src.training.prepare_meta_dataset import extract_meta_dataset
         from src.training.train_meta_1x2 import train_meta_1x2
+
+        from src.training.prepare_meta_dataset import extract_meta_dataset
 
         # 1. Extraction des données (jointure Predictions + Fixtures réelles)
         dataset_path = "meta_dataset.csv"
         df = extract_meta_dataset()
         if df.empty:
             return {"status": "skipped", "message": "Pas assez de données pour l'entraînement Meta"}
-        
+
         df.to_csv(dataset_path, index=False)
 
         # 2. Entraînement et Sauvegarde du Modèle

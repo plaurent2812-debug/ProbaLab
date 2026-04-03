@@ -3,15 +3,10 @@ Récupération des cotes (Odds) pour les matchs NHL du jour via API-Sports (Hock
 Endpoint: https://v1.hockey.api-sports.io/odds
 """
 
-import sys
 import time
 from datetime import datetime
-from pathlib import Path
 
 import requests
-
-# Setup path to import src.config module
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.config import API_FOOTBALL_KEY, logger, supabase
 

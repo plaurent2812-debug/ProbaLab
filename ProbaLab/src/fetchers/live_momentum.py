@@ -11,12 +11,7 @@ Conditions 70ème minute :
 - Pour au moins une équipe dans la 2ème mi-temps : xG > 1.5, Tirs > 8, Tirs cadrés >= 3
 """
 
-import sys
 from datetime import datetime, timezone
-from pathlib import Path
-
-# Ajouter la racine au path pour les imports
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.config import LEAGUES, api_get, logger, supabase
 

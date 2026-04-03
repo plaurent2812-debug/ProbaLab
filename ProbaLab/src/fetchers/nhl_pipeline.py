@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 nhl_pipeline.py — Pipeline NHL complet (équivalent du Google Apps Script)
 
@@ -15,20 +16,19 @@ Push dans nhl_data_lake + nhl_fixtures dans Supabase.
 """
 
 import math
-import sys
 import time
 from datetime import datetime, timedelta
-from pathlib import Path
 
 import httpx
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.config import logger, supabase
-from src.nhl.constants import NHL_TEAM_NAMES as TEAM_NAMES, get_nhl_season_id
+from src.nhl.constants import NHL_TEAM_NAMES as TEAM_NAMES
+from src.nhl.constants import get_nhl_season_id
 
 try:
     from src.nhl.ml_models import load_all_models
-    from src.nhl.nhl_ml_predictor import predict_nhl_match as predict_nhl_match_ml, is_available as nhl_ml_available
+    from src.nhl.nhl_ml_predictor import is_available as nhl_ml_available
+    from src.nhl.nhl_ml_predictor import predict_nhl_match as predict_nhl_match_ml
 
     ML_MODELS = load_all_models()
 except ImportError:
@@ -54,8 +54,8 @@ def _fetch_json(endpoint: str) -> dict | None:
             else:
                 logger.error(f"[NHL] HTTP {resp.status_code} on {endpoint}")
                 return None
-        except Exception as e:
-            logger.error(f"[NHL] Error fetching {endpoint}: {e}")
+        except Exception:
+            logger.warning("[NHL] Error fetching %s (attempt %d)", endpoint, attempt + 1, exc_info=True)
             time.sleep(1.0 * (attempt + 1))
     return None
 
@@ -147,8 +147,8 @@ def fetch_team_special_teams() -> dict[str, dict]:
                     "tsh_per_game": t.get("timesShorthandedPerGame", 3.0),
                     "pk_toi_per_game": t.get("pkTimeOnIcePerGame", 240),
                 }
-    except Exception as e:
-        logger.warning(f"[NHL] Failed to fetch PK stats: {e}")
+    except Exception:
+        logger.warning("[NHL] Failed to fetch PK stats", exc_info=True)
 
     # 2. Power Play stats (season)
     try:
@@ -168,8 +168,8 @@ def fetch_team_special_teams() -> dict[str, dict]:
                 stats[name]["pp_opportunities_per_game"] = t.get(
                     "ppOpportunitiesPerGame", 3.0
                 )
-    except Exception as e:
-        logger.warning(f"[NHL] Failed to fetch PP stats: {e}")
+    except Exception:
+        logger.warning("[NHL] Failed to fetch PP stats", exc_info=True)
 
     # 3. Summary stats (season) for shots against
     try:
@@ -187,8 +187,8 @@ def fetch_team_special_teams() -> dict[str, dict]:
                 stats[name]["shots_against_per_game"] = t.get(
                     "shotsAgainstPerGame", 30.0
                 )
-    except Exception as e:
-        logger.warning(f"[NHL] Failed to fetch summary stats: {e}")
+    except Exception:
+        logger.warning("[NHL] Failed to fetch summary stats", exc_info=True)
 
     logger.info(f"[NHL] Special teams stats loaded for {len(stats)} teams")
 
@@ -444,7 +444,7 @@ def calculate_recent_form(game_log: list[dict]) -> dict:
             current_streak += 1
         else:
             break
-    
+
     max_gap_surge = 1.0
     # Removed Gambler's Fallacy: a player being "due" for a goal has no statistical basis.
     # Previous: +30% if current pointless streak matches max streak.
@@ -471,7 +471,7 @@ def calculate_recent_form(game_log: list[dict]) -> dict:
     # 3. Hard TOI Drop Filter (L3 vs L20)
     l3_toi = sum(_parse_toi(g.get("toi", "00:00")) for g in last3) / max(1, len(last3))
     l20_toi = sum(_parse_toi(g.get("toi", "00:00")) for g in last20) / max(1, len(last20))
-    
+
     toi_drop_penalty = 1.0
     # If dropped by more than 1.5 minutes recently => severe penalty
     if l20_toi > 12.0 and l3_toi < (l20_toi - 1.5):
@@ -594,8 +594,8 @@ def get_ai_game_context(games: list[dict], standings: dict) -> dict:
             if cleaned.startswith("```"):
                 cleaned = cleaned.split("\n", 1)[1].rsplit("```", 1)[0].strip()
             return json.loads(cleaned)
-    except Exception as e:
-        logger.warning(f"[NHL] AI context parsing failed: {e}")
+    except Exception:
+        logger.warning("[NHL] AI context parsing failed", exc_info=True)
 
     return {}
 
@@ -606,10 +606,11 @@ def get_gemini_nhl_analysis(
 ) -> str:
     """Use Gemini to generate a detailed, player-centric NHL match analysis."""
     try:
-        from src.brain import get_gemini_client, get_active_learnings
         from google import genai
         from google.genai import types
-        
+
+        from src.brain import get_active_learnings, get_gemini_client
+
         client = get_gemini_client()
         if not client:
             return f"{home_team} vs {away_team} : Client Gemini non initialisé."
@@ -682,8 +683,8 @@ Rédige l'analyse."""
             ),
         )
         return response.text or "Analyse non disponible."
-    except Exception as e:
-        logger.warning(f"[NHL] AI analysis failed: {e}")
+    except Exception:
+        logger.warning("[NHL] AI analysis failed for %s vs %s", home_team, away_team, exc_info=True)
         return f"Échec de l'analyse IA pour {home_team} vs {away_team}."
 
 
@@ -964,7 +965,7 @@ def _score_player(
     prob_assist = (1.0 - theta_zero) * (1 - math.exp(-max(0, exp_assists))) * 100
     prob_point = (1.0 - theta_zero) * (1 - math.exp(-max(0, exp_points))) * 100
 
-    # For shots (Over 2.5), we apply a smaller structural zero 
+    # For shots (Over 2.5), we apply a smaller structural zero
     # since even 4th liners can occasionally throw pucks on net.
     theta_zero_shots = theta_zero * 0.5
     l_s = max(0, exp_shots)
@@ -1483,8 +1484,8 @@ def run_nhl_pipeline() -> dict:
                     logger.info(f"[NHL]   🧠 ML blend: home={ph}% away={pa}% (ML raw: {ml_home}%)")
                 if ml_preds.get("ml_over_55") is not None:
                     po55 = round(0.6 * po55 + 0.4 * ml_preds["ml_over_55"])
-        except Exception as e:
-            logger.warning(f"[NHL]   ⚠️ ML blend skipped: {e}")
+        except Exception:
+            logger.warning("[NHL] ML blend skipped", exc_info=True)
 
         # Sort match players to find the best bet
         # Priorities: Point > 50%, Goal > 30%, Assist > 35%
@@ -1578,8 +1579,8 @@ def run_nhl_pipeline() -> dict:
         for i in range(0, len(rows), 500):
             try:
                 supabase.table("nhl_data_lake").insert(rows[i : i + 500]).execute()
-            except Exception as e:
-                logger.error(f"[NHL] Error inserting data_lake batch: {e}")
+            except Exception:
+                logger.exception("[NHL] Error inserting data_lake batch")
 
         logger.info(f"[NHL] ✅ {len(rows)} joueurs insérés dans nhl_data_lake")
 
@@ -1641,8 +1642,8 @@ def run_nhl_pipeline() -> dict:
                         "analysis_text": f["analysis_text"],
                     }
                 ).execute()
-        except Exception as e:
-            logger.error(f"[NHL] Error upserting fixture {f['home_team']} vs {f['away_team']}: {e}")
+        except Exception:
+            logger.exception("[NHL] Error upserting fixture %s vs %s", f.get("home_team"), f.get("away_team"))
 
     logger.info(f"[NHL] ✅ {len(fixtures_data)} matchs insérés dans nhl_fixtures")
 
@@ -1652,7 +1653,8 @@ def run_nhl_pipeline() -> dict:
         # Fetch tomorrow's already-stored fixtures from DB to include in DeepThink
         extended_fixtures = list(fixtures_data)
         try:
-            from datetime import datetime as dt, timedelta
+            from datetime import datetime as dt
+            from datetime import timedelta
             tomorrow = (dt.utcnow() + timedelta(days=1)).strftime("%Y-%m-%d")
             cutoff_str = (dt.utcnow() + timedelta(days=1)).replace(hour=20, minute=0, second=0).strftime("%Y-%m-%dT%H:%M:%SZ")
             tmrw_data = (
@@ -1685,8 +1687,8 @@ def run_nhl_pipeline() -> dict:
                             "stats_json": tf.get("stats_json", {}),
                         })
                 logger.info(f"[NHL] DeepThink: added {len(tmrw_data)} tomorrow fixtures (total: {len(extended_fixtures)})")
-        except Exception as e:
-            logger.warning(f"[NHL] Could not fetch tomorrow's fixtures for DeepThink: {e}")
+        except Exception:
+            logger.warning("[NHL] Could not fetch tomorrow's fixtures for DeepThink", exc_info=True)
 
         try:
             meta_analysis = generate_deepthink_meta_analysis(
@@ -1718,9 +1720,9 @@ def run_nhl_pipeline() -> dict:
                         }
                     ).execute()
                     logger.info("[NHL] ✅ DeepThink meta-analysis saved")
-                except Exception as e1:
+                except Exception:
                     # Fallback: store in player_name field if meta_analysis column doesn't exist
-                    logger.warning(f"[NHL] meta_analysis column insert failed ({e1}), trying fallback...")
+                    logger.warning("[NHL] meta_analysis column insert failed, trying fallback...", exc_info=True)
                     try:
                         supabase.table("nhl_data_lake").insert(
                             {
@@ -1737,10 +1739,10 @@ def run_nhl_pipeline() -> dict:
                             }
                         ).execute()
                         logger.info("[NHL] ✅ DeepThink meta-analysis saved (fallback)")
-                    except Exception as e2:
-                        logger.error(f"[NHL] Error saving meta-analysis: {e2}")
-        except Exception as e:
-            logger.warning(f"[NHL] DeepThink meta-analysis failed: {e}")
+                    except Exception:
+                        logger.exception("[NHL] Error saving meta-analysis")
+        except Exception:
+            logger.warning("[NHL] DeepThink meta-analysis failed", exc_info=True)
 
     return {
         "status": "ok",
@@ -1777,6 +1779,7 @@ def generate_deepthink_meta_analysis(
     try:
         from google import genai
         from google.genai import types
+
         from src.config import GEMINI_API_KEY
 
         if not GEMINI_API_KEY:
@@ -1893,14 +1896,14 @@ def generate_deepthink_meta_analysis(
                     result += part.text
         if not result:
             result = getattr(response, "text", "") or ""
-        
+
         if result and len(result) > 50:
             logger.info(f"[NHL] 🧠 DeepThink analysis generated ({len(result)} chars)")
             return result
         else:
             logger.warning("[NHL] DeepThink returned empty/short response")
             return None
-    except Exception as e:
-        logger.warning(f"[NHL] DeepThink generation failed: {e}")
+    except Exception:
+        logger.warning("[NHL] DeepThink generation failed", exc_info=True)
         return None
 

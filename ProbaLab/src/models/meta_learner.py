@@ -1,6 +1,6 @@
 import xgboost as xgb
-import numpy as np
 from sklearn.base import BaseEstimator, RegressorMixin
+
 
 class XGBMetaLearner(BaseEstimator, RegressorMixin):
     def __init__(self, params=None):

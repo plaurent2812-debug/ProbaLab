@@ -2,6 +2,7 @@
 import os
 
 import requests
+
 from src.config import logger
 
 # Config — requires env vars (no hardcoded fallbacks for security)
@@ -46,10 +47,10 @@ if __name__ == "__main__":
     # export TELEGRAM_CHANNEL_ID="@your_channel_name"
     # python src/telegram_bot.py
     if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_IDS:
-        print("Envoi d'un message test...")
+        logger.info("Envoi d'un message test...")
         success = send_telegram_message(
-            "🤖 <b>Test depuis ProbaLab</b>\nCeci est un message de test automatisé."
+            "<b>Test depuis ProbaLab</b>\nCeci est un message de test automatise."
         )
-        print("Succès :" if success else "Échec")
+        logger.info("Succes" if success else "Echec")
     else:
-        print("Veuillez configurer TELEGRAM_BOT_TOKEN et TELEGRAM_CHAT_IDS pour tester.")
+        logger.warning("Veuillez configurer TELEGRAM_BOT_TOKEN et TELEGRAM_CHAT_IDS pour tester.")

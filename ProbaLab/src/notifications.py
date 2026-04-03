@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 notifications.py — Notifications Telegram & Discord pour Football IA.
 
@@ -17,6 +18,7 @@ import os
 from typing import Any
 
 import requests
+
 from src.config import logger
 
 # ── Configuration ──────────────────────────────────────────────────

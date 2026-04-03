@@ -12,10 +12,10 @@ import pickle
 from typing import Any
 
 import numpy as np
-from src.config import logger, supabase
-from src.constants import FEATURE_COLS
 from numpy.typing import NDArray
 
+from src.config import logger, supabase
+from src.constants import FEATURE_COLS
 
 # ── Secure unpickling — whitelist allowed classes to prevent RCE ──
 _PICKLE_ALLOWED_MODULES: dict[str, set[str]] = {

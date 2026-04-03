@@ -33,6 +33,9 @@ from src.telegram_parser import format_confirmation_message, parse_winamax_scree
 
 logger = logging.getLogger("telegram_router")
 
+if not TELEGRAM_WEBHOOK_SECRET:
+    logger.warning("TELEGRAM_WEBHOOK_SECRET not set — webhook will reject all requests")
+
 router = APIRouter(prefix="/api/telegram", tags=["Telegram"])
 
 # ── Simple in-memory rate limiter for webhook ────────────────────
@@ -492,17 +495,19 @@ def _handle_update(update: dict) -> None:
 @router.post("/webhook")
 async def telegram_webhook(request: Request, background_tasks: BackgroundTasks):
     """Webhook Telegram — reçoit les updates et les traite en arrière-plan."""
+    # Fail-closed: reject all requests if webhook secret is not configured
+    if not TELEGRAM_WEBHOOK_SECRET:
+        return Response(content="webhook not configured", status_code=503)
     # Rate limiting
     client_ip = request.client.host if request.client else "unknown"
     if _is_rate_limited(client_ip):
         logger.warning("Webhook rate-limited: %s", client_ip)
         return Response(content="rate limited", status_code=429)
-    # Vérifier le secret token Telegram si configuré
-    if TELEGRAM_WEBHOOK_SECRET:
-        token = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
-        if not hmac.compare_digest(token, TELEGRAM_WEBHOOK_SECRET):
-            logger.warning("Webhook rejected: invalid secret token")
-            return Response(content="unauthorized", status_code=403)
+    # Vérifier le secret token Telegram
+    token = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
+    if not hmac.compare_digest(token, TELEGRAM_WEBHOOK_SECRET):
+        logger.warning("Webhook rejected: invalid secret token")
+        return Response(content="unauthorized", status_code=403)
     try:
         update = await request.json()
         background_tasks.add_task(_handle_update, update)

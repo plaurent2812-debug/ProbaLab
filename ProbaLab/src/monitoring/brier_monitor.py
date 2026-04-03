@@ -25,9 +25,7 @@ from __future__ import annotations
 import math
 from typing import Any
 
-import numpy as np
 from src.config import logger, supabase
-
 
 # ── Thresholds ────────────────────────────────────────────────────
 BRIER_THRESHOLDS = {
@@ -320,7 +318,7 @@ def run() -> dict[str, Any]:
     drift = detect_drift(rolling)
 
     if drift.get("drift_detected"):
-        logger.warning(f"\n  DRIFT DETECTED:")
+        logger.warning("\n  DRIFT DETECTED:")
         logger.warning(f"    Overall Brier : {drift['overall_mean_brier']}")
         logger.warning(f"    Last window   : {drift['last_window_brier']}")
         logger.warning(f"    Delta         : {drift['delta']:+.4f} (threshold: {drift['threshold']})")

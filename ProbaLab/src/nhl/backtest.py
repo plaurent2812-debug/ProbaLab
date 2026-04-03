@@ -14,7 +14,6 @@ Analyse la performance sur les données de nhl_suivi_algo_clean :
 Usage :
     python -m src.nhl.backtest
 """
-import math
 from collections import defaultdict
 
 from src.config import logger, supabase
@@ -187,8 +186,8 @@ def run_nhl_backtest() -> dict:
         logger.info(f"  ROI              : {roi:+.1f}%")
         logger.info(f"  Profit (units)   : {profit:+.1f}")
     else:
-        logger.info(f"  Aucun pari avec cotes réelles disponible.")
-        logger.info(f"  Pour activer: lancer fetch_nhl_odds.py avant les matchs.")
+        logger.info("  Aucun pari avec cotes réelles disponible.")
+        logger.info("  Pour activer: lancer fetch_nhl_odds.py avant les matchs.")
 
     # ── 5. Top/Flop players ──────────────────────────────────────
     _section("5. TOP/FLOP JOUEURS (min 5 évaluations)")

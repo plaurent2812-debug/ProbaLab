@@ -33,13 +33,14 @@ warnings.filterwarnings("ignore")
 
 import optuna
 import xgboost as xgb
-from src.config import logger, supabase
-from src.constants import FEATURE_COLS
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import accuracy_score, brier_score_loss, f1_score, log_loss
 from sklearn.model_selection import TimeSeriesSplit, cross_val_score
 from sklearn.preprocessing import LabelEncoder
 from sklearn.utils.class_weight import compute_sample_weight
+
+from src.config import logger, supabase
+from src.constants import FEATURE_COLS
 
 # Silence Optuna's verbose output
 optuna.logging.set_verbosity(optuna.logging.WARNING)
@@ -348,6 +349,7 @@ def train_classifier(
         params={"sample_weight": sample_weight_train},
     )
     logger.info(f"  CV Accuracy (temporal, balanced) : {cv_scores.mean():.4f} ± {cv_scores.std():.4f}")
+    logger.info(f"  CV Folds : {[round(s, 4) for s in cv_scores.tolist()]}")
 
     # Entraînement final
     model.fit(
@@ -395,6 +397,14 @@ def train_classifier(
     model_bytes = pickle.dumps(payload)
     model_b64 = base64.b64encode(model_bytes).decode("utf-8")
 
+    # Enrichir model_params avec les scores CV par fold
+    params_with_cv = {
+        **params,
+        "cv_fold_scores": cv_scores.tolist(),
+        "cv_mean": float(cv_scores.mean()),
+        "cv_std": float(cv_scores.std()),
+    }
+
     # Sauvegarder
     result: dict = {
         "model_name": model_name,
@@ -405,7 +415,7 @@ def train_classifier(
         "brier_score": round(float(brier), 4) if brier is not None else None,
         "log_loss_val": round(float(ll), 4),
         "feature_importance": feat_imp,
-        "model_params": params,
+        "model_params": params_with_cv,
         "model_weights": model_b64,
         "training_samples": len(y_valid),
         "feature_names": FEATURE_COLS,
@@ -638,7 +648,7 @@ def run() -> None:
         X, y_1x2, "ensemble_1x2", "result", n_classes=3, imputer=imputer,
         lgb_tuned_params=lgb_tuned_1x2
     )
-    
+
     # Tune LightGBM for the binary ensembles
     try:
         logger.info("  🔍 LightGBM tuning for binary models...")
@@ -684,10 +694,42 @@ def run() -> None:
             model_data["imputer"] = imputer
             result["model_weights"] = base64.b64encode(pickle.dumps(model_data)).decode("utf-8")
 
-            supabase.table("ml_models").upsert(result, on_conflict="model_name").execute()
-            logger.info(
-                f"  ✅ {result['model_name']} sauvegardé (acc={result['accuracy']}, n={result['training_samples']})"
-            )
+            # ── Auto-promote : ne promouvoir que si le nouveau modèle est meilleur ──
+            # IMPORTANT : si le nouveau modèle est moins bon, on skip le upsert
+            # pour ne pas écraser le bon modèle actif avec une version dégradée.
+            new_brier = result.get("brier_score")
+            should_save = True
+            if new_brier is not None:
+                existing = (
+                    supabase.table("ml_models")
+                    .select("brier_score")
+                    .eq("model_name", result["model_name"])
+                    .eq("is_active", True)
+                    .execute()
+                    .data
+                )
+                old_brier = existing[0]["brier_score"] if existing else None
+                if old_brier is not None and new_brier >= old_brier:
+                    should_save = False
+                    logger.warning(
+                        f"  Model not promoted (skipped): {result['model_name']} — "
+                        f"new Brier {new_brier} >= old Brier {old_brier} — modele actif conserve"
+                    )
+                else:
+                    result["is_active"] = True
+                    if old_brier is not None:
+                        logger.info(
+                            f"  Promoted {result['model_name']}: "
+                            f"new Brier {new_brier} < old Brier {old_brier}"
+                        )
+
+            if should_save:
+                supabase.table("ml_models").upsert(result, on_conflict="model_name").execute()
+                status = "actif" if result.get("is_active") else "inactif"
+                logger.info(
+                    f"  {result['model_name']} sauvegarde [{status}] "
+                    f"(acc={result['accuracy']}, n={result['training_samples']})"
+                )
         except Exception as e:
             logger.error(f"  ❌ Erreur sauvegarde {result['model_name']}: {e}")
 

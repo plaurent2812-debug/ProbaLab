@@ -110,8 +110,8 @@ def place_bet(
                 stake * odds,
             )
             return data
-    except Exception as e:
-        logger.error("place_bet_atomic RPC failed: %s — falling back to legacy", e)
+    except Exception:
+        logger.warning("place_bet_atomic RPC failed — falling back to legacy", exc_info=True)
 
     # ── Fallback: legacy non-atomic path ──────────────────────────
     return _place_bet_legacy(ticket_type, stake, odds, description, fixture_ids, model_version)
@@ -176,7 +176,7 @@ def _place_bet_legacy(
             )
             return result.data[0] if result.data else row
         except Exception as e:
-            logger.error("Erreur enregistrement pari: %s", e)
+            logger.exception("Erreur enregistrement pari")
             return {"error": str(e)}
 
     return {"error": "Failed after max retries (concurrent bankroll modifications)"}
@@ -244,7 +244,7 @@ def resolve_bet(bet_id: int, won: bool) -> dict[str, Any]:
         return result.data[0] if result.data else update
 
     except Exception as e:
-        logger.error("Erreur résolution pari #%d: %s", bet_id, e)
+        logger.exception("Erreur résolution pari #%d", bet_id)
         return {"error": str(e)}
 
 
@@ -264,7 +264,7 @@ def get_pnl_summary() -> dict[str, Any]:
     try:
         data = supabase.table(TABLE).select("*").in_("status", ["won", "lost"]).execute().data
     except Exception as e:
-        logger.error("Erreur lecture P&L: %s", e)
+        logger.exception("Erreur lecture P&L")
         return {"error": str(e)}
 
     if not data:
@@ -332,6 +332,6 @@ def get_bankroll_history() -> list[dict[str, Any]]:
             .data
         )
         return data or []
-    except Exception as e:
-        logger.error("Erreur lecture historique bankroll: %s", e)
+    except Exception:
+        logger.exception("Erreur lecture historique bankroll")
         return []

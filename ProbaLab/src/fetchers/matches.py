@@ -3,9 +3,9 @@ from __future__ import annotations
 import os
 
 import requests
-from src.config import logger
 from dotenv import load_dotenv
 
+from src.config import logger
 from supabase import Client, create_client
 
 # 1. Chargement des secrets

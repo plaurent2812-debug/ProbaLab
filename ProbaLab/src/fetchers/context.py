@@ -14,6 +14,7 @@ import os
 from datetime import datetime, timezone
 
 import requests
+
 from src.config import (
     LEAGUES,
     SEASON,

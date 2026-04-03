@@ -18,16 +18,15 @@ import numpy as np
 import pandas as pd
 
 try:
+    import optuna
     from sklearn.metrics import accuracy_score, brier_score_loss, log_loss, roc_auc_score
     from sklearn.model_selection import TimeSeriesSplit
     from xgboost import XGBClassifier
-    import optuna
 except ImportError:
-    print("Install: pip install xgboost scikit-learn pandas optuna")
+    import logging as _logging
+    _logging.getLogger(__name__).error("Install: pip install xgboost scikit-learn pandas optuna")
     sys.exit(1)
 
-# ── Ajouter racine au path ──
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 from src.config import logger, supabase
 
 # ═══════════════════════════════════════════════════════════════
@@ -171,29 +170,29 @@ def train_model(df: pd.DataFrame, target: str, model_name: str) -> dict | None:
             "random_state": 42,
             "n_jobs": -1
         }
-        
+
         scores = []
         for train_idx, val_idx in tscv.split(X):
             X_t, X_v = X.iloc[train_idx], X.iloc[val_idx]
             y_t, y_v = y.iloc[train_idx], y.iloc[val_idx]
-            
+
             clf = XGBClassifier(**param)
             clf.fit(X_t, y_t)
-            
+
             preds = clf.predict_proba(X_v)[:, 1]
             scores.append(brier_score_loss(y_v, preds))
-            
+
         return np.mean(scores)
 
     logger.info(f"🚀 Optimisation Optuna pour {model_name}...")
     study = optuna.create_study(direction="minimize")
     study.optimize(objective, n_trials=20)
-    
+
     best_params = study.best_params
     best_params["scale_pos_weight"] = scale_pos_weight
     best_params["eval_metric"] = "logloss"
     best_params["random_state"] = 42
-    
+
     logger.info(f"✅ Meilleurs paramètres: {best_params}")
 
     # FIXED: Honest evaluation on held-out last fold (model trained on train only)

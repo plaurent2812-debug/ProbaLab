@@ -5,7 +5,11 @@ Endpoint : GET /players?team={id}&season=2025&page={n}
 Paginé : 20 joueurs par page.
 ~160 équipes × ~2 pages = ~320 requêtes
 """
-from src.config import supabase, LEAGUES, SEASON, api_get, get_request_count, reset_request_count
+import logging
+
+from src.config import SEASON, api_get, get_request_count, reset_request_count, supabase
+
+logger = logging.getLogger(__name__)
 
 
 def safe_int(val):
@@ -41,7 +45,7 @@ def fetch_players_for_team(team_api_id, team_name):
         for item in results:
             p = item["player"]
             stats_list = item.get("statistics", [])
-            
+
             # Extraire hauteur/poids
             height = None
             if p.get("height"):
@@ -137,7 +141,7 @@ def fetch_players_for_team(team_api_id, team_name):
         try:
             supabase.table("players").upsert(all_players, on_conflict="api_id").execute()
         except Exception as e:
-            print(f"      ❌ Erreur players upsert : {e}")
+            logger.error("      Erreur players upsert : %s", e)
 
     if all_stats:
         try:
@@ -145,7 +149,7 @@ def fetch_players_for_team(team_api_id, team_name):
                 all_stats, on_conflict="player_api_id,league_id,season"
             ).execute()
         except Exception as e:
-            print(f"      ❌ Erreur stats upsert : {e}")
+            logger.error("      Erreur stats upsert : %s", e)
 
     return total_players
 
@@ -153,23 +157,22 @@ def fetch_players_for_team(team_api_id, team_name):
 def fetch_all_players():
     """Récupère les joueurs de toutes les équipes de toutes les ligues."""
     reset_request_count()
-    print(f"=== Importation des joueurs + stats saison ({SEASON}) ===\n")
+    logger.info("=== Importation des joueurs + stats saison (%s) ===", SEASON)
 
     # Charger les équipes depuis Supabase
     all_teams = supabase.table("teams").select("api_id, name, league_id").execute().data
     if not all_teams:
-        print("❌ Aucune équipe en base. Lance fetch_teams.py d'abord.")
+        logger.error("Aucune equipe en base. Lance fetch_teams.py d'abord.")
         return
 
     total = 0
     for i, team in enumerate(all_teams):
-        print(f"  ({i+1}/{len(all_teams)}) {team['name']}...", end=" ", flush=True)
         count = fetch_players_for_team(team["api_id"], team["name"])
-        print(f"{count} joueurs")
+        logger.info("  (%d/%d) %s: %d joueurs", i + 1, len(all_teams), team["name"], count)
         total += count
 
-    print(f"\n{'='*50}")
-    print(f"Total : {total} joueurs importés ({get_request_count()} requêtes API)")
+    logger.info("=" * 50)
+    logger.info("Total : %d joueurs importes (%d requetes API)", total, get_request_count())
 
 
 if __name__ == "__main__":

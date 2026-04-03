@@ -1,15 +1,16 @@
 from __future__ import annotations
+
 import datetime
-import io
 import logging
 import math
 import os
 import pickle
+from typing import Any
 
 import pandas as pd
-from typing import Any, Dict, List, Optional, Tuple, Union
-from src.config import supabase
 from fastapi import APIRouter, Depends, Header, HTTPException
+
+from src.config import supabase
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +71,7 @@ except ImportError:
     load_all_models = None
     ENHANCED_ML_AVAILABLE = False
 
-router = APIRouter(prefix="/nhl", tags=["nhl"])
+router = APIRouter(prefix="/nhl", tags=["NHL"])
 
 # --- CONFIGURATION ---
 API_SECRET_KEY = os.getenv("API_SECRET_KEY", "")
@@ -86,7 +87,7 @@ def clamp(x: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, x))
 
 
-def verify_api_key(x_api_key: Optional[str] = Header(None, alias="X-API-Key")):
+def verify_api_key(x_api_key: str | None = Header(None, alias="X-API-Key")):
     """Vérifie la clé API. BLOQUE si invalide ou non configurée (fail-closed)."""
     if not API_SECRET_KEY:
         raise HTTPException(status_code=503, detail="API key not configured on server")
@@ -112,9 +113,9 @@ def _load_game_win_model():
         try:
             with open(model_path, "rb") as f:
                 data = safe_pickle_load(f)
-            
+
             _game_win_features = data.get("feature_names", [])
-            
+
             # Use UBJ if available
             ubj_path = model_path.replace(".pkl", ".ubj")
             if os.path.isfile(ubj_path):
@@ -151,7 +152,7 @@ else:
 # =============================================================================
 
 
-def _load_calibration_from_supabase(silent: bool = False) -> Tuple[bool, str, Optional[Dict]]:
+def _load_calibration_from_supabase(silent: bool = False) -> tuple[bool, str, dict | None]:
     """Charge la calibration depuis Supabase."""
     try:
         response = (
@@ -590,7 +591,7 @@ def get_nhl_performance(days: int = 30):
                 res = "GAGNÉ"
             elif res == "LOSS":
                 res = "PERDU"
-            
+
             rows.append({
                 "date": b.get("date"),
                 "match": match_str,

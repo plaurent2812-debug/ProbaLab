@@ -23,6 +23,8 @@ from datetime import datetime, timedelta
 from typing import Any
 
 import numpy as np
+from scipy.stats import poisson
+
 from src.config import SEASON, supabase
 from src.constants import (
     AVG_ATTACKER_FOULS_DRAWN_PER_90,
@@ -67,7 +69,7 @@ from src.constants import (
     XG_CEIL,
     XG_FLOOR,
 )
-from scipy.stats import poisson
+
 
 # Import calibration — activée dynamiquement selon le volume de données disponibles.
 # Platt scaling : actif dès 100 prédictions évaluées.
@@ -97,6 +99,47 @@ try:
     ML_AVAILABLE = load_models()
 except ImportError:
     ML_AVAILABLE = False
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  0. BLEND WEIGHTS HELPER
+# ═══════════════════════════════════════════════════════════════════
+
+
+def _get_blend_weights(has_odds: bool, has_ml: bool) -> tuple[float, float, float]:
+    """Return adaptive (weight_poisson, weight_elo, weight_market) for step 7.
+
+    These weights govern the Poisson/ELO/Market blend that produces the
+    base 1X2 probabilities *before* the ML XGBoost override at step 9.
+    When ML is available, step 9 will blend again (60% base + 40% ML),
+    so we can afford to lean more on ELO/Market at step 7.
+
+    Scenarios
+    ---------
+    has_odds=True,  has_ml=True  : Market provides anchor; ML adjusts later.
+                                   Reduce Poisson share slightly → more weight
+                                   on the market signal which is already
+                                   forward-looking.
+    has_odds=True,  has_ml=False : Standard blend with full market weight.
+    has_odds=False, has_ml=True  : No market; ML will correct heavily.
+                                   Use a balanced Poisson/ELO split.
+    has_odds=False, has_ml=False : Pure statistical blend; trust Poisson more.
+
+    Returns:
+        ``(w_poisson, w_elo, w_market)`` summing to 1.0.
+    """
+    if has_odds and has_ml:
+        # Market + ML available: reduce Poisson reliance, ELO stays stable
+        return (0.45, 0.20, 0.35)
+    elif has_odds:
+        # Market available but no ML: standard blend
+        return (WEIGHT_POISSON, WEIGHT_ELO, WEIGHT_MARKET)
+    elif has_ml:
+        # No market, but ML will adjust: balanced Poisson/ELO, no market term
+        return (WEIGHT_POISSON_NO_MARKET, WEIGHT_ELO_NO_MARKET, 0.0)
+    else:
+        # Purely statistical: trust Poisson more, ELO as stabiliser
+        return (WEIGHT_POISSON_NO_MARKET, WEIGHT_ELO_NO_MARKET, 0.0)
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -309,9 +352,9 @@ def calculate_team_strengths(league_id: int) -> dict | None:
     )
     if not fixtures_resp.data:
         return None
-        
+
     fixture_ids = [f["api_fixture_id"] for f in fixtures_resp.data]
-    
+
     # Fetch only relevant match_team_stats rows using chunked in_() queries
     # (Supabase has a ~100-200 element limit on in_(), so we chunk)
     CHUNK_SIZE = 100
@@ -329,7 +372,7 @@ def calculate_team_strengths(league_id: int) -> dict | None:
 
     if not all_mts:
         return None
-        
+
     # Grouper par match
     matches = {}
     for row in all_mts:
@@ -338,7 +381,7 @@ def calculate_team_strengths(league_id: int) -> dict | None:
             if fid not in matches:
                 matches[fid] = []
             matches[fid].append(row)
-            
+
     # Filtre les matchs où on a bien les 2 équipes
     valid_fixtures = [m for m in matches.values() if len(m) == 2]
 
@@ -354,14 +397,14 @@ def calculate_team_strengths(league_id: int) -> dict | None:
     teams_stats = {}
     for match in valid_fixtures:
         t1, t2 = match[0], match[1]
-        
+
         tid1, xg1 = t1["team_api_id"], t1["expected_goals"]
         tid2, xg2 = t2["team_api_id"], t2["expected_goals"]
-        
+
         for tid in (tid1, tid2):
             if tid not in teams_stats:
                 teams_stats[tid] = {"xg_for": [], "xg_against": [], "opponents": [], "atk": 1.0, "def": 1.0}
-        
+
         teams_stats[tid1]["xg_for"].append(xg1 / max(league_avg_xg_scored, 0.1))
         teams_stats[tid1]["xg_against"].append(xg2 / max(league_avg_xg_scored, 0.1))
         teams_stats[tid1]["opponents"].append(tid2)
@@ -422,7 +465,7 @@ def calculate_team_strengths(league_id: int) -> dict | None:
         mp = len(stats["opponents"])
         raw_atk = stats["atk"]
         raw_def = stats["def"]
-        
+
         strengths[tid] = {
             "home_attack": regress_to_mean(raw_atk, mp, 1.0),
             "home_defense": regress_to_mean(raw_def, mp, 1.0),
@@ -547,7 +590,7 @@ def calculate_xg(
         ``XG_CEIL``.
     """
     from src.config import logger
-    from src.constants import XG_FALLBACK_HOME, XG_FALLBACK_AWAY
+    from src.constants import XG_FALLBACK_AWAY, XG_FALLBACK_HOME
 
     home_s = None
     away_s = None
@@ -785,7 +828,7 @@ def update_elo_from_results() -> dict[int, float]:
     # Charger mapping nom -> api_id
     teams = supabase.table("teams").select("api_id, name").execute().data
     name_to_id = {t["name"]: t["api_id"] for t in teams}
-    
+
     # Track last match date for each team to apply decay
     last_match_dates: dict[int, datetime] = {}
 
@@ -798,7 +841,7 @@ def update_elo_from_results() -> dict[int, float]:
             continue
 
         match_dt = datetime.fromisoformat(fix["date"].replace("Z", "+00:00"))
-        
+
         # Apply decay to both teams if they haven't played in >14 days
         for tid in [hid, aid]:
             if tid in last_match_dates:
@@ -1370,17 +1413,17 @@ def get_injury_impact(
 
     # ── 4. Construire la liste des blessés améliorée pour le VORP ──
     missing_players = []
-    
+
     for inj in injured_raw:
         pid = inj.get("player_api_id")
         if not pid:
             continue
-            
+
         position = pos_map.get(pid, "Unknown")
         s = stats_map.get(pid, {})
         name = inj.get("player_name", "?")
         reason = inj.get("reason", "?")
-        
+
         rating = s.get("rating", 6.0)
         mins = s.get("minutes_played", 0)
         is_starter = mins > getattr(team_total_minutes, "real", 0) * 0.03
@@ -1402,12 +1445,12 @@ def get_injury_impact(
         "total_goals": getattr(team_total_goals, "real", 1),
         "total_assists": getattr(team_total_assists, "real", 1)
     }
-    
+
     attack_factor, defense_factor = calculate_vorp_impact(missing_players, team_context)
 
     # ── 6. Préparation des détails pour l'affichage/log ──
     injured_details = missing_players  # Could be augmented by VORP impact strings if needed, keeping simple for now
-    
+
     # Sort roughly by importance (starters with highest rating first)
     injured_details.sort(key=lambda x: (x["is_starter"], x["rating"] or 0.0), reverse=True)
 
@@ -2177,19 +2220,25 @@ def analyze_match(fixture: dict[str, Any]) -> dict[str, Any]:
     context["market"] = market
 
     # ── 7. Combinaison finale ────────────────────────────────────
-    # Pondération dynamique :
-    w_poisson = WEIGHT_POISSON
-    w_elo = WEIGHT_ELO
-    w_market = WEIGHT_MARKET
+    # Pondération adaptive selon disponibilité marché/ML
+    w_poisson, w_elo, w_market = _get_blend_weights(
+        has_odds=bool(market),
+        has_ml=ML_AVAILABLE,
+    )
+    context["blend_weights"] = {
+        "w_poisson": w_poisson,
+        "w_elo": w_elo,
+        "w_market": w_market,
+    }
 
     # Ajustement selon l'avancée de la saison
     # En début de saison (< 8 matchs par équipe en moyenne), l'ELO capture mieux
     # les forces historiques que le Poisson qui se base sur peu de données.
     avg_played = league_data["avg_matches_played"] if league_data else 10
     if avg_played < 8:
-        # Transférer 10 points de % de Poisson vers ELO
+        # Transférer 10 points de % de Poisson vers ELO (sauf si Poisson déjà bas)
         w_poisson = max(0.10, w_poisson - 0.10)
-        w_elo += 0.10
+        w_elo = min(0.60, w_elo + 0.10)
         context["weights_adjusted"] = "early_season"
 
     if market:
@@ -2209,11 +2258,10 @@ def analyze_match(fixture: dict[str, Any]) -> dict[str, Any]:
             + market["market_away"] * w_market
         )
     else:
-        w_p = WEIGHT_POISSON_NO_MARKET
-        w_e = WEIGHT_ELO_NO_MARKET
-        final_home = poisson_probs["proba_home"] * w_p + elo_probs["elo_home"] * w_e
-        final_draw = poisson_probs["proba_draw"] * w_p + elo_probs["elo_draw"] * w_e
-        final_away = poisson_probs["proba_away"] * w_p + elo_probs["elo_away"] * w_e
+        # w_market == 0.0 when no market; use w_poisson and w_elo directly
+        final_home = poisson_probs["proba_home"] * w_poisson + elo_probs["elo_home"] * w_elo
+        final_draw = poisson_probs["proba_draw"] * w_poisson + elo_probs["elo_draw"] * w_elo
+        final_away = poisson_probs["proba_away"] * w_poisson + elo_probs["elo_away"] * w_elo
 
     # Normaliser à 100%
     total = final_home + final_draw + final_away
@@ -2377,6 +2425,7 @@ def analyze_match(fixture: dict[str, Any]) -> dict[str, Any]:
 
             context["ml_active"] = True
         except Exception as e:
+            logger.warning("ML prediction failed", exc_info=True)
             context["ml_active"] = False
             context["ml_error"] = str(e)
 

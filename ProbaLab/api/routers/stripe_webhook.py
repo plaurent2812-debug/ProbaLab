@@ -4,10 +4,11 @@ import os
 
 import httpx
 import stripe
-from src.config import logger, supabase
 from fastapi import APIRouter, Header, HTTPException, Request
 
-router = APIRouter()
+from src.config import logger, supabase
+
+router = APIRouter(tags=["Stripe"])
 
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
@@ -32,38 +33,19 @@ async def stripe_webhook(request: Request, stripe_signature: str = Header(None))
 
     if event_id:
         try:
-            # Idempotency pre-check: see if event already exists
-            existing = (
-                supabase.table("processed_events")
-                .select("id")
-                .eq("id", event_id)
-                .limit(1)
-                .execute()
-            )
-            if existing.data:
-                logger.info(f"Stripe event {event_id} already processed.")
-                return {"status": "already_processed"}
-
-            # Insert to claim processing
-            res = (
-                supabase.table("processed_events")
-                .insert({"id": event_id, "source": "stripe"})
-                .execute()
-            )
-            if hasattr(res, "error") and res.error:
-                logger.info(f"Stripe event {event_id} already processed.")
-                return {"status": "already_processed"}
+            # Atomic idempotency: INSERT and let unique constraint reject duplicates
+            supabase.table("processed_events").insert(
+                {"id": event_id, "source": "stripe"}
+            ).execute()
         except Exception as e:
-            # Check for unique constraint violation via pgcode or message
-            is_duplicate = False
-            if hasattr(e, "code") and e.code == "23505":
-                is_duplicate = True
-            elif hasattr(e, "pgcode") and e.pgcode == "23505":
-                is_duplicate = True
-            elif "duplicate key" in str(e).lower() or "unique constraint" in str(e).lower():
-                is_duplicate = True
-
-            if is_duplicate:
+            # Any unique constraint violation means already processed
+            err_str = str(e).lower()
+            if (
+                (hasattr(e, "code") and e.code == "23505")
+                or (hasattr(e, "pgcode") and e.pgcode == "23505")
+                or "duplicate key" in err_str
+                or "unique constraint" in err_str
+            ):
                 logger.info(f"Stripe event {event_id} already processed.")
                 return {"status": "already_processed"}
             logger.warning(f"Error checking idempotency for {event_id}, continuing: {e}")

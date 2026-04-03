@@ -11,8 +11,9 @@ Corrections Phase 2 (mars 2026):
   - Validation honnête sur le dernier fold (pas de fuite)
 """
 
+import logging
 import os
-import pickle
+import pickle  # noqa: S301 — metadata only, no user data
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -20,13 +21,15 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+logger = logging.getLogger(__name__)
+
 try:
+    import optuna
     from sklearn.metrics import accuracy_score, brier_score_loss, roc_auc_score
     from sklearn.model_selection import TimeSeriesSplit
     from xgboost import XGBClassifier
-    import optuna
 except ImportError:
-    print("Veuillez installer xgboost, scikit-learn et optuna: pip install xgboost scikit-learn optuna pandas")
+    logger.error("Veuillez installer xgboost, scikit-learn et optuna: pip install xgboost scikit-learn optuna pandas")
     sys.exit(1)
 
 # Features utilisées pour l'entraînement.
@@ -70,36 +73,36 @@ FEATURES = [
 def load_data(filepath="nhl_dataset.csv") -> pd.DataFrame:
     path = Path(__file__).parent.parent / filepath
     if not path.exists():
-        print(f"❌ Fichier dataset introuvable: {path}")
-        print("Veuillez d'abord exécuter `python -m src.nhl.build_data`")
+        logger.error("Fichier dataset introuvable: %s", path)
+        logger.error("Veuillez d'abord executer `python -m src.nhl.build_data`")
         return pd.DataFrame()
     df = pd.read_csv(path)
 
     # CRITICAL: Sort by date for proper TimeSeriesSplit
     if "date" in df.columns:
         df = df.sort_values("date").reset_index(drop=True)
-        print(f"  📅 Dataset trié par date: {df['date'].iloc[0][:10]} → {df['date'].iloc[-1][:10]}")
+        logger.info("  Dataset trie par date: %s -> %s", df["date"].iloc[0][:10], df["date"].iloc[-1][:10])
     else:
-        print("  ⚠️ Pas de colonne 'date' — TimeSeriesSplit sera pseudo-aléatoire")
+        logger.warning("  Pas de colonne 'date' — TimeSeriesSplit sera pseudo-aleatoire")
 
     return df
 
 
 def train_market_model(df: pd.DataFrame, market: str, label_col: str, output_path: str):
-    print(f"\n--- Entraînement du modèle: {market} ---")
+    logger.info("--- Entrainement du modele: %s ---", market)
 
     # Nettoyer
     df_clean = df.replace([np.inf, -np.inf], np.nan).fillna(0)
 
     if df_clean.empty:
-        print("❌ Dataset vide.")
+        logger.error("Dataset vide.")
         return
 
     # Only keep features that exist in the dataset
     available_features = [f for f in FEATURES if f in df_clean.columns]
     missing = [f for f in FEATURES if f not in df_clean.columns]
     if missing:
-        print(f"  ⚠️ Features manquantes (remplacées par 0): {missing}")
+        logger.warning("  Features manquantes (remplacees par 0): %s", missing)
         for f in missing:
             df_clean[f] = 0.0
         available_features = FEATURES
@@ -110,10 +113,10 @@ def train_market_model(df: pd.DataFrame, market: str, label_col: str, output_pat
     # Vérifier l'équilibre des classes
     positives = y.sum()
     if positives == 0 or positives == len(y):
-        print("❌ Pas de variance dans la cible. Entraînement impossible.")
+        logger.error("Pas de variance dans la cible. Entrainement impossible.")
         return
 
-    print(f"  Échantillons: {len(y)} | Positifs: {int(positives)} ({positives/len(y):.1%})")
+    logger.info("  Echantillons: %d | Positifs: %d (%.1f%%)", len(y), int(positives), 100 * positives / len(y))
 
     # TimeSeriesSplit — data is already sorted by date
     n_splits = min(5, len(df) // 20)
@@ -150,7 +153,7 @@ def train_market_model(df: pd.DataFrame, market: str, label_col: str, output_pat
 
         return np.mean(scores)
 
-    print(f"🚀 Optimisation Optuna pour {market}...")
+    logger.info("Optimisation Optuna pour %s...", market)
     optuna.logging.set_verbosity(optuna.logging.WARNING)
     study = optuna.create_study(direction="minimize", sampler=optuna.samplers.TPESampler(seed=42))
     study.optimize(objective, n_trials=30)
@@ -160,7 +163,7 @@ def train_market_model(df: pd.DataFrame, market: str, label_col: str, output_pat
     best_params["eval_metric"] = "logloss"
     best_params["random_state"] = 42
 
-    print(f"✅ Meilleurs paramètres: {best_params}")
+    logger.info("Meilleurs parametres: %s", best_params)
 
     # FIXED: Train on TRAIN set only (not all data), evaluate on held-out TEST set
     # Use last fold of TimeSeriesSplit as the final train/test split
@@ -184,10 +187,10 @@ def train_market_model(df: pd.DataFrame, market: str, label_col: str, output_pat
     except Exception:
         auc = 0.5
 
-    print(f"📊 Honest Test Evaluation (last fold, {len(y_test)} samples):")
-    print(f"   Accuracy: {acc:.1%}")
-    print(f"   Brier Score: {brier:.4f}")
-    print(f"   ROC AUC: {auc:.3f}")
+    logger.info("Honest Test Evaluation (last fold, %d samples):", len(y_test))
+    logger.info("   Accuracy: %.1f%%", 100 * acc)
+    logger.info("   Brier Score: %.4f", brier)
+    logger.info("   ROC AUC: %.3f", auc)
 
     # Now retrain on ALL data for production deployment
     final_model = XGBClassifier(**best_params)
@@ -219,8 +222,8 @@ def train_market_model(df: pd.DataFrame, market: str, label_col: str, output_pat
     model_ubj_path = output_path.replace(".pkl", ".ubj")
     final_model.save_model(model_ubj_path)
 
-    print(f"💾 Modèle sauvegardé: {output_path}")
-    print(f"📦 Model binary (UBJ): {model_ubj_path}")
+    logger.info("Modele sauvegarde: %s", output_path)
+    logger.info("Model binary (UBJ): %s", model_ubj_path)
 
 
 def train_all():
@@ -246,7 +249,7 @@ def train_all():
         if label_col in df.columns:
             train_market_model(df, name, label_col, str(path))
         else:
-            print(f"⚠️ Colonne cible {label_col} introuvable pour {name}.")
+            logger.warning("Colonne cible %s introuvable pour %s.", label_col, name)
 
 
 if __name__ == "__main__":

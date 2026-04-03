@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 scorer_engine.py — Prédiction des buteurs les plus probables (v2).
 

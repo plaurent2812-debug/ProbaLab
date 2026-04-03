@@ -15,8 +15,8 @@ from __future__ import annotations
 
 import html as _html
 import logging
+from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable
 
 logger = logging.getLogger("football_ia")
 

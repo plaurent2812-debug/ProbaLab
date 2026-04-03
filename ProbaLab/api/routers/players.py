@@ -1,12 +1,14 @@
 from __future__ import annotations
+
 import logging
 from datetime import datetime, timezone
 
-from src.config import SEASON, api_get, supabase
 from fastapi import APIRouter, HTTPException
 
+from src.config import SEASON, api_get, supabase
+
 logger = logging.getLogger("probalab.players")
-router = APIRouter()
+router = APIRouter(tags=["Players"])
 
 
 def clean_player_data(raw_data: list) -> dict | None:

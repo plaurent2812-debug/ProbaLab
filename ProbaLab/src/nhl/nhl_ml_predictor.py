@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 nhl_ml_predictor.py — Inférence ML match-level pour la NHL.
 
@@ -7,7 +8,6 @@ et fournit des prédictions de victoire et Over 5.5.
 Fallback sur les probas Poisson si modèle non disponible.
 """
 
-import io
 import pickle
 from pathlib import Path
 from typing import Any
@@ -16,7 +16,6 @@ import numpy as np
 import pandas as pd
 
 from src.config import logger
-
 
 # ── Safe Deserialization ──────────────────────────────────────────
 _ALLOWED_PREFIXES = (

@@ -1,9 +1,5 @@
-import os
-import sys
-
 import requests
 
-sys.path.insert(0, os.path.abspath("."))
 from src.config import API_FOOTBALL_KEY
 
 HOCKEY_API_URL = "https://v3.football.api-sports.io"

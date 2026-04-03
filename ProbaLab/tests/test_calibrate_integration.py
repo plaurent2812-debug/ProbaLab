@@ -7,6 +7,10 @@ Toutes les interactions Supabase sont mockées via @patch("src.models.calibrate.
 
 from __future__ import annotations
 
+import pytest
+
+pytestmark = pytest.mark.integration
+
 from unittest.mock import MagicMock, patch
 
 import numpy as np

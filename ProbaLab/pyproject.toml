@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "probalab"
+version = "1.0.0"
+requires-python = ">=3.10"
+
+[tool.setuptools.packages.find]
+include = ["src*", "api*"]
+
+[tool.pytest.ini_options]
+# Keep pytest.ini as primary config, this is supplementary
+
+[tool.coverage.run]
+source = ["src", "api"]
+omit = [
+    "*/test_*",
+    "*/tests/*",
+    "*/__pycache__/*",
+    "src/Projet_Football/*",
+    "src/dashboard/*",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.",
+    "if TYPE_CHECKING:",
+]

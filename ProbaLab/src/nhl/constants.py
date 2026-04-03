@@ -6,7 +6,6 @@ Single source of truth for all NHL abbreviation ↔ name conversions.
 
 from __future__ import annotations
 
-
 # Abbreviation → Full name
 NHL_TEAM_NAMES: dict[str, str] = {
     "ANA": "Anaheim Ducks",

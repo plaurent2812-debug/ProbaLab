@@ -205,6 +205,12 @@ WEIGHT_ELO_NO_MARKET: float = 0.35
 WEIGHT_STATS: float = 0.70
 WEIGHT_AI: float = 0.30
 
+# Phase 2 meta-learner feature flag.
+# Set to True ONLY after retraining the meta-learner with richer features
+# (the current model uses only 5 Gemini scores → near-identical probabilities).
+# When False, blend_predictions() uses 100% stats regardless of WEIGHT_AI.
+META_LEARNER_ENABLED: bool = False
+
 # Stats vs ML XGBoost
 WEIGHT_STATS_VS_ML: float = 0.60
 WEIGHT_ML: float = 0.40
@@ -437,13 +443,13 @@ assert abs(WEIGHT_POISSON + WEIGHT_ELO + WEIGHT_MARKET - 1.0) < 1e-9, (
     f"WEIGHT_POISSON + WEIGHT_ELO + WEIGHT_MARKET must equal 1.0, got {WEIGHT_POISSON + WEIGHT_ELO + WEIGHT_MARKET}"
 )
 assert abs(WEIGHT_POISSON_NO_MARKET + WEIGHT_ELO_NO_MARKET - 1.0) < 1e-9, (
-    f"WEIGHT_POISSON_NO_MARKET + WEIGHT_ELO_NO_MARKET must equal 1.0"
+    "WEIGHT_POISSON_NO_MARKET + WEIGHT_ELO_NO_MARKET must equal 1.0"
 )
 assert abs(WEIGHT_STATS_VS_ML + WEIGHT_ML - 1.0) < 1e-9, (
-    f"WEIGHT_STATS_VS_ML + WEIGHT_ML must equal 1.0"
+    "WEIGHT_STATS_VS_ML + WEIGHT_ML must equal 1.0"
 )
 assert abs(WEIGHT_STATS + WEIGHT_AI - 1.0) < 1e-9, (
-    f"WEIGHT_STATS + WEIGHT_AI must equal 1.0"
+    "WEIGHT_STATS + WEIGHT_AI must equal 1.0"
 )
 assert PROB_1X2_FLOOR > 0, "PROB_1X2_FLOOR must be positive"
 assert PROB_1X2_CEIL < 100, "PROB_1X2_CEIL must be less than 100"

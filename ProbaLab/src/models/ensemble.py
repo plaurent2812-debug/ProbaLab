@@ -26,8 +26,6 @@ from typing import Any
 import lightgbm as lgb
 import numpy as np
 import xgboost as xgb
-from src.config import logger, supabase
-from src.constants import FEATURE_COLS
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     accuracy_score,
@@ -37,6 +35,9 @@ from sklearn.metrics import (
 )
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.preprocessing import LabelEncoder, StandardScaler
+
+from src.config import logger, supabase
+from src.constants import FEATURE_COLS
 
 
 def _safe_loads(data: bytes) -> Any:

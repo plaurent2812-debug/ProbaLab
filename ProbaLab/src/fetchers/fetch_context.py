@@ -8,16 +8,21 @@ fetch_context.py — Récupère le contexte des matchs à venir :
 ~65 matchs × 3 endpoints = ~195 requêtes API-Football
 + ~65 requêtes OpenWeatherMap (optionnel)
 """
+import logging
 import os
-import requests
 from datetime import datetime
-from src.config import supabase, LEAGUES, SEASON, api_get, get_request_count, reset_request_count
+
+import requests
+
+from src.config import LEAGUES, SEASON, api_get, get_request_count, reset_request_count, supabase
+
+logger = logging.getLogger(__name__)
 
 
 # ── BLESSURES ────────────────────────────────────────────────────
 def fetch_injuries():
     """Récupère les joueurs blessés/suspendus pour les prochains matchs."""
-    print("=== Importation des blessures/suspensions ===\n")
+    logger.info("=== Importation des blessures/suspensions ===")
     total = 0
 
     for league in LEAGUES:
@@ -48,12 +53,12 @@ def fetch_injuries():
                 supabase.table("injuries").delete().eq("league_id", lid).execute()
                 supabase.table("injuries").insert(batch).execute()
                 total += len(batch)
-                print(f"  {league['name']}: {len(batch)} blessures/suspensions")
+                logger.info("  %s: %d blessures/suspensions", league["name"], len(batch))
             except Exception as e:
-                print(f"  ❌ {league['name']}: {e}")
+                logger.error("  %s: %s", league["name"], e)
 
     # ── Synchroniser le flag is_injured (seulement matchs à venir) ──
-    print("\n  🔄 Synchronisation du flag is_injured...")
+    logger.info("  Synchronisation du flag is_injured...")
     try:
         # Récupérer les fixture_api_id des matchs NS (à venir)
         ns_fixtures = supabase.table("fixtures").select("api_fixture_id").eq("status", "NS").execute().data
@@ -82,19 +87,19 @@ def fetch_injuries():
                     ).eq("api_id", pid).execute()
                 except Exception:
                     pass
-            print(f"  ✅ {len(injured_ids)} joueurs marqués comme blessés/absents")
+            logger.info("  %d joueurs marques comme blesses/absents", len(injured_ids))
         else:
-            print("  ℹ️ Aucun joueur blessé détecté pour les matchs à venir")
+            logger.info("  Aucun joueur blesse detecte pour les matchs a venir")
     except Exception as e:
-        print(f"  ⚠️ Erreur sync is_injured: {e}")
+        logger.warning("  Erreur sync is_injured: %s", e)
 
-    print(f"\n✅ Total : {total} blessures importées\n")
+    logger.info("Total : %d blessures importees", total)
 
 
 # ── COTES BOOKMAKERS ─────────────────────────────────────────────
 def fetch_odds():
     """Récupère les cotes pré-match pour les fixtures à venir."""
-    print("=== Importation des cotes bookmakers ===\n")
+    logger.info("=== Importation des cotes bookmakers ===")
 
     # Récupérer les fixtures NS
     fixtures = supabase.table("fixtures").select(
@@ -102,14 +107,14 @@ def fetch_odds():
     ).eq("status", "NS").execute().data
 
     if not fixtures:
-        print("   Aucun match à venir.\n")
+        logger.info("   Aucun match a venir.")
         return
 
     total = 0
     for i, fix in enumerate(fixtures):
         fid = fix["api_fixture_id"]
         if (i + 1) % 20 == 0:
-            print(f"  Odds : {i+1}/{len(fixtures)}...")
+            logger.info("  Odds : %d/%d...", i + 1, len(fixtures))
 
         data = api_get("odds", {"fixture": fid, "bookmaker": 8})  # 8 = Bet365
         if not data or not data.get("response"):
@@ -151,21 +156,21 @@ def fetch_odds():
                     odds_data, on_conflict="fixture_api_id"
                 ).execute()
                 total += 1
-            except Exception as e:
+            except Exception:
                 pass
 
-    print(f"\n✅ {total} matchs avec cotes importées\n")
+    logger.info("%d matchs avec cotes importees", total)
 
 
 # ── HEAD TO HEAD ─────────────────────────────────────────────────
 def fetch_h2h():
     """Récupère l'historique des confrontations directes pour les matchs à venir."""
-    print("=== Importation des Head-to-Head ===\n")
+    logger.info("=== Importation des Head-to-Head ===")
 
     # Récupérer les fixtures NS avec les noms d'équipes
     fixtures = supabase.table("fixtures").select("*").eq("status", "NS").execute().data
     if not fixtures:
-        print("   Aucun match à venir.\n")
+        logger.info("   Aucun match a venir.")
         return
 
     # Charger le mapping team_name -> team_api_id
@@ -245,10 +250,10 @@ def fetch_h2h():
                 h2h_data, on_conflict="team_a_api_id,team_b_api_id"
             ).execute()
             total += 1
-        except Exception as e:
+        except Exception:
             pass
 
-    print(f"✅ {total} H2H importés\n")
+    logger.info("%d H2H importes", total)
 
 
 # ── MÉTÉO (optionnel) ────────────────────────────────────────────
@@ -256,10 +261,10 @@ def fetch_weather():
     """Récupère la météo prévue pour les matchs à venir (OpenWeatherMap)."""
     api_key = os.getenv("OPENWEATHER_API_KEY")
     if not api_key:
-        print("⏭️  OPENWEATHER_API_KEY non configurée, météo ignorée.\n")
+        logger.info("OPENWEATHER_API_KEY non configuree, meteo ignoree.")
         return
 
-    print("=== Importation météo ===\n")
+    logger.info("=== Importation meteo ===")
 
     fixtures = supabase.table("fixtures").select(
         "api_fixture_id, date, stats_json"
@@ -309,7 +314,7 @@ def fetch_weather():
         except Exception:
             continue
 
-    print(f"✅ Météo récupérée pour {total} matchs\n")
+    logger.info("Meteo recuperee pour %d matchs", total)
 
 
 def safe_float(val):
@@ -327,5 +332,5 @@ if __name__ == "__main__":
     fetch_odds()
     fetch_h2h()
     fetch_weather()
-    print(f"{'='*50}")
-    print(f"Contexte importé. ({get_request_count()} requêtes API-Football)")
+    logger.info("=" * 50)
+    logger.info("Contexte importe. (%d requetes API-Football)", get_request_count())

@@ -1,5 +1,7 @@
 import pandas as pd
-from src.config import supabase, logger
+
+from src.config import logger, supabase
+
 
 def extract_meta_dataset() -> pd.DataFrame:
     """
@@ -34,19 +36,19 @@ def extract_meta_dataset() -> pd.DataFrame:
     predictions = []
     page_size = 1000
     offset = 0
-    
+
     while True:
         res = supabase.table("predictions").select(
             "fixture_id, proba_home, proba_draw, proba_away, proba_btts, proba_over_15, proba_over_2_5, ai_features"
         ).range(offset, offset + page_size - 1).execute()
-        
+
         data = res.data or []
         predictions.extend(data)
         if len(data) < page_size:
             break
         offset += page_size
         logger.info(f"  ... fetched {len(predictions)} predictions so far")
-    
+
     if not predictions:
         logger.warning("Aucune prédiction trouvée.")
         return pd.DataFrame()
@@ -58,14 +60,14 @@ def extract_meta_dataset() -> pd.DataFrame:
         fixture_id = p.get("fixture_id")
         if not fixture_id or fixture_id not in fixtures:
             continue
-            
+
         fix = fixtures[fixture_id]
         if fix.get("home_goals") is None or fix.get("away_goals") is None:
             continue
-            
+
         hg = fix["home_goals"]
         ag = fix["away_goals"]
-        
+
         # Cibles
         target_1x2 = 2 if hg > ag else (1 if hg == ag else 0)
         target_btts = int(hg > 0 and ag > 0)
@@ -81,7 +83,7 @@ def extract_meta_dataset() -> pd.DataFrame:
             "proba_btts": p.get("proba_btts", 0.0),
             "proba_over_15": p.get("proba_over_15", 0.0),
             "proba_over_25": p.get("proba_over_2_5", 0.0) or p.get("proba_over_25", 0.0),
-            
+
             # Target
             "target_1x2": target_1x2,
             "target_btts": target_btts,
@@ -90,7 +92,7 @@ def extract_meta_dataset() -> pd.DataFrame:
             "home_goals": hg,
             "away_goals": ag
         }
-        
+
         # Extract AI Features if available (Phase 1 structure)
         ai_feats = p.get("ai_features") or {}
         row["ai_motivation"] = ai_feats.get("motivation_score", 0.0)

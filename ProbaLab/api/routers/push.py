@@ -14,7 +14,7 @@ import json
 import logging
 import os
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 
 from src.config import supabase
@@ -29,7 +29,7 @@ def _verify_push_auth(x_api_key: str = Header(None, alias="X-Push-Key")):
 
 logger = logging.getLogger("push_router")
 
-router = APIRouter(prefix="/api/push", tags=["Push Notifications"])
+router = APIRouter(prefix="/api/push", tags=["Push"])
 
 VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "")
 VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
@@ -97,7 +97,7 @@ def send_push_to_all(title: str, body: str, url: str = "/paris-du-soir") -> int:
         return 0
 
     try:
-        from pywebpush import webpush, WebPushException
+        from pywebpush import WebPushException, webpush
     except ImportError:
         logger.warning("pywebpush not installed. Install with: pip install pywebpush")
         return 0

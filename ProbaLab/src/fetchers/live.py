@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 fetchers/live.py — Mise à jour live toutes les 5 minutes.
 

@@ -42,16 +42,11 @@ jobs:
 
       - run: pip install -r requirements.txt
 
-      - run: pip install pytest pytest-timeout
+      - run: pip install pytest pytest-timeout pytest-cov
 
       - name: Run unit tests
         run: |
-          pytest tests/ --timeout=60 -q \
-            --ignore=tests/test_brain_integration.py \
-            --ignore=tests/test_calibrate_integration.py \
-            --ignore=tests/test_evaluate_integration.py \
-            --ignore=tests/test_scorer_engine_integration.py \
-            --ignore=tests/test_stats_engine_integration.py
+          pytest tests/ -m "not integration" --timeout=60 --cov=src --cov=api --cov-report=term-missing --cov-fail-under=40 -q
 
       - name: Upload test results
         if: always()
