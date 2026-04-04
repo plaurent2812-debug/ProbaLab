@@ -74,7 +74,6 @@ def _compute_monitoring() -> dict:
 @router.get(
     "",
     summary="Get model quality monitoring metrics",
-    response_model=MonitoringResponse,
     responses={
         500: {"description": "Internal server error"},
     },
@@ -88,7 +87,7 @@ def get_monitoring():
         return {"error": "Internal error", "health_score": 0}
 
 
-@router.get("/health", summary="Quick data-quality health check", response_model=MonitoringHealthResponse)
+@router.get("/health", summary="Quick data-quality health check")
 def monitoring_health():
     """Quick data-quality health check — lightweight, no heavy computation.
 

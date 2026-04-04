@@ -23,7 +23,6 @@ router = APIRouter(prefix="/api", tags=["Performance"])
 @router.get(
     "/performance",
     summary="Get model performance metrics",
-    response_model=PerformanceResponse,
     responses={
         500: {"description": "Internal server error"},
     },
