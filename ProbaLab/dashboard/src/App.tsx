@@ -148,17 +148,15 @@ function Header() {
             >
               🏒 NHL
             </NavLink>
-            {(isPremium || isAdmin) && (
-              <NavLink
-                to="/paris-du-soir"
-                className={({ isActive }) => cn(
-                  "px-3 py-2 text-xs font-bold transition-colors border-b-2 flex items-center gap-1",
-                  isActive ? "text-amber-400 border-amber-400" : "text-muted-foreground border-transparent hover:text-foreground"
-                )}
-              >
-                <Target className="w-3 h-3" />Pronos
-              </NavLink>
-            )}
+            <NavLink
+              to="/paris-du-soir"
+              className={({ isActive }) => cn(
+                "px-3 py-2 text-xs font-bold transition-colors border-b-2 flex items-center gap-1",
+                isActive ? "text-amber-400 border-amber-400" : "text-muted-foreground border-transparent hover:text-foreground"
+              )}
+            >
+              <Target className="w-3 h-3" />Pronos
+            </NavLink>
             {isAdmin && (
               <>
                 <NavLink
@@ -226,35 +224,29 @@ function Header() {
 }
 
 // ── Bottom Navigation (mobile only) ───────────────────────────
-function NHLIcon() {
-  return <span className="text-base leading-none">🏒</span>
-}
-
 function BottomNav() {
   const location = useLocation()
-  const { isPremium, isAdmin } = useAuth()
+  const { user, isAdmin } = useAuth()
 
-  // Emoji icon components for sports
   const FootballIcon = () => <span className="text-base leading-none">⚽</span>
   const NHLIcon = () => <span className="text-base leading-none">🏒</span>
 
-  const tabs = isPremium || isAdmin
+  const coreTabs = [
+    { to: "/", label: "Accueil", icon: LayoutGrid, exact: true },
+    { to: "/football", label: "Football", icon: FootballIcon },
+    { to: "/nhl", label: "NHL", icon: NHLIcon },
+    { to: "/paris-du-soir", label: "Pronos", icon: Target },
+    { to: user ? "/profile" : "/login", label: "Profil", icon: User, exact: true },
+  ]
+
+  const adminTabs = isAdmin
     ? [
-      { to: "/", label: "Tous", icon: LayoutGrid, exact: true },
-      { to: "/football", label: "Football", icon: FootballIcon },
-      { to: "/nhl", label: "NHL", icon: NHLIcon },
-      { to: "/paris-du-soir", label: "Pronos", icon: Trophy },
-      ...(isAdmin ? [
-          { to: "/performance", label: "Perf", icon: BarChart2 },
-          { to: "/admin", label: "Admin", icon: Shield }
-      ] : []),
-    ]
-    : [
-      { to: "/", label: "Tous", icon: LayoutGrid, exact: true },
-      { to: "/football", label: "Football", icon: FootballIcon },
-      { to: "/nhl", label: "NHL", icon: NHLIcon },
-      { to: "/premium", label: "Premium", icon: Trophy },
-    ]
+        { to: "/performance", label: "Perf", icon: BarChart2 },
+        { to: "/admin", label: "Admin", icon: Shield },
+      ]
+    : []
+
+  const tabs = [...coreTabs, ...adminTabs]
 
   return (
     <nav className="fs-bottom-nav md:hidden">
@@ -388,7 +380,7 @@ function AppContent() {
               <Route path="/admin" element={<AdminGuard><AdminPage /></AdminGuard>} />
               <Route path="/profile" element={<Protected><ProfilePage /></Protected>} />
               <Route path="/watchlist" element={<WatchlistPage />} />
-              <Route path="/paris-du-soir" element={<PremiumGuard><ParisDuSoirPage /></PremiumGuard>} />
+              <Route path="/paris-du-soir" element={<ParisDuSoirPage />} />
               <Route path="/update-password" element={<UpdatePasswordPage />} />
               <Route path="/cgu" element={<CGUPage />} />
               <Route path="/confidentialite" element={<ConfidentialitePage />} />

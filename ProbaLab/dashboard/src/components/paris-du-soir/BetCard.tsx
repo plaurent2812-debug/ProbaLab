@@ -92,7 +92,7 @@ export function BetCard({ bet, sport, date, isAdmin, onResultUpdate }: BetCardPr
                     <div className="flex items-center flex-wrap gap-1.5 mt-1.5">
                         <MarketBadge market={bet.market} />
                         {bet.bookmaker && (
-                            <span className="text-[9px] text-muted-foreground opacity-60 capitalize">
+                            <span className="text-xs text-muted-foreground opacity-60 capitalize">
                                 {bet.bookmaker}
                             </span>
                         )}
@@ -111,7 +111,7 @@ export function BetCard({ bet, sport, date, isAdmin, onResultUpdate }: BetCardPr
                         )}>
                             +{edgePct.toFixed(1)}%
                         </span>
-                        <span className="text-[9px] text-muted-foreground uppercase font-bold">Edge</span>
+                        <span className="text-xs text-muted-foreground uppercase font-bold">Edge</span>
                     </div>
 
                     {/* Odds */}
@@ -120,10 +120,10 @@ export function BetCard({ bet, sport, date, isAdmin, onResultUpdate }: BetCardPr
                     </span>
 
                     {/* Model vs Book */}
-                    <div className="flex flex-col text-xs text-muted-foreground">
+                    <div className="flex flex-col text-sm text-muted-foreground">
                         <span>{formatProba(bet.proba_model)} modele</span>
                         {bet.proba_bookmaker != null && (
-                            <span className="text-[10px]">
+                            <span>
                                 vs {formatProba(bet.proba_bookmaker)} book
                             </span>
                         )}
@@ -136,7 +136,7 @@ export function BetCard({ bet, sport, date, isAdmin, onResultUpdate }: BetCardPr
                             <button
                                 onClick={handleSave}
                                 disabled={saving}
-                                className="px-3 py-1.5 rounded text-[10px] font-bold bg-primary/15 text-primary hover:bg-primary/25 transition-colors disabled:opacity-50"
+                                className="px-3 py-1.5 rounded text-xs font-bold bg-primary/15 text-primary hover:bg-primary/25 transition-colors disabled:opacity-50"
                             >
                                 {saving ? "..." : "Tracker"}
                             </button>

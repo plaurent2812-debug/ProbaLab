@@ -108,9 +108,9 @@ function SportSection({ title, emoji, starredList, favTeamMatches, loading, togg
                 </div>
             ) : !hasContent ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center px-4">
-                    <Star className="w-5 h-5 text-muted-foreground/30 mb-2" />
+                    <span className="text-2xl mb-2">⭐</span>
                     <p className="text-xs text-muted-foreground">
-                        Aucun favori {title.toLowerCase()}. Cliquez sur l'étoile d'un match pour l'ajouter ici.
+                        Aucun favori {title.toLowerCase()}. Tapez ⭐ sur un match pour le suivre ici.
                     </p>
                 </div>
             ) : (

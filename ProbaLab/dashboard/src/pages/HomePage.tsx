@@ -1,13 +1,14 @@
 import { useState, useEffect } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, Link } from "react-router-dom"
 import {
     Flame, BellRing, ShieldAlert,
-    ChevronRight, Activity, Star, Trophy, Radio,
-    ArrowRight, Newspaper, TrendingUp, CheckCircle2, XCircle
+    ChevronRight, Activity, Star, Trophy,
+    ArrowRight, TrendingUp, CheckCircle2, XCircle, Target
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { fetchPredictions, fetchNews, API_ROOT } from "@/lib/api"
+import { fetchPredictions, API_ROOT } from "@/lib/api"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Card, CardContent } from "@/components/ui/card"
 import { useAuth, supabase } from "@/lib/auth"
 
 /* ── Live Alert Banner ────────────────────────────────────────── */
@@ -117,25 +118,6 @@ function MatchRow({ match, sport = "football" }) {
     )
 }
 
-/* ── News Row ──────────────────────────────────────────────────── */
-function NewsRow({ item }) {
-    return (
-        <a
-            href={item.link}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 px-3 py-2.5 border-b border-border/20 last:border-0 hover:bg-accent/30 transition-colors group"
-        >
-            <span className="text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded shrink-0">
-                {item.source}
-            </span>
-            <span className="text-xs font-medium text-foreground/80 group-hover:text-primary transition-colors line-clamp-2">
-                {item.title}
-            </span>
-            <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/30 shrink-0 ml-auto group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
-        </a>
-    )
-}
 
 /* ═══════════════════════════════════════════════════════════
    Home Page (Landing / Dashboard Hybrid)
@@ -148,9 +130,7 @@ export default function HomePage() {
     const [nhlCount, setNhlCount] = useState(0)
     const [vipSpots, setVipSpots] = useState([])
     const [betStats, setBetStats] = useState(null)
-    const [news, setNews] = useState([])
     const [loading, setLoading] = useState(true)
-    const [newsLoading, setNewsLoading] = useState(true)
     const [liveAlert, setLiveAlert] = useState(null)
 
     useEffect(() => {
@@ -195,11 +175,6 @@ export default function HomePage() {
             .then(setBetStats)
             .catch(() => console.warn("Impossible de charger les stats de paris"))
 
-        fetchNews()
-            .then(r => setNews(r.news || []))
-            .catch(() => console.warn("Impossible de charger les actualités"))
-            .finally(() => setNewsLoading(false))
-
         // Live alert
         const thirtyMinsAgo = new Date(Date.now() - 30 * 60000).toISOString()
         supabase
@@ -222,55 +197,36 @@ export default function HomePage() {
                 <h1 className="text-3xl sm:text-4xl font-black text-foreground mb-3 tracking-tight">
                     Proba<span className="text-primary">Lab</span>
                 </h1>
-                <p className="text-sm text-muted-foreground max-w-md mx-auto leading-relaxed">
-                    Prédictions, Live Tracking et Value Bets en un coup d'œil.
+                <p className="text-sm text-muted-foreground max-w-md mx-auto leading-relaxed mb-5">
+                    Value Bets Football & NHL — analyses statistiques quotidiennes.
                 </p>
+                <Link
+                    to="/paris-du-soir"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-bold hover:bg-primary/90 transition-colors"
+                >
+                    <Target className="w-4 h-4" />
+                    Voir les Pronos du jour
+                </Link>
             </div>
 
-            {/* ── Methodology Section ──────────────────────────────── */}
-            <div className="mx-3 mt-4 mb-4 rounded-xl border border-primary/15 bg-gradient-to-br from-primary/5 via-card to-emerald-500/5 overflow-hidden">
-                <div className="px-4 py-3 border-b border-border/30">
-                    <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-primary to-emerald-500 flex items-center justify-center">
-                            <span className="text-white text-xs">🎯</span>
-                        </div>
-                        <span className="text-sm font-bold">Notre Méthode</span>
-                    </div>
-                </div>
-                <div className="grid grid-cols-4 divide-x divide-border/20">
-                    {/* Pillar 1 */}
-                    <div className="p-2.5 text-center">
-                        <div className="text-lg mb-1">🎯</div>
-                        <div className="text-[10px] font-bold text-foreground mb-0.5">Experts</div>
-                        <div className="text-[9px] text-muted-foreground leading-tight">
-                            Sélection quotidienne par nos analystes
-                        </div>
-                    </div>
-                    {/* Pillar 2 */}
-                    <div className="p-2.5 text-center">
-                        <div className="text-lg mb-1">📊</div>
-                        <div className="text-[10px] font-bold text-foreground mb-0.5">Cotes 1.75 – 2.20</div>
-                        <div className="text-[9px] text-muted-foreground leading-tight">
-                            Zone optimale rendement / sécurité
-                        </div>
-                    </div>
-                    {/* Pillar 3 */}
-                    <div className="p-2.5 text-center">
-                        <div className="text-lg mb-1">🛡️</div>
-                        <div className="text-[10px] font-bold text-foreground mb-0.5">5 Safe / jour</div>
-                        <div className="text-[9px] text-muted-foreground leading-tight">
-                            Maximum 5 paris sécurisés par soir
-                        </div>
-                    </div>
-                    {/* Pillar 4 */}
-                    <div className="p-2.5 text-center">
-                        <div className="text-lg mb-1">🎲</div>
-                        <div className="text-[10px] font-bold text-foreground mb-0.5">1 Fun / jour</div>
-                        <div className="text-[9px] text-muted-foreground leading-tight">
-                            Pari fun si opportunité intéressante
-                        </div>
-                    </div>
-                </div>
+            {/* ── Pronos du jour card ──────────────────────────────── */}
+            <div className="px-3 mt-4">
+                <Link to="/paris-du-soir">
+                    <Card className="border-primary/30 bg-primary/5 hover:bg-primary/10 transition-all cursor-pointer">
+                        <CardContent className="p-5 flex items-center justify-between">
+                            <div>
+                                <h2 className="text-base font-bold flex items-center gap-2">
+                                    <Target className="w-5 h-5 text-primary" />
+                                    Pronos du jour
+                                </h2>
+                                <p className="text-sm text-muted-foreground mt-1">
+                                    Value Bets Football & NHL — mis a jour chaque jour
+                                </p>
+                            </div>
+                            <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                        </CardContent>
+                    </Card>
+                </Link>
             </div>
 
             {/* Live Alert */}
@@ -447,7 +403,7 @@ export default function HomePage() {
                 <div className="fs-league-header bg-amber-500/5 border-b border-border/50">
                     <ShieldAlert className="w-4 h-4 text-amber-500 shrink-0" />
                     <div>
-                        <div className="fs-league-name font-black">⚡ Matchs du Jour</div>
+                        <div className="fs-league-name font-black">⚡ Meilleurs matchs analysés</div>
                         <div className="fs-league-country">Top matchs analysés par ProbaLab</div>
                     </div>
                     {vipSpots.length > 0 && (
@@ -490,37 +446,6 @@ export default function HomePage() {
                 )}
             </div>
 
-            {/* ── News Section ───────────────────────────────────── */}
-            <div className="mx-3 bg-card border border-border/50 rounded-lg overflow-hidden shadow-sm">
-                <div className="fs-league-header bg-accent/30 border-b border-border/50">
-                    <Newspaper className="w-4 h-4 text-primary shrink-0" />
-                    <div className="fs-league-name font-black">Actualités Sportives</div>
-                    <span className="fs-league-count">{news.length}</span>
-                </div>
-
-                {newsLoading ? (
-                    <div className="p-3 space-y-3">
-                        {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-5 w-full" />)}
-                    </div>
-                ) : news.length > 0 ? (
-                    <div className="divide-y divide-border/20 max-h-[320px] overflow-y-auto scrollbar-thin">
-                        {news.slice(0, 15).map((item, i) => <NewsRow key={i} item={item} />)}
-                    </div>
-                ) : (
-                    <div className="text-center py-6 text-xs text-muted-foreground">
-                        Actualités indisponibles actuellement.
-                    </div>
-                )}
-
-                <button
-                    onClick={() => {
-                        window.scrollTo({ top: 0, behavior: 'smooth' })
-                    }}
-                    className="w-full py-2.5 text-[10px] font-bold text-muted-foreground hover:bg-accent/50 uppercase tracking-widest transition-colors flex items-center justify-center bg-muted/10"
-                >
-                    Haut de page
-                </button>
-            </div>
         </div>
     )
 }

@@ -249,7 +249,7 @@ export default function MatchDetailPage() {
                         </span>
                         <div className="flex items-center gap-2">
                             {p?.model_version === "meta_v2" && (
-                                <Badge variant="outline" className="border-primary/50 text-primary text-[10px] h-5 px-1.5 flex items-center gap-1 bg-primary/5">
+                                <Badge variant="outline" className="border-primary/50 text-primary text-xs h-5 px-1.5 flex items-center gap-1 bg-primary/5">
                                     <BrainCircuit className="w-3 h-3" />
                                     Meta V2
                                 </Badge>
@@ -273,7 +273,7 @@ export default function MatchDetailPage() {
                                     {fixture?.home_team}
                                 </p>
                                 {sj?.severe_fatigue_home && (
-                                    <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 border-red-500/30 text-red-500 whitespace-nowrap">
+                                    <Badge variant="outline" className="text-xs px-1 py-0 h-4 border-red-500/30 text-red-500 whitespace-nowrap">
                                         ⚠️ Calendrier
                                     </Badge>
                                 )}
@@ -312,7 +312,7 @@ export default function MatchDetailPage() {
                                     {fixture?.away_team}
                                 </p>
                                 {sj?.severe_fatigue_away && (
-                                    <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 border-red-500/30 text-red-500 whitespace-nowrap">
+                                    <Badge variant="outline" className="text-xs px-1 py-0 h-4 border-red-500/30 text-red-500 whitespace-nowrap">
                                         ⚠️ Calendrier
                                     </Badge>
                                 )}
@@ -382,7 +382,7 @@ export default function MatchDetailPage() {
                                 <p className="text-xs text-muted-foreground mt-0.5">Avantage mathématique sur le bookmaker</p>
                             </div>
                             <div className="text-right">
-                                <p className="text-[10px] uppercase font-bold text-muted-foreground mb-0.5">Cote Réelle</p>
+                                <p className="text-xs uppercase font-bold text-muted-foreground mb-0.5">Cote Réelle</p>
                                 <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
                                     @ {formatOdds(oddMap[bestKey] ?? null)}
                                 </span>
@@ -424,7 +424,7 @@ export default function MatchDetailPage() {
                         <CardHeader className="pb-3">
                             <CardTitle className="text-sm font-bold flex items-center gap-2">
                                 ⚽ Événements du match
-                                <Badge className="ml-auto text-[10px] border-0 bg-muted text-muted-foreground">
+                                <Badge className="ml-auto text-xs border-0 bg-muted text-muted-foreground">
                                     {events.length} but{events.length > 1 ? 's' : ''}
                                 </Badge>
                             </CardTitle>
@@ -461,13 +461,13 @@ export default function MatchDetailPage() {
                                                 </p>
                                                 {goal.assist && (
                                                     <p
-                                                        className="text-[10px] text-muted-foreground truncate"
+                                                        className="text-xs text-muted-foreground truncate"
                                                     >
                                                         🎯 {goal.assist}
                                                     </p>
                                                 )}
                                             </div>
-                                            <span className="text-[10px] font-medium text-muted-foreground shrink-0">
+                                            <span className="text-xs font-medium text-muted-foreground shrink-0">
                                                 {goal.team}
                                             </span>
                                         </div>
@@ -492,7 +492,7 @@ export default function MatchDetailPage() {
                             <CardTitle className="text-sm font-bold flex items-center gap-2">
                                 🧤 Compositions officielles
                                 {h.formation && a.formation && (
-                                    <Badge variant="outline" className="ml-auto text-[10px] border-border/40 text-muted-foreground">
+                                    <Badge variant="outline" className="ml-auto text-xs border-border/40 text-muted-foreground">
                                         {h.formation} — {a.formation}
                                     </Badge>
                                 )}
@@ -507,12 +507,12 @@ export default function MatchDetailPage() {
                                     <div key={idx}>
                                         <p className={`text-xs font-bold mb-1 truncate ${color}`}>{label}</p>
                                         {side.coach && (
-                                            <p className="text-[10px] text-muted-foreground mb-2">👔 {side.coach}</p>
+                                            <p className="text-xs text-muted-foreground mb-2">👔 {side.coach}</p>
                                         )}
                                         <div className="space-y-1">
                                             {(side.starters || []).map((p, i) => (
                                                 <div key={i} className="flex items-center gap-1.5">
-                                                    <span className="text-[10px] w-5 text-right text-muted-foreground font-mono shrink-0">
+                                                    <span className="text-xs w-5 text-right text-muted-foreground font-mono shrink-0">
                                                         {p.number}
                                                     </span>
                                                     <span
@@ -521,7 +521,7 @@ export default function MatchDetailPage() {
                                                         {p.name}
                                                     </span>
                                                     {p.pos && (
-                                                        <span className="text-[9px] text-muted-foreground shrink-0 ml-auto">
+                                                        <span className="text-xs text-muted-foreground shrink-0 ml-auto">
                                                             {p.pos}
                                                         </span>
                                                     )}
@@ -555,7 +555,7 @@ export default function MatchDetailPage() {
                         <div className="py-2 border-b border-border/20 last:border-0">
                             <div className="flex justify-between text-xs font-bold mb-1">
                                 <span>{hDisplay}</span>
-                                <span className="text-muted-foreground text-[10px] font-medium">{label}</span>
+                                <span className="text-muted-foreground text-xs font-medium">{label}</span>
                                 <span>{aDisplay}</span>
                             </div>
                             <div className="flex gap-0.5 h-1.5 rounded-full overflow-hidden bg-muted/40">
@@ -598,12 +598,12 @@ export default function MatchDetailPage() {
                     <div className="text-center p-3 bg-accent/30 rounded-xl">
                         <p className="text-xs text-muted-foreground mb-1">{fixture?.home_team}</p>
                         <p className="text-2xl font-black text-primary">{xg_home ?? "—"}</p>
-                        <p className="text-[10px] text-muted-foreground">xG domicile</p>
+                        <p className="text-xs text-muted-foreground">xG domicile</p>
                     </div>
                     <div className="text-center p-3 bg-accent/30 rounded-xl">
                         <p className="text-xs text-muted-foreground mb-1">{fixture?.away_team}</p>
                         <p className="text-2xl font-black text-primary">{xg_away ?? "—"}</p>
-                        <p className="text-[10px] text-muted-foreground">xG extérieur</p>
+                        <p className="text-xs text-muted-foreground">xG extérieur</p>
                     </div>
                 </div>
             </PremiumSection>
@@ -663,19 +663,19 @@ export default function MatchDetailPage() {
                                         <div className="min-w-0">
                                             <p className="text-sm font-semibold leading-tight truncate">{s.player_name || s.name}</p>
                                             <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-                                                {s.team && <p className="text-[10px] text-muted-foreground mr-1 shrink-0">{s.team}</p>}
+                                                {s.team && <p className="text-xs text-muted-foreground mr-1 shrink-0">{s.team}</p>}
                                                 {regress > 1.05 && (
-                                                    <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
+                                                    <Badge variant="outline" className="text-xs px-1 py-0 h-4 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
                                                         🎯 Rebond xG
                                                     </Badge>
                                                 )}
                                                 {regress < 0.95 && (
-                                                    <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 border-red-500/30 text-red-500 whitespace-nowrap">
+                                                    <Badge variant="outline" className="text-xs px-1 py-0 h-4 border-red-500/30 text-red-500 whitespace-nowrap">
                                                         📉 Sur-régime
                                                     </Badge>
                                                 )}
                                                 {broken && (
-                                                    <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 border-amber-500/30 text-amber-600 dark:text-amber-400 whitespace-nowrap">
+                                                    <Badge variant="outline" className="text-xs px-1 py-0 h-4 border-amber-500/30 text-amber-600 dark:text-amber-400 whitespace-nowrap">
                                                         ⚡ Synergie Brisée
                                                     </Badge>
                                                 )}
@@ -689,7 +689,7 @@ export default function MatchDetailPage() {
                             )
                         })}
                         {scorers.length > 3 && (
-                            <p className="text-[10px] text-muted-foreground text-center pt-1">
+                            <p className="text-xs text-muted-foreground text-center pt-1">
                                 et {scorers.length - 3} autre{scorers.length - 3 > 1 ? "s" : ""} buteur{scorers.length - 3 > 1 ? "s" : ""} probable{scorers.length - 3 > 1 ? "s" : ""}
                             </p>
                         )}

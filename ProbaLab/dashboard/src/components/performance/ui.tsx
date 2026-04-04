@@ -65,10 +65,10 @@ export function MarketCard({
                 <div className="flex flex-col gap-0.5 mt-0.5">
                     <div className="flex items-center gap-1">
                         <Icon className={cn("w-3 h-3 shrink-0", color)} />
-                        <span className="text-[11px] text-muted-foreground tabular-nums">{wilsonLabel}</span>
+                        <span className="text-xs text-muted-foreground tabular-nums">{wilsonLabel}</span>
                     </div>
                     {total != null && (
-                        <span className="text-[10px] text-muted-foreground/60">{total} matchs</span>
+                        <span className="text-xs text-muted-foreground/60">{total} matchs</span>
                     )}
                 </div>
             </div>
@@ -90,7 +90,7 @@ export function StatTile({ value, label, icon: Icon, accent }: {
             </div>
             <div>
                 <p className="text-2xl font-black tabular-nums">{value}</p>
-                <p className="text-[11px] text-muted-foreground font-medium">{label}</p>
+                <p className="text-xs text-muted-foreground font-medium">{label}</p>
             </div>
         </div>
     )
@@ -101,7 +101,7 @@ export function InfoTooltip({ content }: { content: React.ReactNode }) {
     return (
         <div className="group relative inline-flex">
             <Info className="w-3.5 h-3.5 text-muted-foreground cursor-help" />
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-card border border-border rounded-lg shadow-xl text-[10px] text-muted-foreground w-56 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-card border border-border rounded-lg shadow-xl text-xs text-muted-foreground w-56 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
                 {content}
             </div>
         </div>
@@ -117,7 +117,7 @@ export function ChartTooltip({ active, payload, label }: {
     if (!active || !payload?.length) return null
     return (
         <div className="rounded-lg border border-border bg-card p-3 shadow-xl">
-            <p className="text-[11px] text-muted-foreground font-medium mb-1">{label}</p>
+            <p className="text-xs text-muted-foreground font-medium mb-1">{label}</p>
             {payload.map((p, i) => (
                 <p key={i} className="text-sm font-semibold">
                     <span className="inline-block w-2 h-2 rounded-full mr-1.5" style={{ background: p.color }} />

@@ -47,7 +47,7 @@ export function BrierCard({ score }: BrierCardProps) {
                         <p className={cn("text-sm font-semibold mt-1", className)}>{label}</p>
                     </div>
                     <div className="flex-1 mb-2">
-                        <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
+                        <div className="flex justify-between text-xs text-muted-foreground mb-1">
                             <span>0 (parfait)</span>
                             <span>0.33 (aleatoire)</span>
                         </div>
@@ -64,7 +64,13 @@ export function BrierCard({ score }: BrierCardProps) {
                             />
                         </div>
                         <div className="flex justify-end mt-1">
-                            <span className="text-[10px] text-muted-foreground">{(pct).toFixed(0)}% du plafond</span>
+                            <span className="text-xs text-muted-foreground">{(pct).toFixed(0)}% du plafond</span>
+                        </div>
+                        <div className="flex flex-wrap gap-3 mt-2 text-xs">
+                            <span className="text-emerald-400">● Excellent {"<"} 0.19</span>
+                            <span className="text-amber-400">● Bon {"<"} 0.21</span>
+                            <span className="text-orange-400">● Acceptable {"<"} 0.23</span>
+                            <span className="text-red-400">● A ameliorer ≥ 0.23</span>
                         </div>
                     </div>
                 </div>

@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react"
 import { format, addDays, subDays } from "date-fns"
 import { fr } from "date-fns/locale"
+import { Link } from "react-router-dom"
 import {
     ChevronLeft, ChevronRight, Target,
-    Sparkles, RefreshCw
+    Sparkles, RefreshCw, Trophy, Lock
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -13,7 +14,6 @@ import { API_ROOT } from "@/lib/api"
 import { BetCard } from "@/components/paris-du-soir/BetCard"
 import { StatsDashboard } from "@/components/paris-du-soir/StatsDashboard"
 import { ExpertPickCard } from "@/components/paris-du-soir/ExpertPickCard"
-import { PremiumLock } from "@/components/paris-du-soir/PremiumLock"
 import { HistorySection } from "@/components/paris-du-soir/HistorySection"
 import {
     fetchBestBets,
@@ -67,8 +67,9 @@ function BetSection({ sport, betsArr, emoji, label, accentColor, loading, isAdmi
                     ))}
                 </div>
             ) : (
-                <div className="text-center py-8 text-xs text-muted-foreground border border-dashed border-border/50 rounded-xl">
-                    Aucun Value Bet {label} detecte pour cette date. Le modele ne bat pas le bookmaker sur les matchs disponibles.
+                <div className="text-center py-8 border border-dashed border-border/50 rounded-xl space-y-1">
+                    <p className="text-xs text-muted-foreground">Aucun Value Bet {label} detecte pour cette date.</p>
+                    <p className="text-xs text-muted-foreground/60">0 pari vaut mieux qu'un mauvais pari.</p>
                 </div>
             )}
         </div>
@@ -96,13 +97,12 @@ export default function ParisDuSoir() {
     const canAccess = hasAccess("premium")
 
     useEffect(() => {
-        if (!canAccess) return
         setLoading(true)
         setBets(null)
         fetchBestBets(date, sportFilter === "both" ? null : sportFilter)
             .then(setBets)
             .finally(() => setLoading(false))
-    }, [date, sportFilter, canAccess, refreshKey])
+    }, [date, sportFilter, refreshKey])
 
     useEffect(() => {
         if (!canAccess) return
@@ -137,7 +137,138 @@ export default function ParisDuSoir() {
             .finally(() => setHistoryLoading(false))
     }, [showHistory, sportFilter, canAccess, historyDateFrom, historyDateTo, historySourceFilter])
 
-    if (!canAccess) return <PremiumLock />
+    if (!canAccess) {
+        const dateObj = new Date(date + "T12:00:00")
+        const formattedDate = format(dateObj, "EEEE d MMMM", { locale: fr })
+        const footballBets = bets?.football || []
+        const previewBets = footballBets.slice(0, 2)
+        const totalBets = footballBets.length + (bets?.nhl || []).length
+
+        return (
+            <div className="animate-fade-in-up px-3 pt-4 pb-8 w-full mx-auto">
+                {/* Header */}
+                <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                        <Target className="w-5 h-5 text-primary" />
+                        <h1 className="text-base font-black capitalize">{formattedDate}</h1>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                        <button
+                            onClick={() => setDate(subDays(dateObj, 1).toISOString().slice(0, 10))}
+                            className="p-1.5 rounded-lg hover:bg-accent transition-colors"
+                        >
+                            <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        <button
+                            onClick={() => setDate(addDays(dateObj, 1).toISOString().slice(0, 10))}
+                            className="p-1.5 rounded-lg hover:bg-accent transition-colors"
+                        >
+                            <ChevronRight className="w-4 h-4" />
+                        </button>
+                    </div>
+                </div>
+
+                {/* Strategy reminder */}
+                <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-2.5 mb-5 flex items-center gap-3">
+                    <Sparkles className="w-4 h-4 text-primary shrink-0" />
+                    <p className="text-xs text-muted-foreground">
+                        <strong className="text-foreground">Strategie :</strong>{" "}
+                        Uniquement des Value Bets (EV+) · Notre modele bat le bookmaker · Edge = avantage mathematique
+                    </p>
+                </div>
+
+                {/* Summary stat line */}
+                {!loading && (
+                    <div className="mb-4 px-1">
+                        <p className="text-xs text-muted-foreground">
+                            {totalBets > 0 ? (
+                                <>
+                                    <strong className="text-foreground">{totalBets} value bet{totalBets > 1 ? "s" : ""}</strong>{" "}
+                                    detecte{totalBets > 1 ? "s" : ""} aujourd'hui
+                                </>
+                            ) : (
+                                "Aucun value bet detecte pour cette date."
+                            )}
+                        </p>
+                    </div>
+                )}
+
+                {/* Free preview: first 2 football bets */}
+                <div className="mb-4">
+                    <div className="flex items-center gap-2 mb-3">
+                        <span className="text-base">⚽</span>
+                        <h2 className="text-sm font-bold text-emerald-500">Football</h2>
+                        <span className="text-xs text-muted-foreground">— Apercu gratuit</span>
+                    </div>
+
+                    {loading ? (
+                        <div className="space-y-2">
+                            {[1, 2].map(i => <Skeleton key={i} className="h-20 w-full rounded-xl" />)}
+                        </div>
+                    ) : previewBets.length > 0 ? (
+                        <div className="space-y-2.5">
+                            {previewBets.map((bet: any, i: number) => (
+                                <BetCard
+                                    key={bet.fixture_id || i}
+                                    bet={bet}
+                                    sport="football"
+                                    date={date}
+                                    isAdmin={false}
+                                />
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="text-center py-8 text-xs text-muted-foreground border border-dashed border-border/50 rounded-xl">
+                            Aucun Value Bet Football detecte pour cette date.
+                        </div>
+                    )}
+                </div>
+
+                {/* Blurred overflow if more bets exist */}
+                {!loading && footballBets.length > 2 && (
+                    <div className="relative mb-4">
+                        <div className="space-y-2.5 blur-sm pointer-events-none select-none" aria-hidden="true">
+                            {footballBets.slice(2, 4).map((bet: any, i: number) => (
+                                <BetCard
+                                    key={`blur-${i}`}
+                                    bet={bet}
+                                    sport="football"
+                                    date={date}
+                                    isAdmin={false}
+                                />
+                            ))}
+                        </div>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                            <div className="flex items-center gap-2 bg-card/90 border border-border/60 rounded-lg px-4 py-2 shadow-lg backdrop-blur-sm">
+                                <Lock className="w-3.5 h-3.5 text-amber-500" />
+                                <span className="text-xs font-bold text-foreground">
+                                    +{footballBets.length - 2} paris masques
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Premium CTA */}
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-5 text-center">
+                    <Trophy className="w-8 h-8 text-amber-500 mx-auto mb-3" />
+                    <h3 className="text-sm font-black text-foreground mb-1">
+                        Debloque tous les pronos
+                    </h3>
+                    <p className="text-xs text-muted-foreground mb-4 max-w-[260px] mx-auto leading-relaxed">
+                        Acces illimite aux Value Bets Football & NHL, picks experts, historique complet et statistiques.
+                    </p>
+                    <Link
+                        to="/premium"
+                        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black text-sm font-black transition-colors"
+                    >
+                        <Trophy className="w-4 h-4" />
+                        Passer Premium
+                    </Link>
+                </div>
+            </div>
+        )
+    }
 
     const dateObj = new Date(date + "T12:00:00")
     const formattedDate = format(dateObj, "EEEE d MMMM", { locale: fr })

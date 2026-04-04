@@ -4,12 +4,10 @@ import { format, addDays, subDays } from "date-fns"
 import { fr } from "date-fns/locale"
 import {
     Trophy, ChevronDown, ChevronUp, Star,
-    Activity, Target, BrainCircuit, Brain, Sparkles
+    Activity
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { usePredictions, useFootballMetaAnalysis } from "@/lib/queries"
-import { getStatValue } from "@/lib/statsHelper"
-import { Badge } from "@/components/ui/badge"
+import { usePredictions } from "@/lib/queries"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useWatchlist } from "@/lib/useWatchlist"
 
@@ -49,271 +47,6 @@ function DateBar({ date, setDate }) {
                     <span className="date-num">{d.dayNum}</span>
                 </button>
             ))}
-        </div>
-    )
-}
-
-/* ── DeepThink Meta-Analysis Card ──────────────────────────── */
-function FootballMetaAnalysisCard({ date }) {
-    const [expanded, setExpanded] = useState(false)
-    const { data: metaData, isLoading: loading } = useFootballMetaAnalysis(date)
-    const analysis = (metaData?.ok && metaData.analysis) ? metaData.analysis : null
-
-    if (loading) {
-        return (
-            <div className="mx-2 mb-3 rounded-xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/5 via-card to-blue-500/5 p-4">
-                <div className="flex items-center gap-2 mb-3">
-                    <div className="w-8 h-8 rounded-lg bg-emerald-500/20 animate-pulse" />
-                    <Skeleton className="h-4 w-40" />
-                </div>
-                <Skeleton className="h-3 w-full mb-2" />
-                <Skeleton className="h-3 w-3/4 mb-2" />
-                <Skeleton className="h-3 w-5/6" />
-            </div>
-        )
-    }
-
-    if (!analysis) return null
-
-    const lines = analysis.split('\n').filter(l => l.trim())
-
-    return (
-        <div className="mx-2 mb-3 rounded-xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/5 via-card to-blue-500/5 overflow-hidden">
-            {/* Header */}
-            <button
-                onClick={() => setExpanded(!expanded)}
-                className="w-full flex items-center gap-2.5 px-4 py-3 hover:bg-emerald-500/5 transition-colors"
-            >
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-blue-500 flex items-center justify-center shrink-0">
-                    <Brain className="w-4 h-4 text-white" />
-                </div>
-                <div className="flex-1 text-left">
-                    <div className="flex items-center gap-1.5">
-                        <span className="text-sm font-bold">Analyse Stratégique</span>
-                        <Sparkles className="w-3 h-3 text-emerald-400" />
-                    </div>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">
-                        Méta-analyse de la journée — spots à haute value
-                    </p>
-                </div>
-                {expanded ? (
-                    <ChevronUp className="w-4 h-4 text-muted-foreground shrink-0" />
-                ) : (
-                    <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
-                )}
-            </button>
-
-            {/* Content */}
-            {expanded && (
-                <div className="px-4 pb-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                    <div className="border-t border-emerald-500/10 pt-3 space-y-2 max-h-[400px] overflow-y-auto pr-1 custom-scrollbar">
-                        {lines.map((line, i) => {
-                            if (line.startsWith('# ') || line.startsWith('⚽ Analyse')) return null
-                            if (line.match(/^-{3,}$/)) return <hr key={i} className="border-emerald-500/10 my-2" />
-                            if (line.startsWith('## ') || line.startsWith('### ')) {
-                                return <h4 key={i} className="text-xs font-bold text-foreground pt-2 first:pt-0">{line.replace(/^#+\s*/, '')}</h4>
-                            }
-                            if (line.match(/^Spot\s*\d/i)) {
-                                return <h4 key={i} className="text-xs font-bold text-foreground pt-2">{line}</h4>
-                            }
-                            if (line.includes('⭐')) {
-                                return <p key={i} className="text-xs text-amber-400 font-medium">{line}</p>
-                            }
-                            if (line.includes('**')) {
-                                const parts = line.split(/\*\*/)
-                                return (
-                                    <p key={i} className="text-xs text-muted-foreground leading-relaxed">
-                                        {parts.map((part, j) =>
-                                            j % 2 === 1 ? <strong key={j} className="text-foreground font-semibold">{part}</strong> : <span key={j}>{part}</span>
-                                        )}
-                                    </p>
-                                )
-                            }
-                            if (line.startsWith('- ') || line.startsWith('• ')) {
-                                return <p key={i} className="text-xs text-muted-foreground leading-relaxed pl-3 border-l-2 border-emerald-500/20">{line.replace(/^[-•]\s*/, '')}</p>
-                            }
-                            if (line.match(/^\d+\.\s/)) {
-                                return <p key={i} className="text-xs text-muted-foreground leading-relaxed pl-3 border-l-2 border-blue-500/20">{line}</p>
-                            }
-                            return <p key={i} className="text-xs text-muted-foreground leading-relaxed">{line}</p>
-                        })}
-                    </div>
-                </div>
-            )}
-        </div>
-    )
-}
-
-/* ── Top 5 Markets Card ────────────────────────────────────── */
-function TopMarketsCard({ matches }) {
-    const [expanded, setExpanded] = useState(false)
-    const [activeMarket, setActiveMarket] = useState('btts')
-    const navigate = useNavigate()
-
-    // Only NS matches with predictions (exclude finished/live)
-    const nsMatches = (matches || []).filter(m =>
-        m.status === "NS" && m.prediction
-    )
-
-    if (nsMatches.length === 0) return null
-
-    const markets = [
-        {
-            key: 'btts',
-            label: 'BTTS',
-            emoji: '🔄',
-            getProba: (m) => getStatValue(m.prediction, 'proba_btts'),
-        },
-        {
-            key: 'over05',
-            label: '+0.5',
-            emoji: '⚽',
-            getProba: (m) => getStatValue(m.prediction, 'proba_over_05'),
-        },
-        {
-            key: 'over15',
-            label: '+1.5',
-            emoji: '🎯',
-            getProba: (m) => getStatValue(m.prediction, 'proba_over_15'),
-        },
-        {
-            key: 'over25',
-            label: '+2.5',
-            emoji: '🔥',
-            getProba: (m) => getStatValue(m.prediction, 'proba_over_25'),
-        },
-        {
-            key: 'over35',
-            label: '+3.5',
-            emoji: '💥',
-            getProba: (m) => getStatValue(m.prediction, 'proba_over_35'),
-        },
-    ]
-
-    const activeMarketData = markets.find(mk => mk.key === activeMarket)
-    const ranked = nsMatches
-        .map(m => ({
-            match: m,
-            proba: activeMarketData?.getProba(m) ?? null,
-        }))
-        .filter(r => r.proba != null && r.proba > 0)
-        .sort((a, b) => b.proba - a.proba)
-        .slice(0, 5)
-
-    return (
-        <div className="mx-2 mb-3 rounded-xl border border-amber-500/20 bg-gradient-to-br from-amber-500/5 via-card to-orange-500/5 overflow-hidden">
-            {/* Header */}
-            <button
-                onClick={() => setExpanded(!expanded)}
-                className="w-full flex items-center gap-2.5 px-4 py-3 hover:bg-amber-500/5 transition-colors"
-            >
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shrink-0">
-                    <Trophy className="w-4 h-4 text-white" />
-                </div>
-                <div className="flex-1 text-left">
-                    <div className="flex items-center gap-1.5">
-                        <span className="text-sm font-bold">Top 5 Marchés</span>
-                        <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-500 uppercase tracking-wider">
-                            Stats
-                        </span>
-                    </div>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">
-                        Meilleurs matchs par marché — BTTS, Over 0.5 à 3.5
-                    </p>
-                </div>
-                {expanded ? (
-                    <ChevronUp className="w-4 h-4 text-muted-foreground shrink-0" />
-                ) : (
-                    <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
-                )}
-            </button>
-
-            {expanded && (
-                <div className="px-4 pb-4 pt-1 space-y-3">
-                    {/* Market tabs */}
-                    <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
-                        {markets.map(mk => (
-                            <button
-                                key={mk.key}
-                                onClick={() => setActiveMarket(mk.key)}
-                                className={cn(
-                                    "flex items-center gap-1 px-3 py-1.5 rounded-full text-[11px] font-semibold whitespace-nowrap transition-all",
-                                    activeMarket === mk.key
-                                        ? "bg-amber-500/20 text-amber-500 shadow-sm"
-                                        : "bg-muted/50 text-muted-foreground hover:bg-muted"
-                                )}
-                            >
-                                <span>{mk.emoji}</span>
-                                <span>{mk.label}</span>
-                            </button>
-                        ))}
-                    </div>
-
-                    {/* Ranked matches */}
-                    <div className="space-y-1">
-                        {ranked.length > 0 ? ranked.map((r, idx) => {
-                            const m = r.match
-                            return (
-                                <div
-                                    key={m.id}
-                                    className="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-muted/30 hover:bg-muted/50 cursor-pointer transition-colors"
-                                    onClick={() => navigate(`/football/match/${m.id}`)}
-                                >
-                                    {/* Rank */}
-                                    <span className={cn(
-                                        "w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0",
-                                        idx === 0 ? "bg-amber-500/20 text-amber-500" :
-                                            idx === 1 ? "bg-slate-300/20 text-slate-400" :
-                                                idx === 2 ? "bg-orange-700/20 text-orange-600" :
-                                                    "bg-muted text-muted-foreground"
-                                    )}>
-                                        {idx + 1}
-                                    </span>
-
-                                    {/* Teams */}
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-1 text-[11px] font-medium truncate">
-                                            {m.home_logo && <img src={m.home_logo} alt="" className="w-3.5 h-3.5 object-contain" />}
-                                            <span className="truncate">{m.home_team}</span>
-                                            <span className="text-muted-foreground mx-0.5">-</span>
-                                            {m.away_logo && <img src={m.away_logo} alt="" className="w-3.5 h-3.5 object-contain" />}
-                                            <span className="truncate">{m.away_team}</span>
-                                        </div>
-                                        <span className="text-[9px] text-muted-foreground">{m.league_name}</span>
-                                    </div>
-
-                                    {/* Proba bar + value */}
-                                    <div className="flex items-center gap-2 shrink-0">
-                                        <div className="w-16 h-1.5 rounded-full bg-muted overflow-hidden">
-                                            <div
-                                                className={cn(
-                                                    "h-full rounded-full transition-all",
-                                                    r.proba >= 75 ? "bg-emerald-500" :
-                                                        r.proba >= 60 ? "bg-amber-500" :
-                                                            "bg-orange-500"
-                                                )}
-                                                style={{ width: `${Math.min(r.proba, 100)}%` }}
-                                            />
-                                        </div>
-                                        <span className={cn(
-                                            "text-[11px] font-bold min-w-[32px] text-right",
-                                            r.proba >= 75 ? "text-emerald-500" :
-                                                r.proba >= 60 ? "text-amber-500" :
-                                                    "text-orange-500"
-                                        )}>
-                                            {Math.round(r.proba)}%
-                                        </span>
-                                    </div>
-                                </div>
-                            )
-                        }) : (
-                            <p className="text-xs text-muted-foreground text-center py-4">
-                                Aucune donnée disponible pour ce marché
-                            </p>
-                        )}
-                    </div>
-                </div>
-            )}
         </div>
     )
 }
@@ -544,12 +277,6 @@ export default function FootballPage({ date, setDate, selectedLeague, setSelecte
                 </select>
             </div>
 
-            {/* DeepThink Meta-Analysis */}
-            <FootballMetaAnalysisCard date={date} />
-
-            {/* Top 5 Markets */}
-            <TopMarketsCard matches={matches} />
-
             {/* Content */}
             <div className="bg-card border-x border-b border-border/50 rounded-b">
                 {loading ? (
@@ -576,13 +303,11 @@ export default function FootballPage({ date, setDate, selectedLeague, setSelecte
                         />
                     ))
                 ) : (
-                    <div className="flex flex-col items-center justify-center py-20 text-center">
-                        <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-                            <span className="text-2xl">⚽</span>
-                        </div>
-                        <h3 className="font-bold text-sm mb-1">Aucun match programmé</h3>
-                        <p className="text-xs text-muted-foreground max-w-[220px]">
-                            Pas de rencontres pour cette date.
+                    <div className="text-center py-12">
+                        <div className="text-4xl mb-3">⚽</div>
+                        <h3 className="text-base font-bold text-foreground mb-1">Aucun match programme</h3>
+                        <p className="text-sm text-muted-foreground">
+                            Pas de rencontres pour cette date. Essayez un autre jour ou consultez les pronos du jour.
                         </p>
                     </div>
                 )}

@@ -450,11 +450,11 @@ export default function NHLPage({ date, setDate }) {
                         <NHLMatchRow key={m.id} match={m} isStarred={isStarred(m.id)} onToggleStar={toggleMatch} />
                     ))
                 ) : (
-                    <div className="flex flex-col items-center justify-center py-12 text-center">
-                        <span className="text-3xl mb-3">🏒</span>
-                        <h3 className="font-bold text-sm mb-1">Aucun match NHL</h3>
-                        <p className="text-xs text-muted-foreground max-w-[220px]">
-                            Pas de rencontres NHL pour cette date.
+                    <div className="text-center py-12">
+                        <div className="text-4xl mb-3">🏒</div>
+                        <h3 className="text-base font-bold text-foreground mb-1">Aucun match NHL programme</h3>
+                        <p className="text-sm text-muted-foreground">
+                            Pas de rencontres pour cette date. Essayez un autre jour ou consultez les pronos du jour.
                         </p>
                     </div>
                 )}
