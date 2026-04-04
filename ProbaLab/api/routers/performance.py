@@ -56,7 +56,8 @@ def get_performance(days: int = Query(0, description="Rolling window in days (0 
                 break
             offset += page_size
 
-        fixture_ids = [f["id"] for f in finished]
+        # predictions.fixture_id is INTEGER — skip UUID fixture IDs
+        fixture_ids = [f["id"] for f in finished if str(f["id"]).isdigit()]
         if not fixture_ids:
             return {
                 "days": days,
@@ -348,6 +349,6 @@ def get_performance(days: int = Query(0, description="Rolling window in days (0 
             },
         }
 
-    except Exception as exc:
+    except Exception:
         logger.exception("get_performance failed")
-        raise HTTPException(status_code=500, detail=f"DEBUG: {type(exc).__name__}: {exc}")
+        raise HTTPException(status_code=500, detail="Internal server error")
