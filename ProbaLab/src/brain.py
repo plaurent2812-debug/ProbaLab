@@ -34,6 +34,17 @@ from src.prompts import (
     get_active_learnings,  # noqa: F401 — re-exported
 )
 
+# ── Optional metrics (no-op when running outside the API process) ─
+_METRICS_ENABLED: bool
+try:
+    from api.metrics import pipeline_duration  # noqa: I001
+    from api.metrics import pipeline_runs  # noqa: I001
+    from api.metrics import predictions_generated  # noqa: I001
+
+    _METRICS_ENABLED = True
+except ImportError:
+    _METRICS_ENABLED = False
+
 
 # ═══════════════════════════════════════════════════════════════════
 #  PIPELINE PRINCIPAL
@@ -97,6 +108,8 @@ def run_brain() -> None:
     logger.info("=" * 60)
     logger.info("  FOOTBALL IA — Brain v2 (Hybrid Stats + IA)")
     logger.info("=" * 60)
+
+    _pipeline_start = time.time()
 
     # 1. Mettre à jour les ELO
     logger.info("Mise à jour des ratings ELO...")
@@ -324,6 +337,9 @@ def run_brain() -> None:
                 f"   {action_msg} → {final['proba_home']}-{final['proba_draw']}-{final['proba_away']} | {final.get('recommended_bet')}"
             )
 
+            if _METRICS_ENABLED:
+                predictions_generated.labels(sport="football", league=league_name).inc()
+
             # Clean up stale predictions from other model versions
             try:
                 stale = (
@@ -364,6 +380,11 @@ def run_brain() -> None:
             generate_football_deepthink(matches, league_names)
         except Exception:
             logger.warning("[Football] DeepThink meta-analysis failed", exc_info=True)
+
+    if _METRICS_ENABLED:
+        _elapsed = time.time() - _pipeline_start
+        pipeline_runs.labels(mode="football", status="success").inc()
+        pipeline_duration.labels(mode="football").observe(_elapsed)
 
 
 if __name__ == "__main__":

@@ -12,6 +12,7 @@ import math
 
 from api.cache import TTLCache
 from src.config import supabase
+from src.constants import CACHE_TTL_LEAGUES
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +33,7 @@ def _ensure_dict(data: dict | str | None) -> dict:
 
 
 # ─── Leagues Cache ──────────────────────────────────────────────
-_league_cache = TTLCache(ttl=3600, name="leagues")
+_league_cache = TTLCache(ttl=CACHE_TTL_LEAGUES, name="leagues")
 
 
 def _get_league_map() -> dict:

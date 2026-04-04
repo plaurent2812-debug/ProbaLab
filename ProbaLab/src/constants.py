@@ -458,3 +458,18 @@ assert XG_FLOOR > 0, "XG_FLOOR must be positive"
 assert XG_CEIL > XG_FLOOR, "XG_CEIL must be greater than XG_FLOOR"
 assert KELLY_FRACTION > 0 and KELLY_FRACTION <= 1.0, "KELLY_FRACTION must be in (0, 1]"
 assert KELLY_MAX_BET_FRACTION > 0 and KELLY_MAX_BET_FRACTION <= 1.0, "KELLY_MAX_BET_FRACTION must be in (0, 1]"
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  API CONFIGURATION
+# ═══════════════════════════════════════════════════════════════════
+
+# Cache TTLs (seconds)
+CACHE_TTL_NEWS: int = 3600       # 1 hour — RSS feeds don't change often
+CACHE_TTL_LEAGUES: int = 3600    # 1 hour — league metadata is static
+CACHE_TTL_MONITORING: int = 300  # 5 min — CLV/Brier are expensive to compute
+
+# Rate limiting
+RATE_LIMIT_DEFAULT: str = "60/minute"
+RATE_LIMIT_SEARCH: str = "30/minute"
+RATE_LIMIT_ADMIN: str = "10/minute"

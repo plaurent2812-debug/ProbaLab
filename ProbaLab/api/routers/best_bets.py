@@ -7,12 +7,12 @@ resolution, stats, and history.
 
 import logging
 from datetime import datetime, timedelta, timezone
-
 from typing import Annotated
 
 from fastapi import APIRouter, Body, Header, HTTPException, Query, Request
 
 from api.auth import verify_cron_auth, verify_internal_auth
+from api.metrics import bets_resolved
 from api.rate_limit import _rate_limit
 from api.response_models import BestBetsResponse, SaveBetResponse, UpdateBetResultResponse
 from api.schemas import (
@@ -997,6 +997,7 @@ def resolve_best_bets(body: Annotated[ResolveBetsRequest, Body()], request: Requ
                     "result": result_val,
                     "score": f"{h}-{a}",
                 })
+                bets_resolved.labels(result=result_val.lower()).inc()
 
             except Exception as e:
                 logger.warning("resolve_best_bets football: bet_id=%s failed", bet.get("id"), exc_info=True)
@@ -1132,6 +1133,7 @@ def resolve_best_bets(body: Annotated[ResolveBetsRequest, Body()], request: Requ
                     "goals": actual_goals,
                     "points": actual_points,
                 })
+                bets_resolved.labels(result=result_val.lower()).inc()
 
             except Exception as e:
                 logger.warning("resolve_best_bets nhl: bet_id=%s failed", bet.get("id"), exc_info=True)

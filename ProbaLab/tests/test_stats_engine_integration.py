@@ -773,10 +773,10 @@ class TestCalculatePenaltyProba:
 class TestAnalyzeMatch:
     """Test d'intégration de analyze_match avec mocks complets."""
 
-    @patch("src.models.stats_engine.CALIBRATION_AVAILABLE", False)
+    @patch("src.models.stats_engine.is_calibration_available", return_value=False)
     @patch("src.models.stats_engine.ML_AVAILABLE", False)
     @patch("src.models.stats_engine.supabase")
-    def test_full_analysis_returns_expected_structure(self, mock_sb):
+    def test_full_analysis_returns_expected_structure(self, mock_sb, mock_calib_available):
         """analyze_match renvoie un dict complet avec probas 1X2, xG, etc."""
         fixture = {
             "home_team": "Paris Saint Germain",

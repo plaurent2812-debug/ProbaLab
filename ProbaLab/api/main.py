@@ -9,13 +9,14 @@ from __future__ import annotations
 import logging
 import os
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from urllib.parse import urlparse as _urlparse
 
 # APScheduler removed — all scheduling handled by Trigger.dev
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from prometheus_fastapi_instrumentator import Instrumentator
 from starlette.middleware.base import BaseHTTPMiddleware
 
 # ─── Rate Limiting ──────────────────────────────────────────────
@@ -82,6 +83,11 @@ app = FastAPI(
     openapi_tags=tags_metadata,
     lifespan=lifespan,
 )
+
+# ─── Prometheus Instrumentation ──────────────────────────────────
+# Exposes /metrics with automatic HTTP request counters, histograms,
+# and size metrics for every route.
+Instrumentator().instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
 
 # ─── Rate Limiting ──────────────────────────────────────────────
 if RATE_LIMITING:
@@ -183,7 +189,37 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 # ─── Health Check ────────────────────────────────────────────────
 
 
-@app.get("/health", tags=["Health"], summary="Health check", response_model=HealthResponse)
-def health_check():
-    """Health check endpoint for Railway / monitoring."""
-    return {"status": "ok", "timestamp": datetime.now().isoformat()}
+@app.get("/health", tags=["Health"], summary="Health check with dependency status", response_model=HealthResponse)
+async def health_check():
+    """Health check endpoint for Railway / monitoring.
+
+    Performs lightweight dependency probes (Supabase, Gemini) and returns
+    an overall status of ``ok`` or ``degraded``.
+    """
+    from src.config import supabase as _supabase
+
+    checks: dict[str, str] = {"api": "ok"}
+
+    # Supabase connectivity probe
+    try:
+        _supabase.table("predictions").select("fixture_id").limit(1).execute()
+        checks["supabase"] = "ok"
+    except Exception:
+        checks["supabase"] = "degraded"
+
+    # Gemini client availability probe (no network call — just client init)
+    try:
+        from src.ai_service import get_gemini_client
+
+        client = get_gemini_client()
+        checks["gemini"] = "ok" if client else "unavailable"
+    except Exception:
+        checks["gemini"] = "unavailable"
+
+    overall = "ok" if all(v == "ok" for v in checks.values()) else "degraded"
+
+    return {
+        "status": overall,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "checks": checks,
+    }

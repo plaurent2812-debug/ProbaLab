@@ -12,6 +12,7 @@ from fastapi import APIRouter, Request
 
 from api.cache import TTLCache
 from api.response_models import NewsResponse
+from src.constants import CACHE_TTL_NEWS
 
 try:
     import httpx
@@ -24,7 +25,7 @@ router = APIRouter(prefix="/api", tags=["News"])
 
 # ─── News RSS Cache ─────────────────────────────────────────────
 
-_news_cache = TTLCache(ttl=3600, name="news")
+_news_cache = TTLCache(ttl=CACHE_TTL_NEWS, name="news")
 
 RSS_FEEDS = [
     {"url": "https://www.lequipe.fr/rss/actu_rss.xml", "source": "L'Équipe"},

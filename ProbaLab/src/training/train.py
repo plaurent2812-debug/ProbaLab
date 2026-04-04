@@ -28,9 +28,6 @@ import warnings
 from typing import Any
 
 import numpy as np
-
-warnings.filterwarnings("ignore")
-
 import optuna
 import xgboost as xgb
 from sklearn.impute import SimpleImputer
@@ -46,9 +43,26 @@ from src.constants import FEATURE_COLS
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
 # ── Safe Deserialization ──────────────────────────────────────────
+# Tight whitelist: only the sklearn sub-modules actually used by trained models.
+# Avoids allowing arbitrary code hidden under any "sklearn.*" namespace.
 _ALLOWED_PREFIXES = (
-    "numpy", "pandas", "sklearn", "xgboost", "lightgbm",
-    "_codecs", "builtins", "collections", "copyreg",
+    "sklearn.ensemble.",
+    "sklearn.linear_model.",
+    "sklearn.preprocessing.",
+    "sklearn.calibration.",
+    "sklearn.pipeline.",
+    "sklearn.impute.",
+    "sklearn.tree.",       # used by ensemble internals
+    "sklearn.utils.",      # _bunch, Tags, etc. used by sklearn internals
+    "sklearn.base.",       # BaseEstimator and mixin classes
+    "numpy.",
+    "numpy",               # catches bare "numpy" module for ndarray/dtype
+    "xgboost.",
+    "lightgbm.",
+    "_codecs",
+    "builtins",
+    "collections",
+    "copyreg",
 )
 
 
@@ -222,7 +236,10 @@ def _optuna_xgb_params(
             params["objective"] = "binary:logistic"
 
         model = xgb.XGBClassifier(**params)
-        scores = cross_val_score(model, X_train, y_train, cv=tscv, scoring="neg_log_loss")
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=UserWarning, module="sklearn")
+            warnings.filterwarnings("ignore", category=FutureWarning)
+            scores = cross_val_score(model, X_train, y_train, cv=tscv, scoring="neg_log_loss")
         return -scores.mean()  # Minimize log_loss
 
     study = optuna.create_study(direction="minimize", sampler=optuna.samplers.TPESampler(seed=42))
@@ -344,20 +361,26 @@ def train_classifier(
     sample_weight_train = compute_sample_weight(class_weight="balanced", y=y_train)
 
     # Cross-validation temporelle (5 folds) — with balanced sample weights
-    cv_scores = cross_val_score(
-        model, X_train, y_train, cv=tscv, scoring="accuracy",
-        params={"sample_weight": sample_weight_train},
-    )
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=UserWarning, module="sklearn")
+        warnings.filterwarnings("ignore", category=FutureWarning)
+        cv_scores = cross_val_score(
+            model, X_train, y_train, cv=tscv, scoring="accuracy",
+            params={"sample_weight": sample_weight_train},
+        )
     logger.info(f"  CV Accuracy (temporal, balanced) : {cv_scores.mean():.4f} ± {cv_scores.std():.4f}")
     logger.info(f"  CV Folds : {[round(s, 4) for s in cv_scores.tolist()]}")
 
     # Entraînement final
-    model.fit(
-        X_train, y_train,
-        sample_weight=sample_weight_train,
-        eval_set=[(X_test, y_test)],
-        verbose=False,
-    )
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=UserWarning, module="sklearn")
+        warnings.filterwarnings("ignore", category=FutureWarning)
+        model.fit(
+            X_train, y_train,
+            sample_weight=sample_weight_train,
+            eval_set=[(X_test, y_test)],
+            verbose=False,
+        )
 
     # Évaluation
     y_pred = model.predict(X_test)
@@ -480,7 +503,10 @@ def train_regressor(
         random_state=42,
     )
 
-    model.fit(X_train, y_train, eval_set=[(X_test, y_test)], verbose=False)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=UserWarning, module="sklearn")
+        warnings.filterwarnings("ignore", category=FutureWarning)
+        model.fit(X_train, y_train, eval_set=[(X_test, y_test)], verbose=False)
 
     y_pred = model.predict(X_test)
     mae: float = float(np.mean(np.abs(y_pred - y_test)))
@@ -552,7 +578,11 @@ def _optuna_lgb_params(
             params["objective"] = "binary"
 
         model = lgb.LGBMClassifier(**params)
-        scores = cross_val_score(model, X_train, y_train, cv=tscv, scoring="neg_log_loss")
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=UserWarning, module="sklearn")
+            warnings.filterwarnings("ignore", category=UserWarning, module="lightgbm")
+            warnings.filterwarnings("ignore", category=FutureWarning)
+            scores = cross_val_score(model, X_train, y_train, cv=tscv, scoring="neg_log_loss")
         return -scores.mean()
 
     study = optuna.create_study(direction="minimize", sampler=optuna.samplers.TPESampler(seed=42))

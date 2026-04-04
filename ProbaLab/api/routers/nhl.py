@@ -16,9 +16,25 @@ logger = logging.getLogger(__name__)
 
 
 # ── Safe Pickle Loading ───────────────────────────────────────────
+# Tight whitelist: only the sklearn sub-modules actually used by NHL models.
 _PICKLE_ALLOWED_PREFIXES = (
-    "numpy", "pandas", "sklearn", "xgboost", "lightgbm",
-    "_codecs", "builtins", "collections", "copyreg",
+    "sklearn.ensemble.",
+    "sklearn.linear_model.",
+    "sklearn.preprocessing.",
+    "sklearn.calibration.",
+    "sklearn.pipeline.",
+    "sklearn.impute.",
+    "sklearn.tree.",
+    "sklearn.utils.",
+    "sklearn.base.",
+    "numpy.",
+    "numpy",
+    "xgboost.",
+    "lightgbm.",
+    "_codecs",
+    "builtins",
+    "collections",
+    "copyreg",
 )
 
 

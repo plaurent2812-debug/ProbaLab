@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import logging
 
+from src.constants import RATE_LIMIT_DEFAULT
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -16,7 +18,7 @@ try:
     from slowapi.errors import RateLimitExceeded  # noqa: F401
     from slowapi.util import get_remote_address
 
-    limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
+    limiter = Limiter(key_func=get_remote_address, default_limits=[RATE_LIMIT_DEFAULT])
     RATE_LIMITING = True
 except ImportError:
     logging.critical(

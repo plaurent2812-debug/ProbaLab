@@ -22,6 +22,17 @@ from src.config import GEMINI_API_KEY, logger
 
 # ── Model constants ───────────────────────────────────────────────
 MODEL_NAME: str = "gemini-2.5-flash"
+
+# ── Optional metrics (no-op when running outside the API process) ─
+# Imported after the module constants so ruff treats this as a non-import block.
+_METRICS_ENABLED: bool
+try:
+    from api.metrics import gemini_calls  # noqa: E402
+    from api.metrics import gemini_latency as _gemini_latency  # noqa: E402
+
+    _METRICS_ENABLED = True
+except ImportError:
+    _METRICS_ENABLED = False
 TEMPERATURE: float = 0.2
 MAX_OUTPUT_TOKENS: int = 4000
 
@@ -118,6 +129,8 @@ def ask_gemini(system_prompt: str, user_prompt: str) -> str | None:
     if not gclient:
         return None
 
+    _t_start = time.time()
+
     for _attempt in range(2):
         try:
             response = gclient.models.generate_content(
@@ -131,6 +144,9 @@ def ask_gemini(system_prompt: str, user_prompt: str) -> str | None:
                 ),
             )
             if response and response.text:
+                if _METRICS_ENABLED:
+                    gemini_calls.labels(status="success").inc()
+                    _gemini_latency.observe(time.time() - _t_start)
                 return response.text
             logger.warning("Gemini attempt %d: response has no text", _attempt + 1)
         except Exception as e:
@@ -138,4 +154,7 @@ def ask_gemini(system_prompt: str, user_prompt: str) -> str | None:
         if _attempt == 0:
             time.sleep(2)
 
+    if _METRICS_ENABLED:
+        gemini_calls.labels(status="error").inc()
+        _gemini_latency.observe(time.time() - _t_start)
     return None

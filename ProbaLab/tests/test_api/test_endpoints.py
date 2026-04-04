@@ -20,12 +20,14 @@ import pytest
 
 class TestHealth:
     def test_health_returns_ok(self, client):
-        """GET /health must return 200 with status='ok'."""
+        """GET /health must return 200 with status and dependency checks."""
         resp = client.get("/health")
         assert resp.status_code == 200
         body = resp.json()
-        assert body["status"] == "ok"
+        assert body["status"] in ("ok", "degraded")
         assert "timestamp" in body
+        assert "checks" in body
+        assert body["checks"]["api"] == "ok"
 
 
 # ════════════════════════════════════════════════════════════════════

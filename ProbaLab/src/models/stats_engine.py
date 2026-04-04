@@ -74,8 +74,15 @@ from src.constants import (
 # Import calibration — activée dynamiquement selon le volume de données disponibles.
 # Platt scaling : actif dès 100 prédictions évaluées.
 # Isotonic regression : actif dès 500 prédictions (évite la "fonction en escalier").
-def _check_calibration_available() -> bool:
-    """Return True if enough evaluated predictions exist to apply calibration."""
+def is_calibration_available() -> bool:
+    """Check if enough data exists for probability calibration.
+
+    Called at prediction time rather than import time so the check
+    reflects the current data volume in ``prediction_results``.
+
+    Returns:
+        True when at least 100 evaluated predictions exist, False otherwise.
+    """
     try:
         resp = supabase.table("prediction_results").select("id").limit(100).execute()
         return len(resp.data) >= 100
@@ -83,14 +90,9 @@ def _check_calibration_available() -> bool:
         return False
 
 
-CALIBRATION_AVAILABLE = _check_calibration_available()
-
-# Import calibration (optionnel)
-if CALIBRATION_AVAILABLE:
-    try:
-        from src.models.calibrate import apply_calibration
-    except ImportError:
-        CALIBRATION_AVAILABLE = False
+# Module-level sentinel kept for backward compatibility with @patch in tests.
+# Do NOT read this constant in business logic — call is_calibration_available() instead.
+CALIBRATION_AVAILABLE: bool = False
 
 # Import modèles ML entraînés (optionnel)
 try:
@@ -2467,8 +2469,9 @@ def analyze_match(fixture: dict[str, Any]) -> dict[str, Any]:
     except Exception:
         context["calibration_1x2"] = "skipped"
 
-    if CALIBRATION_AVAILABLE:
+    if is_calibration_available():
         try:
+            from src.models.calibrate import apply_calibration
             lid = league_id
             # BTTS and Over markets: binary calibration via Platt/Isotonic
             poisson_probs["proba_btts"] = apply_calibration(

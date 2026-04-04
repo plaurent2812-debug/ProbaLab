@@ -14,13 +14,14 @@ from fastapi import APIRouter
 from api.cache import TTLCache
 from api.response_models import MonitoringHealthResponse, MonitoringResponse
 from src.config import supabase
+from src.constants import CACHE_TTL_MONITORING
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/monitoring", tags=["Monitoring"])
 
 # ── Monitoring cache (CLV + Brier are expensive to compute) ────────
-_monitoring_cache = TTLCache(ttl=300, name="monitoring")
+_monitoring_cache = TTLCache(ttl=CACHE_TTL_MONITORING, name="monitoring")
 
 
 def _compute_monitoring() -> dict:
