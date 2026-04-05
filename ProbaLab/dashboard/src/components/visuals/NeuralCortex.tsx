@@ -45,13 +45,13 @@ const PALETTES = {
         glowMultiplier: 1,
     },
     light: {
-        node: [5, 150, 105],        // emerald-600 (darker for contrast)
-        pulse: [4, 120, 87],        // emerald-700
-        pulseCore: [6, 95, 70],     // emerald-800
-        cursor: [5, 150, 105],
-        baseAlpha: 0.25,            // more visible on white
-        lineAlpha: 0.06,            // more visible connections
-        glowMultiplier: 0.7,        // less glow (white bg doesn't need it)
+        node: [2, 100, 70],         // dark emerald for strong contrast
+        pulse: [2, 80, 60],         // even darker pulses
+        pulseCore: [0, 60, 45],     // near-black green core
+        cursor: [2, 100, 70],
+        baseAlpha: 0.45,            // much more visible on white
+        lineAlpha: 0.12,            // clearly visible connections
+        glowMultiplier: 1.2,        // stronger glow to compensate white bg
     },
 } as const
 
