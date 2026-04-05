@@ -709,21 +709,28 @@ def evaluate_performance():
 
 
 @router.post("/retrain-models")
-def retrain_models():
-    """Endpoint for Trigger.dev or Vertex AI to trigger a full ML model retraining."""
-    logger.info("[MLOps] 🚀 Déclenchement du réentrainement continu...")
+def retrain_models(rebuild: bool = False):
+    """Endpoint for Trigger.dev or Vertex AI to trigger a full ML model retraining.
+
+    Args:
+        rebuild: If True, recalculate ALL features from scratch (slow but
+                 needed after importing historical data). Default False
+                 only processes new matches.
+    """
+    mode = "REBUILD" if rebuild else "INCREMENTAL"
+    logger.info(f"[MLOps] 🚀 Déclenchement du réentrainement ({mode})...")
     try:
         # 1. Build new training data vectors
         from src.training import build_data
 
-        build_data.run(rebuild=False)
+        build_data.run(rebuild=rebuild)
 
         # 2. Retrain the XGBoost models and push them to Supabase
         from src.training import train
 
         train.run()
 
-        return {"status": "ok", "message": "ML Models successfully retrained and deployed"}
+        return {"status": "ok", "message": f"ML Models successfully retrained ({mode})"}
     except Exception as e:
         logger.error(f"[MLOps] Retraining Failed: {e}")
         return {"status": "error", "message": str(e)}
