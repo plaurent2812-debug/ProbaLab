@@ -195,44 +195,37 @@ export default function HomePage() {
     return (
         <div className="animate-fade-in-up pb-8 w-full mx-auto">
 
-            {/* ── Hero / Intro Section (Premium) ────────────────────────── */}
-            <div className="relative px-4 py-16 sm:py-20 text-center border-b border-border/20 overflow-hidden">
+            {/* ── Hero / Intro Section (Premium — compact) ──────────────── */}
+            <div className="relative px-4 py-8 border-b border-border/20 overflow-hidden">
                 {/* Aurora background */}
-                <AuroraBackground intensity={0.6} />
+                <AuroraBackground intensity={0.5} />
 
-                {/* Content */}
-                <div className="relative z-10 flex flex-col items-center">
-                    {/* Logo with pulse ring */}
-                    <div className="relative mb-6">
-                        <div className="w-16 h-16 rounded-2xl bg-primary/20 backdrop-blur-sm border border-primary/30 flex items-center justify-center animate-float">
-                            <span className="text-2xl font-black gradient-text-premium">P</span>
-                        </div>
-                        <PulseRing size={100} />
+                {/* Content — horizontal layout */}
+                <div className="relative z-10 flex items-center justify-between gap-4 max-w-lg mx-auto">
+                    {/* Left: text */}
+                    <div className="flex-1 min-w-0">
+                        <h1 className="text-2xl sm:text-3xl font-black text-foreground mb-1 tracking-tighter">
+                            Proba<span className="gradient-text-premium">Lab</span>
+                        </h1>
+                        <p className="text-[0.6rem] font-semibold text-primary/70 uppercase tracking-[0.15em] mb-2">
+                            Smart Betting Assistant
+                        </p>
+                        <p className="text-xs text-muted-foreground leading-relaxed mb-4">
+                            D&eacute;tecte les cotes sous-&eacute;valu&eacute;es. Calcule votre edge.
+                        </p>
+                        <Link
+                            to="/paris-du-soir"
+                            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 transition-all hover:scale-105 glow-value"
+                        >
+                            <Target className="w-3.5 h-3.5" />
+                            Value Bets du jour
+                        </Link>
                     </div>
 
-                    <h1 className="text-4xl sm:text-5xl font-black text-foreground mb-2 tracking-tighter">
-                        Proba<span className="gradient-text-premium">Lab</span>
-                    </h1>
-                    <p className="text-base sm:text-lg font-medium text-primary/80 mb-2 tracking-wide uppercase" style={{ fontSize: "0.7rem", letterSpacing: "0.2em" }}>
-                        Smart Betting Assistant
-                    </p>
-                    <p className="text-sm text-muted-foreground max-w-sm mx-auto leading-relaxed mb-8">
-                        Analyse le march&eacute; en temps r&eacute;el. D&eacute;tecte les cotes sous-&eacute;valu&eacute;es. Calcule votre edge.
-                    </p>
-
-                    {/* Edge Scanner */}
-                    <div className="mb-8 opacity-80">
-                        <EdgeScanner size={160} edgePoints={6} />
+                    {/* Right: Edge Scanner (compact) */}
+                    <div className="shrink-0 opacity-70 hidden sm:block">
+                        <EdgeScanner size={110} edgePoints={5} />
                     </div>
-
-                    <Link
-                        to="/paris-du-soir"
-                        className="inline-flex items-center gap-2 px-7 py-3.5 rounded-xl bg-primary text-primary-foreground text-sm font-bold hover:bg-primary/90 transition-all hover:scale-105 glow-value-strong"
-                    >
-                        <Target className="w-4 h-4" />
-                        Voir les Value Bets du jour
-                    </Link>
-                    <p className="text-xs text-muted-foreground/60 mt-3">Football &amp; NHL — mis &agrave; jour quotidiennement</p>
                 </div>
             </div>
 
