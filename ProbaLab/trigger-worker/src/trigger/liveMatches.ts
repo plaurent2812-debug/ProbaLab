@@ -1,3 +1,6 @@
+// ⚠️ DISABLED — All tasks consolidated into worker.py (APScheduler)
+// Set TRIGGER_DISABLED=true in env to skip execution.
+// Remove env var to re-enable if needed.
 import { task, schedules, wait } from "@trigger.dev/sdk/v3";
 
 const CRON_SECRET = process.env.CRON_SECRET || "";
@@ -16,6 +19,11 @@ export const monitorHalftime = task({
     id: "monitor-halftime",
     retry: standardRetry,
     run: async (payload: { fixture_id: string; start_date: string }) => {
+        // ⚠️ Consolidated into Worker (worker.py) — disable Trigger.dev tasks
+        if (process.env.TRIGGER_DISABLED === "true") {
+            console.log(`[DISABLED] Task skipped — consolidated into Worker`);
+            return { status: "disabled" };
+        }
         const startTime = new Date(payload.start_date);
         const halftimeTime = new Date(startTime.getTime() + 48 * 60 * 1000);
         await wait.until({ date: halftimeTime });
@@ -38,6 +46,11 @@ export const monitor70thMinute = task({
     id: "monitor-70th-minute",
     retry: standardRetry,
     run: async (payload: { fixture_id: string; start_date: string }) => {
+        // ⚠️ Consolidated into Worker (worker.py) — disable Trigger.dev tasks
+        if (process.env.TRIGGER_DISABLED === "true") {
+            console.log(`[DISABLED] Task skipped — consolidated into Worker`);
+            return { status: "disabled" };
+        }
         const startTime = new Date(payload.start_date);
         const seventyMinTime = new Date(startTime.getTime() + 70 * 60 * 1000);
         await wait.until({ date: seventyMinTime });
@@ -62,6 +75,11 @@ export const scheduleDailyMatches = schedules.task({
     cron: "0 8 * * *",
     retry: standardRetry,
     run: async () => {
+        // ⚠️ Consolidated into Worker (worker.py) — disable Trigger.dev tasks
+        if (process.env.TRIGGER_DISABLED === "true") {
+            console.log(`[DISABLED] Task skipped — consolidated into Worker`);
+            return { status: "disabled" };
+        }
         // Fetch today's football matches
         const res = await fetch(`${API_URL}/api/trigger/daily-matches`, {
             headers: { "Authorization": `Bearer ${CRON_SECRET}` }
@@ -88,6 +106,11 @@ export const globalMinutelyScheduler = schedules.task({
     cron: "*/5 * * * *",   // Every 5 minutes (optimized from */2)
     retry: standardRetry,
     run: async () => {
+        // ⚠️ Consolidated into Worker (worker.py) — disable Trigger.dev tasks
+        if (process.env.TRIGGER_DISABLED === "true") {
+            console.log(`[DISABLED] Task skipped — consolidated into Worker`);
+            return { status: "disabled" };
+        }
         const now = new Date();
         const hour = now.getUTCHours();
         const min = now.getUTCMinutes();
@@ -146,6 +169,11 @@ export const fetchLineups = schedules.task({
     cron: "*/15 10-22 * * *",
     retry: standardRetry,
     run: async () => {
+        // ⚠️ Consolidated into Worker (worker.py) — disable Trigger.dev tasks
+        if (process.env.TRIGGER_DISABLED === "true") {
+            console.log(`[DISABLED] Task skipped — consolidated into Worker`);
+            return { status: "disabled" };
+        }
         const res = await fetch(`${API_URL}/api/trigger/fetch-lineups`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "Authorization": `Bearer ${CRON_SECRET}` },
@@ -161,6 +189,11 @@ export const nhlMlReminder = schedules.task({
     cron: "0 9 1,15 * *",   // 09:00 UTC le 1er et 15 du mois
     retry: standardRetry,
     run: async () => {
+        // ⚠️ Consolidated into Worker (worker.py) — disable Trigger.dev tasks
+        if (process.env.TRIGGER_DISABLED === "true") {
+            console.log(`[DISABLED] Task skipped — consolidated into Worker`);
+            return { status: "disabled" };
+        }
         const res = await fetch(`${API_URL}/api/trigger/nhl-ml-reminder`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "Authorization": `Bearer ${CRON_SECRET}` },

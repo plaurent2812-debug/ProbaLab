@@ -1,3 +1,6 @@
+// ⚠️ DISABLED — All tasks consolidated into worker.py (APScheduler)
+// Set TRIGGER_DISABLED=true in env to skip execution.
+// Remove env var to re-enable if needed.
 import { schedules } from "@trigger.dev/sdk";
 
 const API_URL = process.env.API_URL || "https://web-production-ff663.up.railway.app";
@@ -65,6 +68,11 @@ export const resolveAllBets = schedules.task({
     cron: "0 7 * * *",   // 07:00 UTC = 08:00 Paris
     retry: standardRetry,
     run: async (payload) => {
+        // ⚠️ Consolidated into Worker (worker.py) — disable Trigger.dev tasks
+        if (process.env.TRIGGER_DISABLED === "true") {
+            console.log(`[DISABLED] Task skipped — consolidated into Worker`);
+            return { status: "disabled" };
+        }
         const today = new Date(payload.timestamp).toISOString().slice(0, 10);
         const dates = [today, ...getLastNDays(new Date(payload.timestamp), 7)];
         const results: Record<string, unknown> = {};

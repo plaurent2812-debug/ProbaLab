@@ -1,3 +1,6 @@
+// ⚠️ DISABLED — All tasks consolidated into worker.py (APScheduler)
+// Set TRIGGER_DISABLED=true in env to skip execution.
+// Remove env var to re-enable if needed.
 import { schedules } from "@trigger.dev/sdk";
 
 const API_URL = process.env.API_URL || "https://web-production-ff663.up.railway.app";
@@ -63,6 +66,11 @@ export const scheduleNHLPipeline = schedules.task({
     cron: "0 20 * * *",   // 20:00 UTC = 21:00 Paris
     retry: standardRetry,
     run: async (payload) => {
+        // ⚠️ Consolidated into Worker (worker.py) — disable Trigger.dev tasks
+        if (process.env.TRIGGER_DISABLED === "true") {
+            console.log(`[DISABLED] Task skipped — consolidated into Worker`);
+            return { status: "disabled" };
+        }
         const date = payload.timestamp.toISOString().slice(0, 10);
         console.log(`[NHL Pipeline] Launching for ${date}`);
 
@@ -85,6 +93,11 @@ export const scheduleFootballData = schedules.task({
     cron: "0 7 * * *",   // 07:00 UTC = 08:00 Paris
     retry: standardRetry,
     run: async (payload) => {
+        // ⚠️ Consolidated into Worker (worker.py) — disable Trigger.dev tasks
+        if (process.env.TRIGGER_DISABLED === "true") {
+            console.log(`[DISABLED] Task skipped — consolidated into Worker`);
+            return { status: "disabled" };
+        }
         const date = payload.timestamp.toISOString().slice(0, 10);
         console.log(`[Football Data] Fetching data for ${date}`);
         return await runPipeline("data", "Football Data");
@@ -101,6 +114,11 @@ export const scheduleFootballAnalysis = schedules.task({
     cron: "0 12 * * *",   // 12:00 UTC = 13:00 Paris
     retry: standardRetry,
     run: async (payload) => {
+        // ⚠️ Consolidated into Worker (worker.py) — disable Trigger.dev tasks
+        if (process.env.TRIGGER_DISABLED === "true") {
+            console.log(`[DISABLED] Task skipped — consolidated into Worker`);
+            return { status: "disabled" };
+        }
         const date = payload.timestamp.toISOString().slice(0, 10);
         console.log(`[Football Analysis] Running analysis for ${date}`);
         return await runPipeline("analyze", "Football Analysis");

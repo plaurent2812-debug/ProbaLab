@@ -1,9 +1,17 @@
+// ⚠️ DISABLED — All tasks consolidated into worker.py (APScheduler)
+// Set TRIGGER_DISABLED=true in env to skip execution.
+// Remove env var to re-enable if needed.
 import { schedules } from "@trigger.dev/sdk/v3";
 
 export const mlEvaluationTask = schedules.task({
     id: "ml-evaluation-daily",
     cron: "0 4 * * *", // Run every day at 04:00 AM UTC
     run: async (payload) => {
+        // ⚠️ Consolidated into Worker (worker.py) — disable Trigger.dev tasks
+        if (process.env.TRIGGER_DISABLED === "true") {
+            console.log(`[DISABLED] Task skipped — consolidated into Worker`);
+            return { status: "disabled" };
+        }
         console.log(`[ML Evaluation] Starting daily evaluation run at ${payload.timestamp}`);
 
         const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.probalab.fr";

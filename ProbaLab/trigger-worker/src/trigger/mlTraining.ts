@@ -1,3 +1,6 @@
+// ⚠️ DISABLED — All tasks consolidated into worker.py (APScheduler)
+// Set TRIGGER_DISABLED=true in env to skip execution.
+// Remove env var to re-enable if needed.
 import { schedules } from "@trigger.dev/sdk/v3";
 
 export const retrainMetaModelTask = schedules.task({
@@ -5,6 +8,11 @@ export const retrainMetaModelTask = schedules.task({
     // S'exécute tous les vendredis à 02:00 UTC (avant le grand week-end de foot)
     cron: "0 2 * * 5",
     run: async (payload) => {
+        // ⚠️ Consolidated into Worker (worker.py) — disable Trigger.dev tasks
+        if (process.env.TRIGGER_DISABLED === "true") {
+            console.log(`[DISABLED] Task skipped — consolidated into Worker`);
+            return { status: "disabled" };
+        }
         console.log(`🚀 Déclenchement de l'entraînement XGBoost Méta-Modèle à ${payload.timestamp}`);
 
         const API_URL = process.env.API_URL || "http://localhost:8000";
