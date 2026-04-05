@@ -9,21 +9,18 @@ const STRIPE_PAYMENT_LINK = import.meta.env.VITE_STRIPE_PAYMENT_LINK || "#"
 const TELEGRAM_VIP_LINK = import.meta.env.VITE_TELEGRAM_VIP_LINK || "#"
 
 const features = [
-    { label: "Voir les matchs Football & NHL", free: true, premium: true },
+    { label: "Stats match (forme, H2H, classement)", free: true, premium: true },
     { label: "Probabilités 1X2", free: true, premium: true },
-    { label: "Pari recommandé", free: true, premium: true },
-    { label: "Top 5 Points NHL", free: true, premium: true },
-    { label: "BTTS (les deux équipes marquent)", free: false, premium: true },
-    { label: "Over 0.5 / 1.5 / 2.5 / 3.5 buts", free: false, premium: true },
-    { label: "But sur penalty", free: false, premium: true },
-    { label: "Score exact probable", free: false, premium: true },
+    { label: "Résumé des matchs du jour", free: true, premium: true },
+    { label: "2 Value Bets en aperçu", free: true, premium: false },
+    { label: "Value Bets illimités (edge + cotes)", free: false, premium: true },
+    { label: "Mise recommandée (Kelly Criterion)", free: false, premium: true },
+    { label: "BTTS + Over/Under + Score exact", free: false, premium: true },
     { label: "Expected Goals (xG)", free: false, premium: true },
-    { label: "Top 2 buteurs probables (Football)", free: false, premium: true },
-    { label: "Top 5 Buteurs NHL", free: false, premium: true },
-    { label: "Top 5 Passeurs NHL", free: false, premium: true },
-    { label: "Top 5 Tirs (SOG) NHL", free: false, premium: true },
-    { label: "Analyse approfondie de chaque match", free: false, premium: true },
-    { label: "Pronostics VIP Quotidiens (Telegram)", free: false, premium: true },
+    { label: "Top buteurs / passeurs probables", free: false, premium: true },
+    { label: "Alertes Value Bet (Telegram)", free: false, premium: true },
+    { label: "Suivi bankroll & historique complet", free: false, premium: true },
+    { label: "Analyse IA approfondie par match", free: false, premium: true },
 ]
 
 const faqs = [
@@ -64,10 +61,11 @@ export default function PremiumPage() {
                     <span className="text-xs font-bold text-amber-600 dark:text-amber-400">ProbaLab Premium</span>
                 </div>
                 <h1 className="text-3xl font-black tracking-tight mb-3">
-                    Débloquez toutes les analyses
+                    D&eacute;tectez chaque edge du march&eacute;
                 </h1>
                 <p className="text-muted-foreground max-w-md mx-auto">
-                    Accédez aux statistiques avancées, aux buteurs probables et aux analyses complètes pour chaque match.
+                    Value Bets illimit&eacute;s, mise optimale Kelly, alertes temps r&eacute;el.
+                    Essai gratuit 7 jours — sans engagement.
                 </p>
             </div>
 
@@ -144,16 +142,19 @@ export default function PremiumPage() {
                 <div className="text-center space-y-4">
                     <Button
                         size="lg"
-                        className="bg-amber-500 hover:bg-amber-600 text-white border-0 shadow-xl shadow-amber-500/25 px-8 py-6 text-base font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="bg-primary hover:bg-primary/90 text-primary-foreground border-0 shadow-xl shadow-primary/25 px-8 py-6 text-base font-bold disabled:opacity-50 disabled:cursor-not-allowed glow-value"
                         onClick={handleUpgrade}
                         disabled={!stripeAvailable}
                     >
-                        <Trophy className="w-5 h-5 mr-2" />
-                        Passer Premium
+                        <Zap className="w-5 h-5 mr-2" />
+                        Essai gratuit 7 jours
                         <ArrowRight className="w-5 h-5 ml-2" />
                     </Button>
                     <p className="text-xs text-muted-foreground">
-                        {stripeAvailable ? "Paiement sécurisé via Stripe · Annulation à tout moment" : "Paiement temporairement indisponible"}
+                        {stripeAvailable
+                            ? "Puis 9,99\u20AC/mois \u00b7 Sans engagement \u00b7 Annulation en 1 clic via Stripe"
+                            : "Paiement temporairement indisponible"
+                        }
                     </p>
                 </div>
             )}

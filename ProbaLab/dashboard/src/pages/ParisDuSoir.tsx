@@ -15,6 +15,8 @@ import { BetCard } from "@/components/paris-du-soir/BetCard"
 import { StatsDashboard } from "@/components/paris-du-soir/StatsDashboard"
 import { ExpertPickCard } from "@/components/paris-du-soir/ExpertPickCard"
 import { HistorySection } from "@/components/paris-du-soir/HistorySection"
+import { ValueBetExplainer } from "@/components/ValueBetExplainer"
+import { PremiumTeaser } from "@/components/PremiumTeaser"
 import {
     fetchBestBets,
     fetchBestBetsStats,
@@ -172,13 +174,9 @@ export default function ParisDuSoir() {
                     </div>
                 </div>
 
-                {/* Strategy reminder */}
-                <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-2.5 mb-5 flex items-center gap-3">
-                    <Sparkles className="w-4 h-4 text-primary shrink-0" />
-                    <p className="text-xs text-muted-foreground">
-                        <strong className="text-foreground">Strategie :</strong>{" "}
-                        Uniquement des Value Bets (EV+) · Notre modele bat le bookmaker · Edge = avantage mathematique
-                    </p>
+                {/* Value Bet explainer — educational */}
+                <div className="mb-4">
+                    <ValueBetExplainer defaultOpen={totalBets === 0} />
                 </div>
 
                 {/* Summary stat line */}
@@ -253,23 +251,8 @@ export default function ParisDuSoir() {
                     </div>
                 )}
 
-                {/* Premium CTA */}
-                <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-5 text-center">
-                    <Trophy className="w-8 h-8 text-amber-500 mx-auto mb-3" />
-                    <h3 className="text-sm font-black text-foreground mb-1">
-                        Debloque tous les pronos
-                    </h3>
-                    <p className="text-xs text-muted-foreground mb-4 max-w-[260px] mx-auto leading-relaxed">
-                        Acces illimite aux Value Bets Football & NHL, picks experts, historique complet et statistiques.
-                    </p>
-                    <Link
-                        to="/premium"
-                        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black text-sm font-black transition-colors"
-                    >
-                        <Trophy className="w-4 h-4" />
-                        Passer Premium
-                    </Link>
-                </div>
+                {/* Premium teaser — blurred value bets + CTA */}
+                <PremiumTeaser valueBetCount={Math.max(totalBets, 3)} />
             </div>
         )
     }

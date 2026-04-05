@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Card, CardContent } from "@/components/ui/card"
 import { useAuth, supabase } from "@/lib/auth"
 import { NeuralCortex } from "@/components/visuals/NeuralCortex"
+import { ValueBetExplainer } from "@/components/ValueBetExplainer"
 
 /* ── Live Alert Banner ────────────────────────────────────────── */
 function LiveAlertBanner({ alert }) {
@@ -219,8 +220,8 @@ export default function HomePage() {
                 </div>
             </div>
 
-            {/* ── Pronos du jour card ──────────────────────────────── */}
-            <div className="px-3 mt-4">
+            {/* ── Value Bets card + social proof counter ────────────── */}
+            <div className="px-3 mt-4 space-y-3">
                 <Link to="/paris-du-soir">
                     <Card className="border-primary/30 bg-primary/5 hover:bg-primary/10 transition-all cursor-pointer">
                         <CardContent className="p-5 flex items-center justify-between">
@@ -237,6 +238,27 @@ export default function HomePage() {
                         </CardContent>
                     </Card>
                 </Link>
+
+                {/* Social proof counter */}
+                <div className="flex items-center justify-center gap-3 py-2">
+                    <div className="flex items-center gap-1.5">
+                        <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                        <span className="text-xs text-muted-foreground">
+                            <strong className="text-foreground tabular-nums">
+                                {betStats?.global?.total || "—"}
+                            </strong> value bets analys&eacute;s ce mois
+                        </span>
+                    </div>
+                    <span className="text-border">·</span>
+                    <span className="text-xs text-muted-foreground">
+                        <strong className="text-primary tabular-nums">
+                            {betStats?.global?.win_rate != null ? `${betStats.global.win_rate}%` : "—"}
+                        </strong> win rate
+                    </span>
+                </div>
+
+                {/* Value Bet explainer */}
+                <ValueBetExplainer />
             </div>
 
             {/* Live Alert */}
