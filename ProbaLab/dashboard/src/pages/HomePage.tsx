@@ -239,7 +239,7 @@ export default function HomePage() {
                     </Card>
                 </Link>
 
-                {/* Social proof counter */}
+                {/* Social proof counter — volume only, never show bad metrics */}
                 <div className="flex items-center justify-center gap-3 py-2">
                     <div className="flex items-center gap-1.5">
                         <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
@@ -249,12 +249,16 @@ export default function HomePage() {
                             </strong> value bets analys&eacute;s ce mois
                         </span>
                     </div>
-                    <span className="text-border">·</span>
-                    <span className="text-xs text-muted-foreground">
-                        <strong className="text-primary tabular-nums">
-                            {betStats?.global?.win_rate != null ? `${betStats.global.win_rate}%` : "—"}
-                        </strong> win rate
-                    </span>
+                    {betStats?.global?.roi_singles_pct > 0 && (
+                        <>
+                            <span className="text-border">&middot;</span>
+                            <span className="text-xs text-muted-foreground">
+                                <strong className="text-primary tabular-nums">
+                                    +{betStats.global.roi_singles_pct}%
+                                </strong> ROI
+                            </span>
+                        </>
+                    )}
                 </div>
 
                 {/* Value Bet explainer */}
