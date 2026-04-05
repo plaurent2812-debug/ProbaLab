@@ -1499,11 +1499,21 @@ def odds_to_probs(fixture_api_id: int) -> dict | None:
     raw_a = 1 / o["away_win_odds"]
     overround = raw_h + raw_d + raw_a
 
+    def _bin_prob(yes_key: str, no_key: str) -> float | None:
+        y, n = o.get(yes_key), o.get(no_key)
+        if not y or not n:
+            return None
+        ry, rn = 1 / y, 1 / n
+        return round(ry / (ry + rn) * 100)
+
     return {
         "market_home": round(raw_h / overround * 100),
         "market_draw": round(raw_d / overround * 100),
         "market_away": round(raw_a / overround * 100),
         "overround": round(overround, 3),
+        "market_btts": _bin_prob("btts_yes_odds", "btts_no_odds"),
+        "market_over25": _bin_prob("over_25_odds", "under_25_odds"),
+        "market_over15": _bin_prob("over_15_odds", "under_15_odds"),
     }
 
 
@@ -2342,6 +2352,9 @@ def analyze_match(fixture: dict[str, Any]) -> dict[str, Any]:
                 "market_home_prob": market.get("market_home") if market else None,
                 "market_draw_prob": market.get("market_draw") if market else None,
                 "market_away_prob": market.get("market_away") if market else None,
+                "market_btts_prob": market.get("market_btts") if market else None,
+                "market_over25_prob": market.get("market_over25") if market else None,
+                "market_over15_prob": market.get("market_over15") if market else None,
                 "xg_home": xg_home_adj,
                 "xg_away": xg_away_adj,
                 "league_avg_home_goals": league_data["league_avg_home"] if league_data else None,

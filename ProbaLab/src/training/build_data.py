@@ -112,7 +112,12 @@ def load_all_data() -> dict:
     logger.info(f"    ✓ {len(refs_raw)} arbitres")
 
     # Odds
-    odds_raw = _fetch_all("fixture_odds", "fixture_api_id, home_win_odds, draw_odds, away_win_odds")
+    odds_raw = _fetch_all(
+        "fixture_odds",
+        "fixture_api_id, home_win_odds, draw_odds, away_win_odds, "
+        "btts_yes_odds, btts_no_odds, over_25_odds, under_25_odds, "
+        "over_15_odds, under_15_odds"
+    )
     data["odds_map"] = {o["fixture_api_id"]: o for o in odds_raw}
     logger.info(f"    ✓ {len(odds_raw)} cotes")
 
@@ -405,6 +410,22 @@ def _referee_from_mem(data: dict, referee_name: str | None) -> float:
     return round(r["avg_penalties_per_match"] / 0.3, 2)
 
 
+def _binary_odds_to_prob(yes_odds: float | None, no_odds: float | None) -> float | None:
+    """Convert binary yes/no odds into an implied probability (%).
+
+    Removes the overround by normalising the two raw probabilities.
+
+    Returns:
+        Implied probability as a rounded integer percentage, or ``None``
+        if either odds value is missing or zero.
+    """
+    if not yes_odds or not no_odds:
+        return None
+    raw_yes = 1 / yes_odds
+    raw_no = 1 / no_odds
+    return round(raw_yes / (raw_yes + raw_no) * 100)
+
+
 def _odds_from_mem(data: dict, fixture_api_id: int | None) -> dict | None:
     """Convert bookmaker odds into normalised probabilities.
 
@@ -413,9 +434,10 @@ def _odds_from_mem(data: dict, fixture_api_id: int | None) -> dict | None:
         fixture_api_id: API fixture identifier.
 
     Returns:
-        A dict with ``"market_home"``, ``"market_draw"``,
-        ``"market_away"`` expressed as rounded percentages, or
-        ``None`` when odds are unavailable.
+        A dict with 1X2 probabilities (``"market_home"``, ``"market_draw"``,
+        ``"market_away"``) and binary market probabilities
+        (``"market_btts"``, ``"market_over25"``, ``"market_over15"``),
+        or ``None`` when 1X2 odds are unavailable.
     """
     o = data["odds_map"].get(fixture_api_id)
     if not o or not o.get("home_win_odds"):
@@ -428,6 +450,9 @@ def _odds_from_mem(data: dict, fixture_api_id: int | None) -> dict | None:
         "market_home": round(raw_h / overround * 100),
         "market_draw": round(raw_d / overround * 100),
         "market_away": round(raw_a / overround * 100),
+        "market_btts": _binary_odds_to_prob(o.get("btts_yes_odds"), o.get("btts_no_odds")),
+        "market_over25": _binary_odds_to_prob(o.get("over_25_odds"), o.get("under_25_odds")),
+        "market_over15": _binary_odds_to_prob(o.get("over_15_odds"), o.get("under_15_odds")),
     }
 
 
@@ -773,6 +798,12 @@ def build_features_fast(fixture: dict, data: dict, league_cache: dict) -> dict |
         features["market_home_prob"] = market["market_home"]
         features["market_draw_prob"] = market["market_draw"]
         features["market_away_prob"] = market["market_away"]
+        if market.get("market_btts") is not None:
+            features["market_btts_prob"] = market["market_btts"]
+        if market.get("market_over25") is not None:
+            features["market_over25_prob"] = market["market_over25"]
+        if market.get("market_over15") is not None:
+            features["market_over15_prob"] = market["market_over15"]
 
     # 10. xG Poisson (calculé en mémoire)
     if league_data and league_data["strengths"]:
