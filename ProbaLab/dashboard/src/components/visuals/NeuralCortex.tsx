@@ -33,11 +33,33 @@ interface Pulse {
     width: number
 }
 
+// Theme-aware color palettes
+const PALETTES = {
+    dark: {
+        node: [16, 185, 129],       // emerald
+        pulse: [52, 211, 153],      // emerald-300
+        pulseCore: [167, 243, 208], // emerald-200
+        cursor: [52, 211, 153],
+        baseAlpha: 0.15,            // dim nodes
+        lineAlpha: 0.03,            // dim connections
+        glowMultiplier: 1,
+    },
+    light: {
+        node: [5, 150, 105],        // emerald-600 (darker for contrast)
+        pulse: [4, 120, 87],        // emerald-700
+        pulseCore: [6, 95, 70],     // emerald-800
+        cursor: [5, 150, 105],
+        baseAlpha: 0.25,            // more visible on white
+        lineAlpha: 0.06,            // more visible connections
+        glowMultiplier: 0.7,        // less glow (white bg doesn't need it)
+    },
+} as const
+
 export function NeuralCortex({ className = "", nodeCount = 35, pulseSpeed = 0.012 }: Props) {
     const canvasRef = useRef<HTMLCanvasElement>(null)
     const animRef = useRef<number>(0)
-    const stateRef = useRef<{ nodes: Node[]; pulses: Pulse[]; w: number; h: number; mouse: { x: number; y: number } }>({
-        nodes: [], pulses: [], w: 0, h: 0, mouse: { x: -1000, y: -1000 }
+    const stateRef = useRef<{ nodes: Node[]; pulses: Pulse[]; w: number; h: number; mouse: { x: number; y: number }; palette: typeof PALETTES.dark }>({
+        nodes: [], pulses: [], w: 0, h: 0, mouse: { x: -1000, y: -1000 }, palette: PALETTES.dark
     })
 
     useEffect(() => {
@@ -142,6 +164,11 @@ export function NeuralCortex({ className = "", nodeCount = 35, pulseSpeed = 0.01
                 node.y = node.baseY + Math.cos(t * 0.4 + node.phase * 1.3) * 3
             }
 
+            const P = s.palette
+            const [nr, ng, nb] = P.node
+            const [pr, pg, pb] = P.pulse
+            const [cr, cg, cb] = P.pulseCore
+
             // Draw connections (dim base lines)
             for (let i = 0; i < s.nodes.length; i++) {
                 const node = s.nodes[i]
@@ -150,12 +177,12 @@ export function NeuralCortex({ className = "", nodeCount = 35, pulseSpeed = 0.01
                     const target = s.nodes[j]
 
                     const maxEnergy = Math.max(node.energy, target.energy)
-                    const alpha = 0.03 + maxEnergy * 0.08
+                    const alpha = P.lineAlpha + maxEnergy * 0.08
 
                     ctx!.beginPath()
                     ctx!.moveTo(node.x, node.y)
                     ctx!.lineTo(target.x, target.y)
-                    ctx!.strokeStyle = `rgba(16, 185, 129, ${alpha})`
+                    ctx!.strokeStyle = `rgba(${nr}, ${ng}, ${nb}, ${alpha})`
                     ctx!.lineWidth = 0.15 + maxEnergy * 0.2
                     ctx!.stroke()
                 }
@@ -197,18 +224,19 @@ export function NeuralCortex({ className = "", nodeCount = 35, pulseSpeed = 0.01
                 const py = from.y + (to.y - from.y) * pulse.progress
 
                 // Pulse glow
+                const gm = P.glowMultiplier
                 const glowSize = 3 + pulse.width * 4
                 const grad = ctx!.createRadialGradient(px, py, 0, px, py, glowSize)
-                grad.addColorStop(0, `rgba(52, 211, 153, ${0.5 * pulse.width})`)
-                grad.addColorStop(0.5, `rgba(16, 185, 129, ${0.12 * pulse.width})`)
-                grad.addColorStop(1, "rgba(16, 185, 129, 0)")
+                grad.addColorStop(0, `rgba(${pr}, ${pg}, ${pb}, ${0.5 * pulse.width * gm})`)
+                grad.addColorStop(0.5, `rgba(${nr}, ${ng}, ${nb}, ${0.12 * pulse.width * gm})`)
+                grad.addColorStop(1, `rgba(${nr}, ${ng}, ${nb}, 0)`)
                 ctx!.fillStyle = grad
                 ctx!.fillRect(px - glowSize, py - glowSize, glowSize * 2, glowSize * 2)
 
                 // Pulse core — tiny bright dot
                 ctx!.beginPath()
                 ctx!.arc(px, py, pulse.width * 0.8, 0, Math.PI * 2)
-                ctx!.fillStyle = `rgba(167, 243, 208, 0.9)`
+                ctx!.fillStyle = `rgba(${cr}, ${cg}, ${cb}, 0.9)`
                 ctx!.fill()
             }
 
@@ -232,7 +260,7 @@ export function NeuralCortex({ className = "", nodeCount = 35, pulseSpeed = 0.01
                         ctx!.beginPath()
                         ctx!.moveTo(node.x, node.y)
                         ctx!.lineTo(mx, my)
-                        ctx!.strokeStyle = `rgba(52, 211, 153, ${proximity * 0.15})`
+                        ctx!.strokeStyle = `rgba(${pr}, ${pg}, ${pb}, ${proximity * 0.15})`
                         ctx!.lineWidth = proximity * 0.8
                         ctx!.stroke()
                     }
@@ -240,8 +268,8 @@ export function NeuralCortex({ className = "", nodeCount = 35, pulseSpeed = 0.01
 
                 // Cursor glow
                 const cursorGrad = ctx!.createRadialGradient(mx, my, 0, mx, my, 12)
-                cursorGrad.addColorStop(0, "rgba(52, 211, 153, 0.1)")
-                cursorGrad.addColorStop(1, "rgba(16, 185, 129, 0)")
+                cursorGrad.addColorStop(0, `rgba(${P.cursor.join(",")}, 0.1)`)
+                cursorGrad.addColorStop(1, `rgba(${nr}, ${ng}, ${nb}, 0)`)
                 ctx!.fillStyle = cursorGrad
                 ctx!.fillRect(mx - 12, my - 12, 24, 24)
             }
@@ -251,10 +279,11 @@ export function NeuralCortex({ className = "", nodeCount = 35, pulseSpeed = 0.01
                 // Node glow when energized
                 if (node.energy > 0.1) {
                     const glowR = node.r * 3 + node.energy * 5
+                    const gm = P.glowMultiplier
                     const grad = ctx!.createRadialGradient(node.x, node.y, 0, node.x, node.y, glowR)
-                    grad.addColorStop(0, `rgba(16, 185, 129, ${node.energy * 0.4})`)
-                    grad.addColorStop(0.5, `rgba(16, 185, 129, ${node.energy * 0.1})`)
-                    grad.addColorStop(1, "rgba(16, 185, 129, 0)")
+                    grad.addColorStop(0, `rgba(${nr}, ${ng}, ${nb}, ${node.energy * 0.4 * gm})`)
+                    grad.addColorStop(0.5, `rgba(${nr}, ${ng}, ${nb}, ${node.energy * 0.1 * gm})`)
+                    grad.addColorStop(1, `rgba(${nr}, ${ng}, ${nb}, 0)`)
                     ctx!.fillStyle = grad
                     ctx!.fillRect(node.x - glowR, node.y - glowR, glowR * 2, glowR * 2)
                 }
@@ -262,8 +291,8 @@ export function NeuralCortex({ className = "", nodeCount = 35, pulseSpeed = 0.01
                 // Node core
                 ctx!.beginPath()
                 ctx!.arc(node.x, node.y, node.r, 0, Math.PI * 2)
-                const brightness = 0.15 + node.energy * 0.85
-                ctx!.fillStyle = `rgba(16, 185, 129, ${brightness})`
+                const brightness = P.baseAlpha + node.energy * (1 - P.baseAlpha)
+                ctx!.fillStyle = `rgba(${nr}, ${ng}, ${nb}, ${brightness})`
                 ctx!.fill()
 
                 // Decay energy
@@ -316,6 +345,16 @@ export function NeuralCortex({ className = "", nodeCount = 35, pulseSpeed = 0.01
             }
         }
 
+        // Theme detection — watch for class changes on <html>
+        function updatePalette() {
+            const isDark = document.documentElement.classList.contains("dark")
+            stateRef.current.palette = isDark ? PALETTES.dark : PALETTES.light
+        }
+
+        updatePalette()
+        const themeObserver = new MutationObserver(updatePalette)
+        themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] })
+
         resize()
         animRef.current = requestAnimationFrame(draw)
 
@@ -326,6 +365,7 @@ export function NeuralCortex({ className = "", nodeCount = 35, pulseSpeed = 0.01
 
         return () => {
             cancelAnimationFrame(animRef.current)
+            themeObserver.disconnect()
             canvas.removeEventListener("pointermove", onPointerMove)
             canvas.removeEventListener("pointerleave", onPointerLeave)
             canvas.removeEventListener("pointerdown", onPointerDown)
