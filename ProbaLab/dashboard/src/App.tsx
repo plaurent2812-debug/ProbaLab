@@ -286,6 +286,8 @@ function Footer() {
           <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
             <NavLink to="/cgu" className="hover:text-foreground transition-colors">CGU</NavLink>
             <NavLink to="/confidentialite" className="hover:text-foreground transition-colors">Confidentialité</NavLink>
+            <span className="text-muted-foreground/60">·</span>
+            <span className="text-muted-foreground/60">par OptiPro</span>
           </div>
         </div>
       </div>
