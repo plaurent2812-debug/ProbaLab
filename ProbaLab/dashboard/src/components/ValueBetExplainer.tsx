@@ -87,10 +87,10 @@ export function ValueBetExplainer({ defaultOpen = false }: { defaultOpen?: boole
                                 <Target className="w-3 h-3 text-primary" />
                             </div>
                             <div>
-                                <p className="text-xs font-bold text-foreground">D&eacute;tection automatique</p>
+                                <p className="text-xs font-bold text-foreground">D&eacute;tection par nos experts</p>
                                 <p className="text-xs text-muted-foreground">
-                                    Notre IA compare ses probabilit&eacute;s aux cotes de
-                                    Bet365 sur chaque match, chaque march&eacute;.
+                                    Nos experts s'appuient sur l'IA pour comparer
+                                    les probabilit&eacute;s aux cotes Bet365 sur chaque match.
                                 </p>
                             </div>
                         </div>
