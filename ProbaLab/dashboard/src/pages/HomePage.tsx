@@ -440,8 +440,8 @@ export default function HomePage() {
                 <div className="fs-league-header bg-amber-500/5 border-b border-border/50">
                     <ShieldAlert className="w-4 h-4 text-amber-500 shrink-0" />
                     <div>
-                        <div className="fs-league-name font-black">⚡ Meilleurs matchs analysés</div>
-                        <div className="fs-league-country">Top matchs analysés par ProbaLab</div>
+                        <div className="fs-league-name font-black">⚡ Matchs du jour</div>
+                        <div className="fs-league-country">Analyses ProbaLab par confiance</div>
                     </div>
                     {vipSpots.length > 0 && (
                         <span className="fs-league-count bg-amber-500/20 text-amber-600">{vipSpots.length}</span>
@@ -471,14 +471,51 @@ export default function HomePage() {
                         )}
                     </>
                 ) : (
-                    <div className="text-center py-8 text-xs text-muted-foreground flex flex-col items-center px-6">
-                        <div className="w-12 h-12 rounded-full bg-muted/20 flex items-center justify-center mb-3">
-                            <Activity className="w-6 h-6 text-muted-foreground/40" />
+                    <div className="p-4 space-y-4">
+                        {/* Recent value bets results */}
+                        {betStats?.last_10 && betStats.last_10.length > 0 && (
+                            <div>
+                                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">
+                                    Derniers Value Bets
+                                </p>
+                                <div className="space-y-1.5">
+                                    {betStats.last_10.slice(0, 5).map((bet: any, i: number) => (
+                                        <div key={i} className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-muted/20 text-xs">
+                                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                <span className={cn(
+                                                    "w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0",
+                                                    bet.result === "WIN" ? "bg-emerald-500/20 text-emerald-400" :
+                                                    bet.result === "LOSS" ? "bg-red-500/20 text-red-400" :
+                                                    "bg-muted text-muted-foreground"
+                                                )}>
+                                                    {bet.result === "WIN" ? "W" : bet.result === "LOSS" ? "L" : "·"}
+                                                </span>
+                                                <span className="truncate text-foreground/80">{bet.label || bet.bet_label}</span>
+                                            </div>
+                                            <span className="font-mono font-bold text-foreground/60 shrink-0 ml-2">
+                                                @{(bet.odds || 0).toFixed(2)}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* CTA to next matches */}
+                        <div className="text-center pt-2">
+                            <p className="text-xs text-muted-foreground mb-3">
+                                Pas de match aujourd'hui — les prochaines analyses arrivent bient&ocirc;t.
+                            </p>
+                            <div className="flex gap-2 justify-center">
+                                <Link to="/football" className="text-xs font-bold text-primary hover:underline">
+                                    ⚽ Prochains matchs
+                                </Link>
+                                <span className="text-border">·</span>
+                                <Link to="/nhl" className="text-xs font-bold text-primary hover:underline">
+                                    🏒 NHL ce soir
+                                </Link>
+                            </div>
                         </div>
-                        <p className="font-bold text-foreground mb-1">Pas de match prévu</p>
-                        <p className="max-w-[220px] leading-relaxed mx-auto opacity-70">
-                            Aucun match analysé pour aujourd'hui. Consultez la page Football ou NHL pour les prochaines rencontres.
-                        </p>
                     </div>
                 )}
             </div>
