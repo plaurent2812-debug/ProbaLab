@@ -20,9 +20,10 @@ from src.config import logger, supabase
 #  CONSTANTS
 # ═══════════════════════════════════════════════════════════════════
 
-SINGLE_ODDS_MIN = 1.75
-SINGLE_ODDS_MAX = 2.20
-MIN_EDGE = 0.05  # 5% edge minimum
+SINGLE_ODDS_MIN = 1.50
+SINGLE_ODDS_MAX = 3.00
+MIN_EDGE = 0.05   # 5% edge minimum
+MAX_EDGE = 0.25   # 25% edge max — above this the model is likely wrong
 MAX_SINGLES = 4
 DOUBLE_ODDS_MIN = 1.80
 DOUBLE_ODDS_MAX = 2.50
@@ -137,12 +138,12 @@ def _build_football_singles(
             o = get_market_odds(real_odds, "+1.5", p15)
             markets.append(("Over 1.5 buts", p15, o, "+1.5 buts"))
 
-        # Filter: odds in range + edge >= 5%
+        # Filter: odds in range + edge in [5%, 25%]
         for market_name, proba, odds, pick_label in markets:
             if not (SINGLE_ODDS_MIN <= odds <= SINGLE_ODDS_MAX):
                 continue
             edge = _compute_edge(proba, odds)
-            if edge < MIN_EDGE:
+            if edge < MIN_EDGE or edge > MAX_EDGE:
                 continue
             candidates.append({
                 "match": match_label,
@@ -293,7 +294,7 @@ def _build_nhl_singles(nhl_fixtures: list, odds_map: dict) -> list[dict]:
                 if not (SINGLE_ODDS_MIN <= o <= SINGLE_ODDS_MAX):
                     continue
                 edge = _compute_edge(prob, o)
-                if edge < MIN_EDGE:
+                if edge < MIN_EDGE or edge > MAX_EDGE:
                     continue
                 candidates.append({
                     "match": match_str,
