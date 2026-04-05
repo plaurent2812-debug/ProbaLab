@@ -309,13 +309,9 @@ export default function ParisDuSoir() {
                 </div>
             </div>
 
-            {/* Strategy reminder */}
-            <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-2.5 mb-5 flex items-center gap-3">
-                <Sparkles className="w-4 h-4 text-primary shrink-0" />
-                <p className="text-xs text-muted-foreground">
-                    <strong className="text-foreground">Strategie :</strong>{" "}
-                    Uniquement des Value Bets (EV+) · Notre modele bat le bookmaker · Edge = avantage mathematique · Plus l'edge est haut, plus le pari a de valeur
-                </p>
+            {/* Value Bet explainer — educational */}
+            <div className="mb-4">
+                <ValueBetExplainer />
             </div>
 
             {/* Expert Picks section — hidden for Smart Betting Assistant pivot (keep code for later) */}

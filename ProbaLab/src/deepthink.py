@@ -122,7 +122,8 @@ def generate_football_deepthink(matches: list[dict], league_names: dict[int, str
         "**FORMAT** : Rédige en français, style direct de parieur expert. "
         "Commence par un titre '⚽ Analyse Stratégique' puis les 3 spots. "
         "Termine par un bref résumé de la journée (1-2 phrases).\n"
-        "Max 500 mots total. Sois percutant et précis."
+        "Max 500 mots total. Sois percutant et précis.\n"
+        "⚠️ Ne dis JAMAIS 'mon modèle', 'mon analyse', 'je'. Utilise 'notre analyse', 'nos experts', 'le modèle'."
     )
 
     user_prompt = (

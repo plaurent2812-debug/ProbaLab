@@ -208,7 +208,7 @@ export default function HomePage() {
                         Smart Betting Assistant
                     </p>
                     <p className="text-sm text-muted-foreground max-w-xs mx-auto leading-relaxed mb-5">
-                        Notre IA analyse le march&eacute; et d&eacute;tecte les cotes sous-&eacute;valu&eacute;es en temps r&eacute;el.
+                        Nos experts, assist&eacute;s par l'IA, d&eacute;tectent les cotes sous-&eacute;valu&eacute;es en temps r&eacute;el.
                     </p>
                     <Link
                         to="/paris-du-soir"
@@ -270,8 +270,10 @@ export default function HomePage() {
 
             {/* ── ROI + Streak (Trust building) ───────────────────── */}
             {(() => {
-                const monthNames = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"]
+                const monthNames = ["Janvier", "F\u00e9vrier", "Mars", "Avril", "Mai", "Juin", "Juillet", "Ao\u00fbt", "Septembre", "Octobre", "Novembre", "D\u00e9cembre"]
                 const currentMonth = monthNames[new Date().getMonth()]
+                const vowels = ["A", "O"]
+                const monthPrefix = vowels.includes(currentMonth.charAt(0)) ? "d'" : "de "
                 const roiIsGood = (g.roi_singles_pct || 0) >= -2
                 const bestOdds = betStats?.best_pick?.odds
                 const maxStreak = betStats?.max_streak || 0
@@ -280,8 +282,7 @@ export default function HomePage() {
                     <div className="mx-3 mt-4 mb-4 rounded border border-border/50 bg-card overflow-hidden">
                         <div className="fs-summary-bar border-b border-border/50 bg-muted/20">
                             <TrendingUp className="w-4 h-4 text-emerald-500" />
-                            <span className="text-xs font-bold uppercase tracking-wider">Bilan de {currentMonth}</span>
-                            <span className="fs-summary-badge bg-muted text-muted-foreground ml-auto">Experts</span>
+                            <span className="text-xs font-bold uppercase tracking-wider">Bilan {monthPrefix}{currentMonth}</span>
                         </div>
 
                         {/* Main metrics */}
