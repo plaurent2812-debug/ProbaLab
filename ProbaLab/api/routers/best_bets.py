@@ -1305,10 +1305,12 @@ def get_best_bets_stats(request: Request):
 
         def build_market_breakdown(rows):
             grouped = defaultdict(list)
+            skipped = 0
             for b in rows:
                 label = b.get("bet_label") or b.get("match_label") or ""
                 key = normalize_market(b.get("market", "unknown"), label)
                 if key == "__skip__":
+                    skipped += 1
                     continue
                 grouped[key].append(b)
             breakdown = {}
@@ -1316,6 +1318,8 @@ def get_best_bets_stats(request: Request):
                 s = calc_stats(bets)
                 if s["total"] > 0:
                     breakdown[market] = s
+            if skipped > 0:
+                breakdown["__meta__"] = {"skipped": skipped}
             return breakdown
 
         # ── 1. Expert picks stats (Paris de l'Expert) ─────────────
@@ -1325,6 +1329,7 @@ def get_best_bets_stats(request: Request):
             .neq("result", "PENDING")
             .gte("date", cutoff_30d)
             .order("date", desc=True)
+            .limit(10000)
             .execute()
         )
         expert_rows = expert_resp.data or []
@@ -1388,6 +1393,7 @@ def get_best_bets_stats(request: Request):
             .neq("result", "PENDING")
             .gte("date", cutoff_30d)
             .order("date", desc=True)
+            .limit(10000)
             .execute()
         )
         model_rows = model_resp.data or []
@@ -1462,6 +1468,23 @@ def get_best_bets_stats(request: Request):
             else:
                 current_streak = 0
 
+        # ── Pending counts (diagnostic) ──────────────────────────────
+        pending_bb = (
+            supabase.table("best_bets")
+            .select("id", count="exact")
+            .eq("result", "PENDING")
+            .gte("date", cutoff_30d)
+            .execute()
+        )
+        pending_ep = (
+            supabase.table("expert_picks")
+            .select("id", count="exact")
+            .eq("result", "PENDING")
+            .gte("date", cutoff_30d)
+            .execute()
+        )
+        pending_count = (pending_bb.count or 0) + (pending_ep.count or 0)
+
         return {
             # Combined stats (all sources)
             "global": calc_stats(all_rows),
@@ -1484,6 +1507,9 @@ def get_best_bets_stats(request: Request):
             "expert_football": calc_stats(expert_football),
             "expert_nhl": calc_stats(expert_nhl),
             "expert_by_market": expert_market_breakdown,
+            # Diagnostic: how many bets are still unresolved
+            "pending_count": pending_count,
+            "resolved_rows": {"expert": len(expert_rows), "model": len(model_rows)},
         }
     except Exception:
         logger.exception("get_best_bets_stats failed")

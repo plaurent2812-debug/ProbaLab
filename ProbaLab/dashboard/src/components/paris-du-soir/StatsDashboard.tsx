@@ -32,6 +32,8 @@ interface Stats {
     expert_by_market?: Record<string, MarketData>
     expert_football?: SportStats & { total: number }
     expert_nhl?: SportStats & { total: number }
+    pending_count?: number
+    resolved_rows?: { expert: number; model: number }
     error?: boolean
 }
 
@@ -108,10 +110,10 @@ export function StatsDashboard({ stats, isAdmin: _isAdmin }: StatsDashboardProps
     const { global: g, football: f, nhl: n } = stats
 
     const footballMarkets = Object.entries(stats.by_market_football || {})
-        .filter(([, data]) => data.total >= 3)
+        .filter(([key, data]) => key !== "__meta__" && data.total >= 3)
         .sort((a, b) => b[1].total - a[1].total)
     const nhlMarkets = Object.entries(stats.by_market_nhl || {})
-        .filter(([, data]) => data.total >= 3)
+        .filter(([key, data]) => key !== "__meta__" && data.total >= 3)
         .sort((a, b) => b[1].total - a[1].total)
 
     return (
@@ -121,6 +123,15 @@ export function StatsDashboard({ stats, isAdmin: _isAdmin }: StatsDashboardProps
                 <h2 className="text-sm font-bold">Performance ProbaLab</h2>
                 <span className="text-[10px] text-muted-foreground ml-1">({g.total} paris resolus)</span>
             </div>
+
+            {(stats.pending_count ?? 0) > 0 && (
+                <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 flex items-center gap-2">
+                    <span className="text-amber-500 text-xs">⚠</span>
+                    <span className="text-[11px] text-amber-200/80">
+                        {stats.pending_count} paris en attente de resolution — les stats ne comptent que les paris resolus (WIN/LOSS)
+                    </span>
+                </div>
+            )}
 
             {/* Global stats cards */}
             <div className="grid grid-cols-3 gap-3">
@@ -241,7 +252,7 @@ export function StatsDashboard({ stats, isAdmin: _isAdmin }: StatsDashboardProps
                         </div>
                         <div className="divide-y divide-border/30">
                             {Object.entries(stats.model_by_market)
-                                .filter(([, data]) => data.total >= 3)
+                                .filter(([key, data]) => key !== "__meta__" && data.total >= 3)
                                 .sort(([, a], [, b]) => b.total - a.total)
                                 .map(([market, data]) => (
                                     <MarketRow key={market} market={market} data={data} />
@@ -297,7 +308,7 @@ export function StatsDashboard({ stats, isAdmin: _isAdmin }: StatsDashboardProps
                         </div>
                         <div className="divide-y divide-border/30">
                             {Object.entries(stats.expert_by_market)
-                                .filter(([, data]) => data.total >= 1)
+                                .filter(([key, data]) => key !== "__meta__" && data.total >= 1)
                                 .sort(([, a], [, b]) => b.total - a.total)
                                 .map(([market, data]) => (
                                     <MarketRow key={market} market={market} data={data} />
