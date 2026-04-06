@@ -9,10 +9,11 @@ from __future__ import annotations
 import logging
 import os
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse as _urlparse
 
-# APScheduler removed — all scheduling handled by Trigger.dev
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -47,11 +48,66 @@ from api.routers import telegram as telegram_router
 logger = logging.getLogger(__name__)
 
 
+def _job_resolve_bets():
+    """Resolve PENDING bets for the last 7 days (both best_bets and expert_picks)."""
+    try:
+        from api.routers.best_bets import resolve_best_bets
+        from api.routers.expert_picks import resolve_expert_picks
+        from api.schemas import ResolveBetsRequest, ResolveExpertPicksRequest
+
+        cron_secret = os.getenv("CRON_SECRET", "")
+        auth_header = f"Bearer {cron_secret}"
+        resolved_total = 0
+
+        for days_back in range(7):
+            date = (datetime.now(timezone.utc) - timedelta(days=days_back)).strftime("%Y-%m-%d")
+
+            # Resolve best_bets (football + nhl)
+            for sport in ("football", "nhl"):
+                try:
+                    req = ResolveBetsRequest(date=date, sport=sport)
+                    res = resolve_best_bets(req, None, auth_header)
+                    resolved_total += res.get("resolved", 0)
+                except Exception:
+                    logger.warning("[scheduler] resolve best_bets failed %s/%s", date, sport, exc_info=True)
+
+            # Resolve expert_picks
+            try:
+                req = ResolveExpertPicksRequest(date=date)
+                resolve_expert_picks(req, None, auth_header)
+            except Exception:
+                logger.warning("[scheduler] resolve expert_picks failed %s", date, exc_info=True)
+
+        logger.info("[scheduler] resolve_bets done — %d resolved", resolved_total)
+    except Exception:
+        logger.exception("[scheduler] resolve_bets error")
+
+
+_scheduler = None
+
+
 @asynccontextmanager
 async def lifespan(app_instance):
-    """App lifespan — scheduling handled by Trigger.dev."""
+    """App lifespan — start background scheduler for bet resolution."""
+    global _scheduler
     setup_logging()
+
+    _scheduler = BackgroundScheduler(timezone="UTC")
+    # Resolve bets every 2 hours (catches matches finishing at different times)
+    _scheduler.add_job(
+        _job_resolve_bets,
+        CronTrigger(minute=0, hour="6,8,10,12,14,16,18,20,22"),
+        id="resolve_bets",
+        max_instances=1,
+        coalesce=True,
+    )
+    _scheduler.start()
+    logger.info("[scheduler] BackgroundScheduler started — resolve_bets every 2h")
+
     yield
+
+    _scheduler.shutdown(wait=False)
+    logger.info("[scheduler] BackgroundScheduler stopped")
 
 
 tags_metadata = [
