@@ -189,7 +189,8 @@ def _impute(X: NDArray[np.float32], model_name: str) -> NDArray[np.float32]:
     else:
         # No imputer — use sensible defaults instead of destructive 0.0
         # Market features imputed to ~33% (uniform prior), others to 0.0
-        _MARKET_COLS = {"market_home_prob", "market_draw_prob", "market_away_prob"}
+        _MARKET_COLS = {"market_home_prob", "market_draw_prob", "market_away_prob",
+                        "market_btts_prob", "market_over25_prob", "market_over15_prob"}
         for i, col_name in enumerate(FEATURE_COLS):
             if i < X.shape[1] and np.isnan(X[0, i]):
                 if col_name in _MARKET_COLS:
