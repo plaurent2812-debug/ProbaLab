@@ -920,14 +920,147 @@ def daily_recap():
 # ─── 3. Value Bet Detection ─────────────────────────────────────
 
 
+def _get_market_performance(days: int = 30) -> dict:
+    """Fetch market ROI data to filter value bets by historical performance."""
+    try:
+        import httpx as _httpx
+        # Internal call to market-roi endpoint — fallback to direct computation
+    except Exception:
+        pass
+
+    # Direct computation (same logic as /api/market-roi but lightweight)
+    from datetime import timedelta as _td
+
+    cutoff = (datetime.now() - _td(days=days)).strftime("%Y-%m-%d")
+    finished = (
+        supabase.table("fixtures")
+        .select("id, api_fixture_id, home_goals, away_goals")
+        .eq("status", "FT")
+        .gte("date", cutoff)
+        .execute()
+        .data
+        or []
+    )
+    if not finished:
+        return {}
+
+    fixture_ids = [f["id"] for f in finished]
+    predictions = (
+        supabase.table("predictions")
+        .select("fixture_id, proba_home, proba_draw, proba_away, proba_btts, proba_over_25, stats_json")
+        .in_("fixture_id", fixture_ids)
+        .execute()
+        .data
+        or []
+    )
+    pred_map = {p["fixture_id"]: p for p in predictions}
+
+    api_ids = [f["api_fixture_id"] for f in finished if f.get("api_fixture_id")]
+    odds_map = {}
+    for i in range(0, len(api_ids), 50):
+        chunk = api_ids[i : i + 50]
+        rows = (
+            supabase.table("fixture_odds")
+            .select("fixture_api_id, home_win_odds, draw_odds, away_win_odds, btts_yes_odds, over_25_odds, dc_1x_odds, dc_x2_odds")
+            .in_("fixture_api_id", chunk)
+            .execute()
+            .data
+            or []
+        )
+        for r in rows:
+            odds_map[r["fixture_api_id"]] = r
+
+    # Track per market-type: {market_key: {wins, total, staked, returned}}
+    perf: dict[str, dict] = {}
+
+    def _track(key: str, won: bool, odd: float):
+        if key not in perf:
+            perf[key] = {"wins": 0, "total": 0, "staked": 0.0, "returned": 0.0}
+        perf[key]["total"] += 1
+        perf[key]["staked"] += 1.0
+        if won:
+            perf[key]["wins"] += 1
+            perf[key]["returned"] += odd
+
+    for f in finished:
+        pred = pred_map.get(f["id"])
+        if not pred:
+            continue
+        sj = pred.get("stats_json") or {}
+        hg = f.get("home_goals", 0) or 0
+        ag = f.get("away_goals", 0) or 0
+        actual = "H" if hg > ag else ("D" if hg == ag else "A")
+        odds = odds_map.get(f.get("api_fixture_id"), {})
+
+        ph = pred.get("proba_home") or sj.get("proba_home", 0) or 0
+        pd_v = pred.get("proba_draw") or sj.get("proba_draw", 0) or 0
+        pa = pred.get("proba_away") or sj.get("proba_away", 0) or 0
+
+        if ph > pd_v and ph > pa and ph >= 50 and (odds.get("home_win_odds") or 0) > 1:
+            _track("home_win", actual == "H", odds["home_win_odds"])
+        if pa > pd_v and pa > ph and pa >= 50 and (odds.get("away_win_odds") or 0) > 1:
+            _track("away_win", actual == "A", odds["away_win_odds"])
+
+        p_btts = pred.get("proba_btts") or sj.get("proba_btts", 0) or 0
+        if p_btts > 55 and (odds.get("btts_yes_odds") or 0) > 1:
+            _track("btts_yes", hg > 0 and ag > 0, odds["btts_yes_odds"])
+
+        p_o25 = pred.get("proba_over_25") or sj.get("proba_over_25") or sj.get("proba_over_2_5")
+        if p_o25 and p_o25 > 55 and (odds.get("over_25_odds") or 0) > 1:
+            _track("over_25", hg + ag > 2.5, odds["over_25_odds"])
+
+        dc_1x = ph + pd_v
+        if dc_1x >= 65 and (odds.get("dc_1x_odds") or 0) > 1:
+            _track("dc_1x", actual in ("H", "D"), odds["dc_1x_odds"])
+        dc_x2 = pd_v + pa
+        if dc_x2 >= 65 and (odds.get("dc_x2_odds") or 0) > 1:
+            _track("dc_x2", actual in ("D", "A"), odds["dc_x2_odds"])
+
+    # Compute ROI per market
+    result = {}
+    for key, m in perf.items():
+        if m["total"] >= 3:
+            roi = round((m["returned"] - m["staked"]) / m["staked"] * 100, 1)
+            result[key] = {
+                "roi": roi,
+                "winrate": round(m["wins"] / m["total"] * 100, 1),
+                "total": m["total"],
+                "active": roi > -5,  # Disable clearly unprofitable
+            }
+    return result
+
+
+# ── Market key mapping for value bet types ──
+_MARKET_KEY_MAP = {
+    "home_win": "home_win",
+    "away_win": "away_win",
+    "draw": "draw",
+    "btts_yes": "btts_yes",
+    "over_25": "over_25",
+    "under_25": "under_25",
+    "dc_1x": "dc_1x",
+    "dc_x2": "dc_x2",
+}
+
+
 @router.post("/detect-value-bets")
 def detect_value_bets():
-    """Compare model probabilities with bookmaker odds to find value bets."""
-    logger.info("[Value Bets] 🔍 Recherche de value bets...")
+    """Compare model probabilities with bookmaker odds to find value bets.
+
+    Now covers 1X2, BTTS, Over/Under 2.5, and Double Chance markets.
+    Filters out markets with historically negative ROI.
+    """
+    logger.info("[Value Bets] Recherche de value bets...")
 
     today = datetime.now().strftime("%Y-%m-%d")
 
-    # Get today's predictions
+    # Step 1: Get market performance to filter unprofitable markets
+    market_perf = _get_market_performance(days=30)
+    disabled_markets = {k for k, v in market_perf.items() if not v.get("active", True)}
+    if disabled_markets:
+        logger.info(f"[Value Bets] Marchés désactivés (ROI négatif): {disabled_markets}")
+
+    # Step 2: Get today's fixtures with predictions
     fixtures = (
         supabase.table("fixtures")
         .select(
@@ -945,95 +1078,169 @@ def detect_value_bets():
     )
 
     if not fixtures:
-        return {"status": "no_matches", "value_bets": []}
+        return {"status": "no_matches", "value_bets": [], "disabled_markets": list(disabled_markets)}
+
+    # Step 3: Fetch stored odds from fixture_odds table
+    api_ids = [f["api_fixture_id"] for f in fixtures if f.get("api_fixture_id")]
+    stored_odds = {}
+    if api_ids:
+        for i in range(0, len(api_ids), 50):
+            chunk = api_ids[i : i + 50]
+            rows = (
+                supabase.table("fixture_odds")
+                .select("*")
+                .in_("fixture_api_id", chunk)
+                .execute()
+                .data
+                or []
+            )
+            for r in rows:
+                stored_odds[r["fixture_api_id"]] = r
 
     value_bets = []
+    skipped_by_filter = 0
+    MIN_EDGE = 10  # Reduced from 15 since we now have market filtering
 
     for fix in fixtures:
         api_id = fix.get("api_fixture_id")
         if not api_id:
             continue
 
-        # Get bookmaker odds from API-Football
-        odds_resp = api_get("odds", {"fixture": api_id})
-        if not odds_resp or not odds_resp.get("response"):
-            continue
+        odds = stored_odds.get(api_id, {})
 
-        bookmakers = odds_resp["response"]
-        if not bookmakers:
-            continue
+        # Fallback: fetch from API if no stored odds
+        if not odds:
+            odds_resp = api_get("odds", {"fixture": api_id})
+            if odds_resp and odds_resp.get("response"):
+                for bm in odds_resp["response"]:
+                    for bet in bm.get("bookmakers", []):
+                        for mkt in bet.get("bets", []):
+                            name = mkt.get("name", "")
+                            vals = {v["value"]: float(v["odd"]) for v in mkt.get("values", []) if v.get("odd")}
+                            if name == "Match Winner":
+                                odds["home_win_odds"] = vals.get("Home", 0)
+                                odds["draw_odds"] = vals.get("Draw", 0)
+                                odds["away_win_odds"] = vals.get("Away", 0)
+                            elif name == "Both Teams Score":
+                                odds["btts_yes_odds"] = vals.get("Yes", 0)
+                                odds["btts_no_odds"] = vals.get("No", 0)
+                            elif name == "Goals Over/Under" or name == "Over/Under 2.5":
+                                odds["over_25_odds"] = vals.get("Over 2.5", 0)
+                                odds["under_25_odds"] = vals.get("Under 2.5", 0)
+                            elif name == "Double Chance":
+                                odds["dc_1x_odds"] = vals.get("Home/Draw", 0)
+                                odds["dc_x2_odds"] = vals.get("Draw/Away", 0)
+                                odds["dc_12_odds"] = vals.get("Home/Away", 0)
+                        break
+                    break
 
-        # Parse odds (take first bookmaker's 1X2 market)
-        for bm in bookmakers:
-            for bet in bm.get("bookmakers", []):
-                for mkt in bet.get("bets", []):
-                    if mkt.get("name") == "Match Winner":
-                        odds_map = {}
-                        for val in mkt.get("values", []):
-                            odds_map[val["value"]] = float(val["odd"])
+        our_home = fix.get("proba_home", 0) or 0
+        our_draw = fix.get("proba_draw", 0) or 0
+        our_away = fix.get("proba_away", 0) or 0
+        our_btts = fix.get("proba_btts", 0) or 0
+        our_over25 = fix.get("proba_over_25", 0) or 0
+        match_label = f"{fix['home_team']} vs {fix['away_team']}"
 
-                        home_odd = odds_map.get("Home", 0)
-                        draw_odd = odds_map.get("Draw", 0)
-                        away_odd = odds_map.get("Away", 0)
+        # Build all market checks: (label, market_key, our_prob, implied_prob, odd)
+        checks = []
 
-                        if home_odd <= 0 or draw_odd <= 0 or away_odd <= 0:
-                            continue
+        # 1X2 markets
+        home_odd = odds.get("home_win_odds", 0) or 0
+        draw_odd = odds.get("draw_odds", 0) or 0
+        away_odd = odds.get("away_win_odds", 0) or 0
 
-                        # Implied probabilities (with margin)
-                        implied_home = round(100 / home_odd)
-                        implied_draw = round(100 / draw_odd)
-                        implied_away = round(100 / away_odd)
+        if home_odd > 1:
+            checks.append(("Victoire " + fix["home_team"], "home_win", our_home, round(100 / home_odd), home_odd))
+        if draw_odd > 1:
+            checks.append(("Match Nul", "draw", our_draw, round(100 / draw_odd), draw_odd))
+        if away_odd > 1:
+            checks.append(("Victoire " + fix["away_team"], "away_win", our_away, round(100 / away_odd), away_odd))
 
-                        # Our probabilities
-                        our_home = fix.get("proba_home", 0) or 0
-                        our_draw = fix.get("proba_draw", 0) or 0
-                        our_away = fix.get("proba_away", 0) or 0
+        # BTTS market
+        btts_yes_odd = odds.get("btts_yes_odds", 0) or 0
+        if btts_yes_odd > 1:
+            checks.append(("BTTS Oui", "btts_yes", our_btts, round(100 / btts_yes_odd), btts_yes_odd))
 
-                        # Value = our probability - implied probability
-                        # If > 15% edge, it's a value bet
-                        MIN_EDGE = 15
+        # Over/Under 2.5
+        over25_odd = odds.get("over_25_odds", 0) or 0
+        under25_odd = odds.get("under_25_odds", 0) or 0
+        if over25_odd > 1:
+            checks.append(("Over 2.5 buts", "over_25", our_over25, round(100 / over25_odd), over25_odd))
+        if under25_odd > 1 and our_over25 > 0:
+            under_prob = 100 - our_over25
+            checks.append(("Under 2.5 buts", "under_25", under_prob, round(100 / under25_odd), under25_odd))
 
-                        checks = [
-                            ("Victoire " + fix["home_team"], our_home, implied_home, home_odd),
-                            ("Match Nul", our_draw, implied_draw, draw_odd),
-                            ("Victoire " + fix["away_team"], our_away, implied_away, away_odd),
-                        ]
+        # Double Chance
+        dc_1x_odd = odds.get("dc_1x_odds", 0) or 0
+        dc_x2_odd = odds.get("dc_x2_odds", 0) or 0
+        dc_1x_prob = our_home + our_draw
+        dc_x2_prob = our_draw + our_away
 
-                        for label, our_prob, implied_prob, odd in checks:
-                            edge = our_prob - implied_prob
-                            if edge >= MIN_EDGE and our_prob >= 40:
-                                value_bets.append(
-                                    {
-                                        "match": f"{fix['home_team']} vs {fix['away_team']}",
-                                        "bet": label,
-                                        "our_proba": our_prob,
-                                        "implied_proba": implied_prob,
-                                        "edge": edge,
-                                        "odd": odd,
-                                    }
-                                )
+        if dc_1x_odd > 1:
+            checks.append(("Double Chance 1X", "dc_1x", dc_1x_prob, round(100 / dc_1x_odd), dc_1x_odd))
+        if dc_x2_odd > 1:
+            checks.append(("Double Chance X2", "dc_x2", dc_x2_prob, round(100 / dc_x2_odd), dc_x2_odd))
 
-                        break  # Only need one bookmaker
-                break
-            break
+        for label, market_key, our_prob, implied_prob, odd in checks:
+            edge = our_prob - implied_prob
+
+            # Filter by market performance
+            if market_key in disabled_markets:
+                if edge >= MIN_EDGE:
+                    skipped_by_filter += 1
+                    logger.debug(f"[Value Bets] Skipped {label} ({match_label}) — market disabled")
+                continue
+
+            if edge >= MIN_EDGE and our_prob >= 40:
+                # Get ROI boost from market performance
+                perf = market_perf.get(market_key, {})
+                roi_history = perf.get("roi", 0)
+
+                value_bets.append(
+                    {
+                        "match": match_label,
+                        "bet": label,
+                        "market": market_key,
+                        "our_proba": round(our_prob, 1),
+                        "implied_proba": implied_prob,
+                        "edge": round(edge, 1),
+                        "odd": odd,
+                        "market_roi_30d": roi_history,
+                        "confidence": "high" if roi_history > 10 else ("medium" if roi_history > 0 else "low"),
+                    }
+                )
+
+    # Sort value bets: profitable markets first, then by edge
+    value_bets.sort(key=lambda vb: (-1 if vb.get("market_roi_30d", 0) > 0 else 1, -vb["edge"]))
 
     # Send Telegram alert if value bets found
     if value_bets:
-        lines = [f"💎 *VALUE BETS — {today}*\n"]
+        lines = [f"*VALUE BETS — {today}*\n"]
         for vb in value_bets:
+            confidence_emoji = {"high": "+", "medium": "~", "low": "?"}[vb["confidence"]]
+            roi_suffix = f" | ROI 30j: {vb['market_roi_30d']}%" if vb.get("market_roi_30d") else ""
             lines.append(
-                f"⚽ *{vb['match']}*\n"
-                f"   💰 {vb['bet']} @ {vb['odd']}\n"
-                f"   📊 Notre modèle: {vb['our_proba']}% vs Marché: {vb['implied_proba']}% "
-                f"(*+{vb['edge']}% edge*)\n"
+                f"[{confidence_emoji}] *{vb['match']}*\n"
+                f"   {vb['bet']} @ {vb['odd']}\n"
+                f"   Modele: {vb['our_proba']}% vs Marche: {vb['implied_proba']}% "
+                f"(*+{vb['edge']}% edge*){roi_suffix}\n"
             )
+        if skipped_by_filter:
+            lines.append(f"\n_{skipped_by_filter} paris filtres (marches non rentables)_")
         _send_telegram_message("\n".join(lines))
-        logger.info(f"[Value Bets] 🔥 {len(value_bets)} value bets détectés !")
+        logger.info(f"[Value Bets] {len(value_bets)} value bets detectes ! ({skipped_by_filter} filtres)")
     else:
-        _send_telegram_message(f"💎 *Value Bets — {today}*\n\nAucun value bet détecté aujourd'hui.")
-        logger.info("[Value Bets] Aucun value bet aujourd'hui.")
+        _send_telegram_message(f"*Value Bets — {today}*\n\nAucun value bet detecte aujourd'hui."
+                               + (f"\n_{skipped_by_filter} filtres par la strategie_" if skipped_by_filter else ""))
+        logger.info(f"[Value Bets] Aucun value bet. ({skipped_by_filter} filtres)")
 
-    return {"status": "ok", "value_bets": value_bets}
+    return {
+        "status": "ok",
+        "value_bets": value_bets,
+        "disabled_markets": list(disabled_markets),
+        "skipped_by_filter": skipped_by_filter,
+        "market_performance": market_perf,
+    }
 
 
 # =============================================================================

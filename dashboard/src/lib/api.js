@@ -146,3 +146,16 @@ export async function fetchPlayerProfile(playerId) {
     if (!res.ok) throw new Error(`API error: ${res.status}`)
     return res.json()
 }
+
+export async function fetchMarketROI(days = 30) {
+    const url = `${API_BASE}/market-roi?days=${days}`
+    if (cache[url] && Date.now() - cache[url].timestamp < CACHE_TTL) {
+        return cache[url].data
+    }
+
+    const res = await fetch(url)
+    if (!res.ok) throw new Error(`API error: ${res.status}`)
+    const data = await res.json()
+    cache[url] = { data, timestamp: Date.now() }
+    return data
+}

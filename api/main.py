@@ -884,6 +884,314 @@ def get_performance(days: int = Query(30, description="Rolling window in days"))
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ─── Market ROI (Value Betting Strategy) ─────────────────────
+
+
+@app.get("/api/market-roi")
+def get_market_roi(days: int = Query(30, description="Rolling window in days")):
+    """Compute per-market win rate and simulated ROI from predictions + odds.
+
+    Used to determine which markets are profitable for value betting
+    and to filter future value bet recommendations.
+    """
+    try:
+        cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+
+        # Get finished fixtures
+        finished = (
+            supabase.table("fixtures")
+            .select("id, api_fixture_id, home_goals, away_goals, date, status")
+            .eq("status", "FT")
+            .gte("date", cutoff)
+            .order("date")
+            .execute()
+            .data
+            or []
+        )
+
+        fixture_ids = [f["id"] for f in finished]
+        if not fixture_ids:
+            return {"days": days, "markets": {}}
+
+        # Fetch predictions
+        predictions = (
+            supabase.table("predictions")
+            .select("*")
+            .in_("fixture_id", fixture_ids)
+            .execute()
+            .data
+            or []
+        )
+        pred_by_fixture = {p["fixture_id"]: p for p in predictions}
+
+        # Fetch odds from fixture_odds table
+        api_ids = [f["api_fixture_id"] for f in finished if f.get("api_fixture_id")]
+        odds_data = {}
+        if api_ids:
+            # Batch fetch in chunks of 50
+            for i in range(0, len(api_ids), 50):
+                chunk = api_ids[i : i + 50]
+                rows = (
+                    supabase.table("fixture_odds")
+                    .select("*")
+                    .in_("fixture_api_id", chunk)
+                    .execute()
+                    .data
+                    or []
+                )
+                for r in rows:
+                    odds_data[r["fixture_api_id"]] = r
+
+        # Define market evaluators
+        # Each market: (key, label, pred_check, actual_check, odds_field)
+        markets: dict[str, dict] = {}
+
+        def init_market(key: str, label: str):
+            if key not in markets:
+                markets[key] = {
+                    "label": label,
+                    "total": 0,
+                    "wins": 0,
+                    "losses": 0,
+                    "total_staked": 0.0,
+                    "total_return": 0.0,
+                }
+
+        for f in finished:
+            pred = pred_by_fixture.get(f["id"])
+            if not pred:
+                continue
+
+            stats_json = pred.get("stats_json") or {}
+
+            def get_val(key, default=None):
+                val = pred.get(key)
+                if val is not None:
+                    return val
+                return stats_json.get(key, default)
+
+            hg = f.get("home_goals", 0) or 0
+            ag = f.get("away_goals", 0) or 0
+            total_goals = hg + ag
+            actual_result = "H" if hg > ag else ("D" if hg == ag else "A")
+            actual_btts = hg > 0 and ag > 0
+
+            odds = odds_data.get(f.get("api_fixture_id"), {})
+
+            ph = get_val("proba_home", 0) or 0
+            pd_val = get_val("proba_draw", 0) or 0
+            pa = get_val("proba_away", 0) or 0
+
+            # ── 1X2: Victoire domicile ──
+            if ph > pd_val and ph > pa and ph >= 50:
+                odd = odds.get("home_win_odds", 0) or 0
+                if odd > 1:
+                    init_market("home_win", "Victoire domicile")
+                    m = markets["home_win"]
+                    m["total"] += 1
+                    m["total_staked"] += 1.0
+                    if actual_result == "H":
+                        m["wins"] += 1
+                        m["total_return"] += odd
+                    else:
+                        m["losses"] += 1
+
+            # ── 1X2: Victoire extérieur ──
+            if pa > pd_val and pa > ph and pa >= 50:
+                odd = odds.get("away_win_odds", 0) or 0
+                if odd > 1:
+                    init_market("away_win", "Victoire extérieur")
+                    m = markets["away_win"]
+                    m["total"] += 1
+                    m["total_staked"] += 1.0
+                    if actual_result == "A":
+                        m["wins"] += 1
+                        m["total_return"] += odd
+                    else:
+                        m["losses"] += 1
+
+            # ── Match Nul ──
+            if pd_val > ph and pd_val > pa and pd_val >= 40:
+                odd = odds.get("draw_odds", 0) or 0
+                if odd > 1:
+                    init_market("draw", "Match Nul")
+                    m = markets["draw"]
+                    m["total"] += 1
+                    m["total_staked"] += 1.0
+                    if actual_result == "D":
+                        m["wins"] += 1
+                        m["total_return"] += odd
+                    else:
+                        m["losses"] += 1
+
+            # ── BTTS Yes ──
+            p_btts = get_val("proba_btts", 0) or 0
+            if p_btts > 55:
+                odd = odds.get("btts_yes_odds", 0) or 0
+                if odd > 1:
+                    init_market("btts_yes", "BTTS (Oui)")
+                    m = markets["btts_yes"]
+                    m["total"] += 1
+                    m["total_staked"] += 1.0
+                    if actual_btts:
+                        m["wins"] += 1
+                        m["total_return"] += odd
+                    else:
+                        m["losses"] += 1
+
+            # ── BTTS No ──
+            if p_btts < 40:
+                odd = odds.get("btts_no_odds", 0) or 0
+                if odd > 1:
+                    init_market("btts_no", "BTTS (Non)")
+                    m = markets["btts_no"]
+                    m["total"] += 1
+                    m["total_staked"] += 1.0
+                    if not actual_btts:
+                        m["wins"] += 1
+                        m["total_return"] += odd
+                    else:
+                        m["losses"] += 1
+
+            # ── Over 2.5 ──
+            p_o25 = get_val("proba_over_2_5") or get_val("proba_over_25")
+            if p_o25 is not None and p_o25 > 55:
+                odd = odds.get("over_25_odds", 0) or 0
+                if odd > 1:
+                    init_market("over_25", "Over 2.5 buts")
+                    m = markets["over_25"]
+                    m["total"] += 1
+                    m["total_staked"] += 1.0
+                    if total_goals > 2.5:
+                        m["wins"] += 1
+                        m["total_return"] += odd
+                    else:
+                        m["losses"] += 1
+
+            # ── Under 2.5 ──
+            if p_o25 is not None and p_o25 < 40:
+                odd = odds.get("under_25_odds", 0) or 0
+                if odd > 1:
+                    init_market("under_25", "Under 2.5 buts")
+                    m = markets["under_25"]
+                    m["total"] += 1
+                    m["total_staked"] += 1.0
+                    if total_goals < 2.5:
+                        m["wins"] += 1
+                        m["total_return"] += odd
+                    else:
+                        m["losses"] += 1
+
+            # ── Over 1.5 ──
+            p_o15 = get_val("proba_over_15")
+            if p_o15 is not None and p_o15 > 60:
+                odd = odds.get("over_15_odds", 0) or 0
+                if odd > 1:
+                    init_market("over_15", "Over 1.5 buts")
+                    m = markets["over_15"]
+                    m["total"] += 1
+                    m["total_staked"] += 1.0
+                    if total_goals > 1.5:
+                        m["wins"] += 1
+                        m["total_return"] += odd
+                    else:
+                        m["losses"] += 1
+
+            # ── Over 3.5 ──
+            p_o35 = get_val("proba_over_35")
+            if p_o35 is not None and p_o35 > 55:
+                odd = odds.get("over_35_odds", 0) or 0
+                if odd > 1:
+                    init_market("over_35", "Over 3.5 buts")
+                    m = markets["over_35"]
+                    m["total"] += 1
+                    m["total_staked"] += 1.0
+                    if total_goals > 3.5:
+                        m["wins"] += 1
+                        m["total_return"] += odd
+                    else:
+                        m["losses"] += 1
+
+            # ── Double Chance 1X ──
+            dc_1x_prob = ph + pd_val
+            if dc_1x_prob >= 65:
+                odd = odds.get("dc_1x_odds", 0) or 0
+                if odd > 1:
+                    init_market("dc_1x", "Double Chance 1X")
+                    m = markets["dc_1x"]
+                    m["total"] += 1
+                    m["total_staked"] += 1.0
+                    if actual_result in ("H", "D"):
+                        m["wins"] += 1
+                        m["total_return"] += odd
+                    else:
+                        m["losses"] += 1
+
+            # ── Double Chance X2 ──
+            dc_x2_prob = pd_val + pa
+            if dc_x2_prob >= 65:
+                odd = odds.get("dc_x2_odds", 0) or 0
+                if odd > 1:
+                    init_market("dc_x2", "Double Chance X2")
+                    m = markets["dc_x2"]
+                    m["total"] += 1
+                    m["total_staked"] += 1.0
+                    if actual_result in ("D", "A"):
+                        m["wins"] += 1
+                        m["total_return"] += odd
+                    else:
+                        m["losses"] += 1
+
+            # ── Double Chance 12 ──
+            dc_12_prob = ph + pa
+            if dc_12_prob >= 70:
+                odd = odds.get("dc_12_odds", 0) or 0
+                if odd > 1:
+                    init_market("dc_12", "Double Chance 12")
+                    m = markets["dc_12"]
+                    m["total"] += 1
+                    m["total_staked"] += 1.0
+                    if actual_result in ("H", "A"):
+                        m["wins"] += 1
+                        m["total_return"] += odd
+                    else:
+                        m["losses"] += 1
+
+        # Compute final metrics
+        result_markets = {}
+        for key, m in markets.items():
+            if m["total"] < 3:  # Need minimum sample size
+                continue
+            winrate = round(m["wins"] / m["total"] * 100, 1)
+            roi = round((m["total_return"] - m["total_staked"]) / m["total_staked"] * 100, 1) if m["total_staked"] > 0 else 0
+            result_markets[key] = {
+                "label": m["label"],
+                "total": m["total"],
+                "wins": m["wins"],
+                "losses": m["losses"],
+                "winrate": winrate,
+                "roi": roi,
+                "profitable": roi > 0,
+                "active": roi > -5,  # Disable only clearly unprofitable markets
+            }
+
+        # Sort by ROI descending
+        sorted_markets = dict(sorted(result_markets.items(), key=lambda x: x[1]["roi"], reverse=True))
+
+        return {
+            "days": days,
+            "markets": sorted_markets,
+            "active_markets": [k for k, v in sorted_markets.items() if v["active"]],
+            "disabled_markets": [k for k, v in sorted_markets.items() if not v["active"]],
+        }
+
+    except Exception as e:
+        import traceback
+
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ─── Team History ──────────────────────────────────────────────
 
 
