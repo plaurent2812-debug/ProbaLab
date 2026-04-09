@@ -12,7 +12,7 @@ from supabase import Client, create_client
 # 1. Chargement des secrets
 load_dotenv()
 url = os.getenv("SUPABASE_URL")
-key = os.getenv("SUPABASE_KEY")
+key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY")
 api_key = os.getenv("API_FOOTBALL_KEY")
 
 if not api_key:

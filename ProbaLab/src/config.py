@@ -42,11 +42,14 @@ env_path = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(dotenv_path=env_path)
 
 SUPABASE_URL: str | None = os.getenv("SUPABASE_URL")
-SUPABASE_KEY: str | None = os.getenv("SUPABASE_KEY")
+SUPABASE_SERVICE_ROLE_KEY: str | None = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+SUPABASE_ANON_KEY: str | None = os.getenv("SUPABASE_ANON_KEY")
+# Legacy fallback — old envs may still set SUPABASE_KEY
+SUPABASE_KEY: str | None = SUPABASE_SERVICE_ROLE_KEY or os.getenv("SUPABASE_KEY")
 API_FOOTBALL_KEY: str | None = os.getenv("API_FOOTBALL_KEY")
 GEMINI_API_KEY: str | None = os.getenv("GEMINI_API_KEY")
 
-# ── Client Supabase ──────────────────────────────────────────────
+# ── Client Supabase (service_role — bypasse RLS) ────────────────
 supabase: Client = create_client(SUPABASE_URL or "", SUPABASE_KEY or "")
 
 # ── Moteur V2 (A/B Testing) ──────────────────────────────────────
