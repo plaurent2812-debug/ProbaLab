@@ -201,8 +201,17 @@ export default function HomePage() {
 
                 {/* Content — centered */}
                 <div className="relative z-10 text-center">
-                    <h1 className="text-3xl sm:text-4xl font-black text-foreground mb-1 tracking-tighter">
-                        Proba<span className="gradient-text-premium">Lab</span>
+                    <h1 className="text-3xl sm:text-4xl font-black text-foreground mb-1 tracking-tighter flex justify-center">
+                        <span className="logo-container !px-5 !py-1.5 !text-3xl sm:!text-4xl" style={{ boxShadow: '0 0 20px rgba(16,185,129,0.12), 0 0 4px rgba(16,185,129,0.08)' }}>
+                            <svg className="logo-border" viewBox="0 0 280 64" preserveAspectRatio="none">
+                                <defs><filter id="hero-blur"><feGaussianBlur stdDeviation="4"/></filter></defs>
+                                <rect x="1" y="1" width="278" height="62" rx="10" ry="10" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-primary/30" />
+                                <rect x="1" y="1" width="278" height="62" rx="10" ry="10" fill="none" stroke="currentColor" strokeWidth="6" strokeDasharray="50 630" strokeLinecap="round" className="text-primary/20 logo-energy" filter="url(#hero-blur)" />
+                            </svg>
+                            <span className="tracking-tighter">proba</span>
+                            <span className="inline-block w-[2px] h-7 sm:h-8 bg-primary/70 mx-1.5" />
+                            <span className="tracking-tighter text-primary">lab</span>
+                        </span>
                     </h1>
                     <p className="text-[0.6rem] font-semibold text-primary/60 uppercase tracking-[0.2em] mb-3">
                         Smart Betting Assistant
