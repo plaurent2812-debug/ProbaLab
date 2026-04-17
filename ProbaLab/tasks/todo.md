@@ -3,6 +3,47 @@
 > Source : `01_PROBALAB_actions_correctives.md` (audit du 2026-04-10)
 > Exécution étape par étape dans l'ordre de priorité P0 → P1 → P2.
 
+## ACTION REQUISE OWNER — Migration SQL à appliquer manuellement
+
+**Task B1 (2026-04-17)** — La migration `050_model_health_log.sql` a été créée mais n'a pas pu être appliquée automatiquement (pas de psql local, MCP non accessible, Management API requiert un token différent).
+
+**À faire via Supabase Studio** (https://supabase.com/dashboard/project/yskpqdnidxojoclmqcxn/editor) :
+
+```sql
+create table if not exists model_health_log (
+    id bigserial primary key,
+    recorded_at timestamptz not null default now(),
+    sport text not null check (sport in ('football','nhl')),
+    brier_7d numeric,
+    brier_30d numeric,
+    log_loss_30d numeric,
+    ece_30d numeric,
+    clv_best_mean_30d numeric,
+    drift_detected boolean default false,
+    data_completeness_pct numeric,
+    prediction_volume_today integer,
+    alert_count integer default 0,
+    ml_fallback_rate numeric,
+    notes text
+);
+
+create index if not exists idx_model_health_log_recorded_at
+    on model_health_log(recorded_at desc);
+create index if not exists idx_model_health_log_sport_date
+    on model_health_log(sport, recorded_at desc);
+
+alter table model_health_log enable row level security;
+
+create policy "service_role_all_model_health_log"
+    on model_health_log for all
+    using (auth.role() = 'service_role')
+    with check (auth.role() = 'service_role');
+```
+
+Après application : les tests `pytest tests/test_model_health_log.py -m integration -v` doivent passer en PASS.
+
+---
+
 ## État de départ (constaté après exploration)
 
 Beaucoup d'éléments cités dans l'audit existent déjà dans le code :

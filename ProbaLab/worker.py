@@ -203,6 +203,15 @@ def job_drift_check() -> None:
         logger.exception("[job_drift_check] Error")
 
 
+def job_run_monitoring_alerts() -> None:
+    """08:30 UTC — Brier check + drift + persistance model_health_log."""
+    from run_pipeline import run_monitoring_alerts
+    try:
+        run_monitoring_alerts()
+    except Exception as e:
+        logger.exception("job_run_monitoring_alerts failed: %s", e)
+
+
 # ═══════════════════════════════════════════════════════════════
 #  JOBS QUOTIDIENS — PRÉDICTIONS + VALUE BETS
 # ═══════════════════════════════════════════════════════════════
@@ -308,6 +317,13 @@ def main() -> None:
                       id="nhl_eval", max_instances=1, coalesce=True)
     scheduler.add_job(job_football_evaluation, CronTrigger(hour=8, minute=30),
                       id="football_eval", max_instances=1, coalesce=True)
+    scheduler.add_job(
+        job_run_monitoring_alerts,
+        CronTrigger(hour=8, minute=30, timezone="UTC"),
+        id="monitoring_alerts_daily",
+        max_instances=1,
+        coalesce=True,
+    )
     scheduler.add_job(job_drift_check, CronTrigger(hour=9, minute=0),
                       id="drift_check", max_instances=1, coalesce=True)
 
@@ -346,6 +362,7 @@ def main() -> None:
     logger.info("    07:45    Fetch cotes fraîches")
     logger.info("    08:00    Évaluation NHL")
     logger.info("    08:30    Évaluation foot + calibration")
+    logger.info("    08:30 UTC Monitoring alerts + persistance model_health_log")
     logger.info("    09:00    Drift detection")
     logger.info("    10:00    Brain IA (prédictions)")
     logger.info("    12:00    Value Bets football")
