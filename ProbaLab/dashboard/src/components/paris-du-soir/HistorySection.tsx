@@ -91,7 +91,7 @@ function HistoryTable({ filteredHistory, filteredHistoryStats }: {
                                             {pick.bet_label || pick.player_name || "—"}
                                         </span>
                                         {isExpert && (
-                                            <span className="shrink-0 self-start px-1.5 py-0.5 rounded text-[8px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/20 mt-0.5">
+                                            <span className="shrink-0 self-start px-1.5 py-0.5 rounded text-xs font-bold bg-amber-500/15 text-amber-400 border border-amber-500/20 mt-0.5">
                                                 🎯 Expert
                                             </span>
                                         )}

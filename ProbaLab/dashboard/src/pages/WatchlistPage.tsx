@@ -50,7 +50,7 @@ function MiniMatchRow({ match, isStarred, onToggleStar, sport = "football" }) {
                 ) : (
                     <div className="flex flex-col items-center">
                         <span>{time}</span>
-                        {dayLabel && <span className="text-[8px] text-muted-foreground/60">{dayLabel}</span>}
+                        {dayLabel && <span className="text-xs text-muted-foreground/60">{dayLabel}</span>}
                     </div>
                 )}
             </div>

@@ -52,7 +52,12 @@ function MatchRow({ match, sport = "football" }) {
     const link = sport === "nhl" ? `/nhl/match/${match.api_fixture_id || match.id}` : `/football/match/${match.id}`
 
     return (
-        <div className="fs-match-row" onClick={() => navigate(link)}>
+        <button
+            type="button"
+            className="fs-match-row w-full text-left"
+            onClick={() => navigate(link)}
+            aria-label={`${match.home_team} vs ${match.away_team}`}
+        >
             <div className="fs-match-time">
                 {isLive ? (
                     <span className="fs-live-badge">{match.elapsed ? `${match.elapsed}'` : "LIVE"}</span>
@@ -67,7 +72,7 @@ function MatchRow({ match, sport = "football" }) {
                 <div className="flex-1 flex items-center gap-1.5 min-w-0 justify-end">
                     <span className={cn("fs-team-name text-right", homeWon && "winner")}>{match.home_team}</span>
                     {match.home_logo ? (
-                        <img src={match.home_logo} alt="" className="w-4 h-4 shrink-0 object-contain" loading="lazy" />
+                        <img src={match.home_logo} alt="" role="presentation" className="w-4 h-4 shrink-0 object-contain" loading="lazy" />
                     ) : (
                         <div className="w-4 h-4 rounded-sm bg-primary/10 shrink-0 flex items-center justify-center text-[7px] font-bold text-primary">
                             {match.home_team?.charAt(0)}
@@ -91,7 +96,7 @@ function MatchRow({ match, sport = "football" }) {
 
                 <div className="flex-1 flex items-center gap-1.5 min-w-0">
                     {match.away_logo ? (
-                        <img src={match.away_logo} alt="" className="w-4 h-4 shrink-0 object-contain" loading="lazy" />
+                        <img src={match.away_logo} alt="" role="presentation" className="w-4 h-4 shrink-0 object-contain" loading="lazy" />
                     ) : (
                         <div className="w-4 h-4 rounded-sm bg-primary/10 shrink-0 flex items-center justify-center text-[7px] font-bold text-primary">
                             {match.away_team?.charAt(0)}
@@ -116,7 +121,7 @@ function MatchRow({ match, sport = "football" }) {
                     )}
                 </div>
             )}
-        </div>
+        </button>
     )
 }
 

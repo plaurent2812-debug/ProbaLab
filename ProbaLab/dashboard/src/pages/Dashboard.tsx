@@ -91,7 +91,7 @@ function MatchRow({ match, isStarred, onToggleStar }) {
                         {match.home_team}
                     </span>
                     {match.home_logo ? (
-                        <img src={match.home_logo} alt="" className="w-4 h-4 shrink-0 object-contain" loading="lazy" />
+                        <img src={match.home_logo} alt="" role="presentation" className="w-4 h-4 shrink-0 object-contain" loading="lazy" />
                     ) : (
                         <div className="w-4 h-4 rounded-sm bg-primary/10 shrink-0 flex items-center justify-center text-[7px] font-bold text-primary">
                             {match.home_team?.charAt(0)}
@@ -116,7 +116,7 @@ function MatchRow({ match, isStarred, onToggleStar }) {
                 {/* Away */}
                 <div className="flex-1 flex items-center gap-1.5 min-w-0">
                     {match.away_logo ? (
-                        <img src={match.away_logo} alt="" className="w-4 h-4 shrink-0 object-contain" loading="lazy" />
+                        <img src={match.away_logo} alt="" role="presentation" className="w-4 h-4 shrink-0 object-contain" loading="lazy" />
                     ) : (
                         <div className="w-4 h-4 rounded-sm bg-primary/10 shrink-0 flex items-center justify-center text-[7px] font-bold text-primary">
                             {match.away_team?.charAt(0)}
