@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
@@ -127,10 +127,10 @@ def admin_delete_user(user_id: str):
 @router.get("/admin/stats")
 def admin_stats():
     """Site-wide KPIs for admin overview."""
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, timezone
 
-    today = datetime.utcnow().strftime("%Y-%m-%d")
-    week_ago = (datetime.utcnow() - timedelta(days=7)).isoformat()
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    week_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
 
     stats = {}
     try:
@@ -316,7 +316,7 @@ def _detect_anomalies(t1: dict, t2: dict, score_home: int, score_away: int) -> l
 @router.get("/daily-matches")
 def get_daily_matches():
     """Returns all matches planned for today that haven't started yet."""
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     fixtures = (
         supabase.table("fixtures")
         .select("id, api_fixture_id, date, home_team, away_team")
@@ -444,8 +444,8 @@ def check_active_matches():
     """Lite check to see if we have any active or upcoming matches.
     Used by Trigger.dev to skip useless runs and save compute costs.
     """
-    from datetime import timedelta
-    now_utc = datetime.utcnow()
+    from datetime import timedelta, timezone
+    now_utc = datetime.now(timezone.utc)
     next_15m = (now_utc + timedelta(minutes=15)).isoformat()
     today_start = now_utc.replace(hour=0, minute=0, second=0).isoformat()
     today_end = now_utc.replace(hour=23, minute=59, second=59).isoformat()
@@ -589,7 +589,7 @@ def update_live_scores(detail: bool = Query(False, description="Fetch events & s
         return {"status": "ok", "updated": updated_count, "finished": 0, "errors": errors, "total_live": len(live_fixtures)}
 
     # Fixtures in our DB marked as live/NS but no longer in the API live response
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     stale_statuses = ["1H", "2H", "HT", "ET", "LIVE", "BT", "NS"]
     try:
         stale_fixtures = (
@@ -942,7 +942,7 @@ def run_daily_pipeline():
     elapsed = round(_time.time() - start)
 
     # Count today's predictions
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     predictions = (
         supabase.table("fixtures")
         .select("id, home_team, away_team, proba_home, proba_draw, proba_away")
@@ -980,7 +980,7 @@ def daily_recap():
     """Compare today's predictions vs actual results and send a Telegram recap."""
     logger.info("[Recap] 📊 Bilan du jour...")
 
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     # Get all finished matches today with predictions
     fixtures = (
@@ -1084,7 +1084,7 @@ def detect_value_bets():
     """Compare model probabilities with bookmaker odds to find value bets."""
     logger.info("[Value Bets] 🔍 Recherche de value bets...")
 
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     # Get today's predictions
     fixtures = (
@@ -1205,7 +1205,7 @@ def detect_value_bets():
 @router.get("/nhl-daily-matches")
 def get_nhl_daily_matches():
     """Returns all NHL matches planned for today."""
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     fixtures = (
         supabase.table("nhl_fixtures")
         .select("id, api_fixture_id, date, home_team, away_team")
@@ -1224,7 +1224,7 @@ def nhl_value_bets():
     """Detect NHL value bets and send Telegram alerts with Top 5 players per category."""
     logger.info("[NHL Value Bets] 🏒 Recherche de value bets NHL...")
 
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     # 1. Get today's NHL fixtures
     fixtures = (
@@ -1436,7 +1436,7 @@ def football_momentum():
 def nhl_update_live_scores():
     """Fetch live NHL scores from official NHLE API and update nhl_fixtures table."""
     import time as _time
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, timezone
 
     import requests as _requests
 
@@ -1453,7 +1453,7 @@ def nhl_update_live_scores():
     try:
         # We fetch "now", "yesterday" and "2 days ago" to ensure games that just finished are flipped to FT
         # especially given the UTC/US date shift.
-        t_now = datetime.now()
+        t_now = datetime.now(timezone.utc)
         yesterday = (t_now - timedelta(days=1)).strftime("%Y-%m-%d")
         two_days_ago = (t_now - timedelta(days=2)).strftime("%Y-%m-%d")
 

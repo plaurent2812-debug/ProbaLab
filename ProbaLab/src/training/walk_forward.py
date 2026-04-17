@@ -9,7 +9,7 @@ Usage:
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 import numpy as np
@@ -82,7 +82,7 @@ def walk_forward_evaluate(
         "brier_1x2_mean": float(np.mean([f["brier_1x2"] for f in fold_results])),
         "brier_1x2_std": float(np.std([f["brier_1x2"] for f in fold_results])),
         "log_loss_mean": float(np.mean([f["log_loss"] for f in fold_results])),
-        "generated_at": datetime.utcnow().isoformat() + "Z",
+        "generated_at": datetime.now(timezone.utc).isoformat() + "Z",
     }
 
 

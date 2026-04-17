@@ -64,7 +64,7 @@ def get_best_bets(
     import math as _math
 
     if not date:
-        date = datetime.now().strftime("%Y-%m-%d")
+        date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     result = {
         "date": date,
@@ -724,7 +724,7 @@ def update_bet_result(
             .update({
                 "result": result_val,
                 "notes": body.notes,
-                "updated_at": datetime.now().isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             })
             .eq("id", bet_id)
             .execute()
@@ -791,7 +791,7 @@ def nhl_fetch_odds(body: dict, request: Request, authorization: str = Header(Non
     """
     verify_cron_auth(authorization)
 
-    date = body.get("date") or datetime.now().strftime("%Y-%m-%d")
+    date = body.get("date") or datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     try:
         from src.nhl.fetch_odds import run as fetch_nhl_odds
@@ -954,7 +954,7 @@ def resolve_best_bets(body: Annotated[ResolveBetsRequest, Body()], request: Requ
                     .update({
                         "result": result_val,
                         "notes": f"Auto-résolu: {h}-{a} ({fx['status']})",
-                        "updated_at": datetime.now().isoformat(),
+                        "updated_at": datetime.now(timezone.utc).isoformat(),
                     })
                     .eq("id", bet["id"])
                     .execute()
@@ -1075,7 +1075,7 @@ def resolve_best_bets(body: Annotated[ResolveBetsRequest, Body()], request: Requ
                     .update({
                         "result": result_val,
                         "notes": note,
-                        "updated_at": datetime.now().isoformat(),
+                        "updated_at": datetime.now(timezone.utc).isoformat(),
                     })
                     .eq("id", bet["id"])
                     .execute()
@@ -1303,7 +1303,7 @@ def get_best_bets_history(
         if date_from:
             cutoff = date_from
         else:
-            cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+            cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
 
         # ── 1. Fetch from best_bets (model predictions) ──────────
         bb_query = (

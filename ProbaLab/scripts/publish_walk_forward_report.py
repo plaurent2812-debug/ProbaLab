@@ -5,7 +5,7 @@ Output: ProbaLab/public/walk_forward_report.json (consommé par le frontend).
 """
 import json
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -40,7 +40,7 @@ def _write_minimal_report(out_path: Path, reason: str) -> None:
         "brier_1x2_mean": None,
         "brier_1x2_std": None,
         "log_loss_mean": None,
-        "generated_at": datetime.utcnow().isoformat() + "Z",
+        "generated_at": datetime.now(timezone.utc).isoformat() + "Z",
     }
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(report, indent=2))
