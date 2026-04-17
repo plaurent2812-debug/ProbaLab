@@ -368,7 +368,7 @@ def train_classifier(
         warnings.filterwarnings("ignore", category=FutureWarning)
         cv_scores = cross_val_score(
             model, X_train, y_train, cv=tscv, scoring="accuracy",
-            params={"sample_weight": sample_weight_train},
+            fit_params={"sample_weight": sample_weight_train},
         )
     logger.info(f"  CV Accuracy (temporal, balanced) : {cv_scores.mean():.4f} ± {cv_scores.std():.4f}")
     logger.info(f"  CV Folds : {[round(s, 4) for s in cv_scores.tolist()]}")
