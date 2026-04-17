@@ -63,7 +63,7 @@ export default function AdminLeagues() {
                             {(countryLeagues as any[]).map((league: any) => (
                                 <div key={league.id} className="flex items-center justify-between p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors">
                                     <span className="text-sm font-medium">{league.name}</span>
-                                    <span className="text-[10px] font-mono text-muted-foreground bg-white/10 px-2 py-0.5 rounded">ID: {league.id}</span>
+                                    <span className="text-xs font-mono text-muted-foreground bg-white/10 px-2 py-0.5 rounded">ID: {league.id}</span>
                                 </div>
                             ))}
                         </div>

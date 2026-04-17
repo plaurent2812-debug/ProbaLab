@@ -347,7 +347,7 @@ function AdminDashboard() {
                                                 {t.name}
                                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500/60" title="Actif" />
                                             </div>
-                                            <div className="text-[10px] text-muted-foreground whitespace-pre-line">{t.desc}</div>
+                                            <div className="text-xs text-muted-foreground whitespace-pre-line">{t.desc}</div>
                                         </div>
                                     </div>
                                 ))}
@@ -375,7 +375,7 @@ function AdminDashboard() {
                                                 {t.name}
                                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500/60" title="Actif" />
                                             </div>
-                                            <div className="text-[10px] text-muted-foreground">{t.desc}</div>
+                                            <div className="text-xs text-muted-foreground">{t.desc}</div>
                                         </div>
                                     </div>
                                 ))}
@@ -401,7 +401,7 @@ function AdminDashboard() {
                                                 {t.name}
                                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500/60" title="Actif" />
                                             </div>
-                                            <div className="text-[10px] text-muted-foreground whitespace-pre-line">{t.desc}</div>
+                                            <div className="text-xs text-muted-foreground whitespace-pre-line">{t.desc}</div>
                                         </div>
                                     </div>
                                 ))}
@@ -412,7 +412,7 @@ function AdminDashboard() {
                                         <Calendar className="w-3.5 h-3.5 text-indigo-400" />
                                         Ligues suivies
                                     </div>
-                                    <div className="text-[10px] text-muted-foreground space-y-0.5">
+                                    <div className="text-xs text-muted-foreground space-y-0.5">
                                         <div>🇫🇷 Ligue 1 · Ligue 2 · Coupe de France</div>
                                         <div>🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League · FA Cup</div>
                                         <div>🇪🇸 La Liga · Copa del Rey</div>

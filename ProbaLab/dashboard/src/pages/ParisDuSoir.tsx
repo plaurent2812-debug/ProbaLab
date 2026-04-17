@@ -45,7 +45,7 @@ function BetSection({ sport, betsArr, emoji, label, accentColor, loading, isAdmi
                 <h2 className={cn("text-sm font-bold", accentColor)}>{label}</h2>
                 <span className="text-xs text-muted-foreground">— Value Bets (EV+)</span>
                 {isAdmin && betsArr.length > 0 && (
-                    <span className="ml-auto text-[9px] text-muted-foreground">
+                    <span className="ml-auto text-xs text-muted-foreground">
                         Boutons WIN/LOSS visibles (admin)
                     </span>
                 )}
