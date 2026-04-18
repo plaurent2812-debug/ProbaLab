@@ -14,7 +14,11 @@ Design:
 from __future__ import annotations
 
 import logging
+import os
 from collections import defaultdict
+from datetime import date, datetime, timedelta, timezone
+
+from src.config import supabase
 
 logger = logging.getLogger("football_ia.clv_engine")
 
@@ -177,3 +181,122 @@ def _model_probs_for_market(pred: dict, market: str) -> list[float] | None:
             return None
         return [o, 1.0 - o]
     return None
+
+
+def _load_predictions_for_date(target: date) -> list[dict]:
+    """Charge les prediction_results pour les matchs dont fixtures.date == target."""
+    start = datetime(target.year, target.month, target.day, tzinfo=timezone.utc)
+    end = start + timedelta(days=1)
+    rows = (
+        supabase.table("prediction_results")
+        .select("*")
+        .gte("created_at", start.isoformat())
+        .lt("created_at", end.isoformat())
+        .execute()
+        .data
+    ) or []
+    return rows
+
+
+def _load_closing_odds_for_date(target: date) -> list[dict]:
+    """Charge les closing_odds dont match_start dans la journée target."""
+    start = datetime(target.year, target.month, target.day, tzinfo=timezone.utc)
+    end = start + timedelta(days=1)
+    rows = (
+        supabase.table("closing_odds")
+        .select("*")
+        .eq("snapshot_type", "closing")
+        .gte("match_start", start.isoformat())
+        .lt("match_start", end.isoformat())
+        .execute()
+        .data
+    ) or []
+    return rows
+
+
+_FR_BOOKMAKERS = ["betclic", "winamax", "unibet", "zebet"]
+
+
+def _compute_fr_avg_clv(
+    predictions: list[dict], closing_rows: list[dict], market: str
+) -> float | None:
+    per_book: list[float] = []
+    for bk in _FR_BOOKMAKERS:
+        res = aggregate_clv_by_market(
+            predictions=predictions,
+            closing_odds_rows=closing_rows,
+            market=market,
+            bookmaker=bk,
+        )
+        if res["n_matches"] > 0:
+            per_book.append(res["clv_mean"])
+    if not per_book:
+        return None
+    return sum(per_book) / len(per_book)
+
+
+def run_daily_clv_snapshot(*, target_date: date | None = None) -> dict:
+    """Entrypoint cron — calcule CLV vs Pinnacle + moyenne FR pour J-1.
+
+    Upsert une row dans model_health_log avec toutes les colonnes CLV.
+    """
+    if target_date is None:
+        target_date = (datetime.now(timezone.utc) - timedelta(days=1)).date()
+
+    predictions = _load_predictions_for_date(target_date)
+    closing_rows = _load_closing_odds_for_date(target_date)
+
+    if not predictions:
+        logger.info("[clv_snapshot] No predictions for %s — skip", target_date)
+        return {"n_matches_clv": 0}
+
+    # Calculs Pinnacle
+    p_1x2 = aggregate_clv_by_market(
+        predictions=predictions, closing_odds_rows=closing_rows,
+        market="1x2", bookmaker="pinnacle",
+    )
+    p_btts = aggregate_clv_by_market(
+        predictions=predictions, closing_odds_rows=closing_rows,
+        market="btts", bookmaker="pinnacle",
+    )
+    p_over25 = aggregate_clv_by_market(
+        predictions=predictions, closing_odds_rows=closing_rows,
+        market="over_2_5", bookmaker="pinnacle",
+    )
+    p_nhl_ml = aggregate_clv_by_market(
+        predictions=predictions, closing_odds_rows=closing_rows,
+        market="moneyline", bookmaker="pinnacle",
+    )
+    p_nhl_goals = aggregate_clv_by_market(
+        predictions=predictions, closing_odds_rows=closing_rows,
+        market="totals_nhl", bookmaker="pinnacle",
+    )
+
+    # Moyennes FR
+    fr_1x2 = _compute_fr_avg_clv(predictions, closing_rows, "1x2")
+    fr_btts = _compute_fr_avg_clv(predictions, closing_rows, "btts")
+    fr_over25 = _compute_fr_avg_clv(predictions, closing_rows, "over_2_5")
+
+    variant_id = os.getenv("PROBALAB_ACTIVE_VARIANT", "baseline")
+    n_total = p_1x2.get("n_matches", 0)
+
+    row = {
+        "sport": "football",
+        "recorded_at": datetime.now(timezone.utc).isoformat(),
+        "n_matches_clv": n_total,
+        "clv_vs_pinnacle_1x2": p_1x2.get("clv_mean"),
+        "clv_vs_pinnacle_btts": p_btts.get("clv_mean"),
+        "clv_vs_pinnacle_over25": p_over25.get("clv_mean"),
+        "clv_vs_pinnacle_nhl_ml": p_nhl_ml.get("clv_mean"),
+        "clv_vs_pinnacle_nhl_goals": p_nhl_goals.get("clv_mean"),
+        "clv_vs_fr_avg_1x2": fr_1x2,
+        "clv_vs_fr_avg_btts": fr_btts,
+        "clv_vs_fr_avg_over25": fr_over25,
+        "variant_id": variant_id,
+    }
+    supabase.table("model_health_log").insert(row).execute()
+    logger.info(
+        "[clv_snapshot] variant=%s n=%d clv_1x2_vs_pinnacle=%s",
+        variant_id, n_total, p_1x2.get("clv_mean"),
+    )
+    return row
