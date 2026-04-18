@@ -12,14 +12,22 @@ Les fonctions I/O utilisent supabase + httpx ; les helpers sont testables sans r
 from __future__ import annotations
 
 import logging
+import os
 import time
+import uuid
 from datetime import datetime, timezone
 from typing import Any
 
 import httpx
 
 from src.config import supabase
-from src.fetchers.bookmaker_registry import get_bookmaker_from_api_key, teams_match
+from src.fetchers.bookmaker_registry import (
+    BOOKMAKERS_FR,
+    ODDS_API_KEY_BY_BOOKMAKER,
+    SPORT_KEYS,
+    get_bookmaker_from_api_key,
+    teams_match,
+)
 
 logger = logging.getLogger("football_ia.odds_ingestor")
 
@@ -331,3 +339,66 @@ def upsert_odds(rows: list[dict]) -> int:
         )
         total += len(chunk)
     return total
+
+
+_FOOT_MARKETS = "h2h,btts,totals"
+_NHL_MARKETS = "h2h,totals"
+
+
+def _get_api_key() -> str:
+    key = os.getenv("THE_ODDS_API_KEY", "").strip()
+    if not key:
+        raise RuntimeError("THE_ODDS_API_KEY env var missing")
+    return key
+
+
+def run_snapshot(*, snapshot_type: str) -> int:
+    """Fetch + persist cotes pour tous sports/ligues configurés.
+
+    Args:
+        snapshot_type: "opening" | "closing" | "intraday"
+
+    Returns:
+        Nombre total de rows soumis à upsert (≠ inserts réussis).
+    """
+    api_key = _get_api_key()
+    bookmakers_param = ",".join(
+        ODDS_API_KEY_BY_BOOKMAKER[b] for b in BOOKMAKERS_FR
+    )
+    request_id = f"{snapshot_type}-{uuid.uuid4().hex[:12]}"
+    total_rows = 0
+
+    for sport, sport_keys in SPORT_KEYS.items():
+        markets = _FOOT_MARKETS if sport == "football" else _NHL_MARKETS
+        for sport_key in sport_keys:
+            try:
+                events = fetch_odds(
+                    sport_key=sport_key,
+                    markets=markets,
+                    api_key=api_key,
+                    bookmakers=bookmakers_param,
+                )
+            except OddsAPIQuotaExhausted as exc:
+                logger.error(
+                    "[odds_ingestor] Quota exhausted, stopping snapshot: %s", exc
+                )
+                return total_rows
+            except Exception:
+                logger.exception(
+                    "[odds_ingestor] fetch failed sport_key=%s", sport_key
+                )
+                continue
+
+            rows = parse_odds_response(
+                events,
+                sport=sport,
+                snapshot_type=snapshot_type,
+                source_request_id=request_id,
+            )
+            if rows:
+                upsert_odds(rows)
+                total_rows += len(rows)
+                logger.info(
+                    "[odds_ingestor] sport_key=%s rows=%d", sport_key, len(rows)
+                )
+    return total_rows

@@ -184,6 +184,29 @@ def job_football_evaluation() -> None:
         logger.exception("[job_football_eval] Error")
 
 
+def job_odds_opening_snapshot() -> None:
+    """08:00 UTC — snapshot opening odds (J+1 matchs)."""
+    try:
+        from src.fetchers.odds_ingestor import run_snapshot
+        n = run_snapshot(snapshot_type="opening")
+        logger.info("[job_odds_opening_snapshot] rows=%d", n)
+    except Exception:
+        logger.exception("[job_odds_opening_snapshot] Error")
+
+
+def job_odds_closing_snapshot() -> None:
+    """18:00 UTC — snapshot closing odds (matchs J du soir).
+
+    Wave unique : couvre la majorité des matchs Europe qui kick off 19h/20h.
+    """
+    try:
+        from src.fetchers.odds_ingestor import run_snapshot
+        n = run_snapshot(snapshot_type="closing")
+        logger.info("[job_odds_closing_snapshot] rows=%d", n)
+    except Exception:
+        logger.exception("[job_odds_closing_snapshot] Error")
+
+
 def job_drift_check() -> None:
     """09:00 — détection drift Brier 7j vs 30j."""
     try:
@@ -313,6 +336,14 @@ def main() -> None:
                       id="data_pipeline", max_instances=1, coalesce=True)
     scheduler.add_job(job_fetch_odds, CronTrigger(hour=7, minute=45),
                       id="fetch_odds", max_instances=1, coalesce=True)
+    scheduler.add_job(job_odds_opening_snapshot,
+                      CronTrigger(hour=8, minute=0, timezone="UTC"),
+                      id="odds_opening_snapshot", max_instances=1, coalesce=True,
+                      misfire_grace_time=1800, replace_existing=True)
+    scheduler.add_job(job_odds_closing_snapshot,
+                      CronTrigger(hour=18, minute=0, timezone="UTC"),
+                      id="odds_closing_snapshot", max_instances=1, coalesce=True,
+                      misfire_grace_time=1800, replace_existing=True)
     scheduler.add_job(job_nhl_evaluation, CronTrigger(hour=8, minute=0),
                       id="nhl_eval", max_instances=1, coalesce=True)
     scheduler.add_job(job_football_evaluation, CronTrigger(hour=8, minute=30),

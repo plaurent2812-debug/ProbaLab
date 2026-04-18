@@ -484,3 +484,47 @@ def test_upsert_odds_empty_list_is_noop(monkeypatch):
     monkeypatch.setattr(odds_ingestor, "supabase", FakeSupabase())
     assert odds_ingestor.upsert_odds([]) == 0
     assert called == []
+
+
+def test_run_snapshot_iterates_all_sports(monkeypatch):
+    from src.fetchers import odds_ingestor
+
+    fetched_calls: list[tuple[str, str]] = []
+    upserted: list[int] = []
+
+    def fake_fetch(sport_key, markets, api_key, bookmakers=None, regions="eu",
+                   odds_format="decimal"):
+        fetched_calls.append((sport_key, markets))
+        return []
+
+    def fake_upsert(rows):
+        upserted.append(len(rows))
+        return len(rows)
+
+    monkeypatch.setattr(odds_ingestor, "fetch_odds", fake_fetch)
+    monkeypatch.setattr(odds_ingestor, "upsert_odds", fake_upsert)
+    monkeypatch.setattr(odds_ingestor, "_get_api_key", lambda: "FAKE")
+
+    n = odds_ingestor.run_snapshot(snapshot_type="opening")
+    # 8 ligues foot + 1 NHL = 9 sport keys × N markets
+    assert len(fetched_calls) >= 9
+    sport_keys_called = {c[0] for c in fetched_calls}
+    assert "soccer_france_ligue_one" in sport_keys_called
+    assert "icehockey_nhl" in sport_keys_called
+    assert n == 0  # rien à upsert (fake retourne [])
+
+
+def test_run_snapshot_skips_sports_on_quota(monkeypatch):
+    """Quand OddsAPIQuotaExhausted est levé, on arrête proprement."""
+    from src.fetchers import odds_ingestor
+
+    def fake_fetch(sport_key, markets, api_key, **_):
+        raise OddsAPIQuotaExhausted("quota")
+
+    monkeypatch.setattr(odds_ingestor, "fetch_odds", fake_fetch)
+    monkeypatch.setattr(odds_ingestor, "upsert_odds", lambda rows: 0)
+    monkeypatch.setattr(odds_ingestor, "_get_api_key", lambda: "FAKE")
+
+    # Doit attraper l'exception, logger, et retourner 0 (pas re-raise)
+    n = odds_ingestor.run_snapshot(snapshot_type="opening")
+    assert n == 0
