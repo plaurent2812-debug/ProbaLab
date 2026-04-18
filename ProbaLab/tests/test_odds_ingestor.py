@@ -524,7 +524,148 @@ def test_run_snapshot_skips_sports_on_quota(monkeypatch):
     monkeypatch.setattr(odds_ingestor, "fetch_odds", fake_fetch)
     monkeypatch.setattr(odds_ingestor, "upsert_odds", lambda rows: 0)
     monkeypatch.setattr(odds_ingestor, "_get_api_key", lambda: "FAKE")
+    monkeypatch.setattr(odds_ingestor, "_try_send_telegram", lambda msg: None)
 
     # Doit attraper l'exception, logger, et retourner 0 (pas re-raise)
     n = odds_ingestor.run_snapshot(snapshot_type="opening")
     assert n == 0
+
+
+def test_run_snapshot_raises_if_all_sport_keys_fail(monkeypatch):
+    """I2 regression — if ALL sport_keys throw non-quota errors, raise RuntimeError."""
+    from src.fetchers import odds_ingestor
+
+    def fake_fetch(sport_key, markets, api_key, **_):
+        raise RuntimeError("API 500")
+
+    monkeypatch.setattr(odds_ingestor, "fetch_odds", fake_fetch)
+    monkeypatch.setattr(odds_ingestor, "upsert_odds", lambda rows: 0)
+    monkeypatch.setattr(odds_ingestor, "_get_api_key", lambda: "FAKE")
+    monkeypatch.setattr(odds_ingestor, "_try_send_telegram", lambda msg: None)
+
+    with pytest.raises(RuntimeError, match="failed on all"):
+        odds_ingestor.run_snapshot(snapshot_type="opening")
+
+
+def test_run_snapshot_succeeds_if_at_least_one_sport_key_works(monkeypatch):
+    """Partial failure (some sport_keys OK, some fail) must not raise."""
+    from src.fetchers import odds_ingestor
+
+    call_count = {"n": 0}
+
+    def fake_fetch(sport_key, markets, api_key, **_):
+        call_count["n"] += 1
+        if call_count["n"] % 2 == 0:
+            raise RuntimeError("transient")
+        return []  # success with empty payload
+
+    monkeypatch.setattr(odds_ingestor, "fetch_odds", fake_fetch)
+    monkeypatch.setattr(odds_ingestor, "upsert_odds", lambda rows: 0)
+    monkeypatch.setattr(odds_ingestor, "_get_api_key", lambda: "FAKE")
+    monkeypatch.setattr(odds_ingestor, "_try_send_telegram", lambda msg: None)
+
+    # Should not raise — at least some sport_keys succeeded
+    n = odds_ingestor.run_snapshot(snapshot_type="opening")
+    assert n == 0
+
+
+def test_run_snapshot_for_fixtures_filters_events(monkeypatch):
+    from src.fetchers import odds_ingestor
+
+    upserted_rows: list[list[dict]] = []
+
+    def fake_fetch(sport_key, markets, api_key, **_):
+        return [
+            {
+                "id": "target_fx",
+                "sport_key": sport_key,
+                "commence_time": "2026-04-20T19:00:00Z",
+                "home_team": "Arsenal",
+                "away_team": "Chelsea",
+                "bookmakers": [
+                    {
+                        "key": "pinnacle",
+                        "markets": [
+                            {
+                                "key": "h2h",
+                                "outcomes": [
+                                    {"name": "Arsenal", "price": 1.80},
+                                    {"name": "Chelsea", "price": 4.50},
+                                    {"name": "Draw", "price": 3.60},
+                                ],
+                            }
+                        ],
+                    }
+                ],
+            },
+            {
+                "id": "other_fx",
+                "sport_key": sport_key,
+                "commence_time": "2026-04-20T19:00:00Z",
+                "home_team": "A",
+                "away_team": "B",
+                "bookmakers": [],
+            },
+        ]
+
+    def fake_upsert(rows):
+        upserted_rows.append(rows)
+        return len(rows)
+
+    monkeypatch.setattr(odds_ingestor, "fetch_odds", fake_fetch)
+    monkeypatch.setattr(odds_ingestor, "upsert_odds", fake_upsert)
+    monkeypatch.setattr(odds_ingestor, "_get_api_key", lambda: "FAKE")
+
+    n = odds_ingestor.run_snapshot_for_fixtures(["target_fx"])
+    assert n > 0
+    # All upserted rows should belong to target_fx
+    for batch in upserted_rows:
+        for row in batch:
+            assert row["fixture_id"] == "target_fx"
+            assert row["snapshot_type"] == "closing"
+
+
+def test_run_snapshot_for_fixtures_empty_list_noop(monkeypatch):
+    from src.fetchers import odds_ingestor
+
+    called = []
+    monkeypatch.setattr(odds_ingestor, "fetch_odds",
+                        lambda **kw: called.append(1) or [])
+
+    n = odds_ingestor.run_snapshot_for_fixtures([])
+    assert n == 0
+    assert called == []
+
+
+def test_schedule_closing_snapshots_registers_date_triggers(monkeypatch):
+    from datetime import timedelta
+
+    from src.fetchers import odds_ingestor
+
+    now = datetime.now(timezone.utc)
+    fixtures = [
+        {"fixture_id": "fx1", "kickoff_utc": now + timedelta(hours=6)},
+        {"fixture_id": "fx2", "kickoff_utc": now + timedelta(hours=8)},
+        {"fixture_id": "fx_past", "kickoff_utc": now - timedelta(hours=1)},
+    ]
+    monkeypatch.setattr(odds_ingestor, "_load_today_fixtures_for_closing",
+                        lambda: fixtures)
+
+    scheduled = []
+
+    class FakeScheduler:
+        def add_job(self, func, *, trigger, run_date, args, id, replace_existing,
+                    misfire_grace_time):
+            scheduled.append({"id": id, "run_date": run_date, "args": args})
+
+    n = odds_ingestor.schedule_closing_snapshots_for_today(FakeScheduler())
+    assert n == 2
+    ids = {s["id"] for s in scheduled}
+    assert "closing_fx1" in ids
+    assert "closing_fx2" in ids
+    assert "closing_fx_past" not in ids
+    # Verify run_dates are kickoff - 30min
+    for s in scheduled:
+        fx_id = s["id"].replace("closing_", "")
+        expected_fx = next(fx for fx in fixtures if fx["fixture_id"] == fx_id)
+        assert s["run_date"] == expected_fx["kickoff_utc"] - timedelta(minutes=30)

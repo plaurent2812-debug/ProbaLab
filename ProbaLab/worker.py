@@ -21,6 +21,11 @@ from src.logging_config import setup_logging
 setup_logging()
 logger = logging.getLogger("worker")
 
+# Module-level scheduler reference. Assigned inside main() at startup so that
+# jobs (e.g. job_schedule_closing_snapshots) can register additional date
+# triggers dynamically at runtime.
+scheduler: "BlockingScheduler | None" = None
+
 
 # ═══════════════════════════════════════════════════════════════
 #  JOBS CONTINUS (haute fréquence)
@@ -194,17 +199,25 @@ def job_odds_opening_snapshot() -> None:
         logger.exception("[job_odds_opening_snapshot] Error")
 
 
-def job_odds_closing_snapshot() -> None:
-    """18:00 UTC — snapshot closing odds (matchs J du soir).
+def job_schedule_closing_snapshots() -> None:
+    """10:15 UTC — planifie les closing snapshots T-30min pour chaque fixture du jour.
 
-    Wave unique : couvre la majorité des matchs Europe qui kick off 19h/20h.
+    Utilise le scheduler global (module-level `scheduler`) pour enregistrer
+    des date-triggers. Appelle `run_snapshot_for_fixtures([fixture_id])` T-30min
+    avant chaque kickoff (spec H2-SS1 §5 : closing = T-30min, précision requise
+    pour le dataset CLV).
     """
     try:
-        from src.fetchers.odds_ingestor import run_snapshot
-        n = run_snapshot(snapshot_type="closing")
-        logger.info("[job_odds_closing_snapshot] rows=%d", n)
+        if scheduler is None:
+            logger.warning(
+                "[job_schedule_closing_snapshots] scheduler is None; skipping"
+            )
+            return
+        from src.fetchers.odds_ingestor import schedule_closing_snapshots_for_today
+        n = schedule_closing_snapshots_for_today(scheduler)
+        logger.info("[job_schedule_closing_snapshots] scheduled=%d", n)
     except Exception:
-        logger.exception("[job_odds_closing_snapshot] Error")
+        logger.exception("[job_schedule_closing_snapshots] Error")
 
 
 def job_drift_check() -> None:
@@ -319,6 +332,7 @@ def job_weekly_retrain() -> None:
 
 
 def main() -> None:
+    global scheduler
     scheduler = BlockingScheduler(timezone="Europe/Paris")
 
     # ── Continu ─────────────────────────────────────────────
@@ -340,9 +354,9 @@ def main() -> None:
                       CronTrigger(hour=8, minute=0, timezone="UTC"),
                       id="odds_opening_snapshot", max_instances=1, coalesce=True,
                       misfire_grace_time=1800, replace_existing=True)
-    scheduler.add_job(job_odds_closing_snapshot,
-                      CronTrigger(hour=18, minute=0, timezone="UTC"),
-                      id="odds_closing_snapshot", max_instances=1, coalesce=True,
+    scheduler.add_job(job_schedule_closing_snapshots,
+                      CronTrigger(hour=10, minute=15, timezone="UTC"),
+                      id="schedule_closing_snapshots", max_instances=1, coalesce=True,
                       misfire_grace_time=1800, replace_existing=True)
     scheduler.add_job(job_nhl_evaluation, CronTrigger(hour=8, minute=0),
                       id="nhl_eval", max_instances=1, coalesce=True)
@@ -396,6 +410,7 @@ def main() -> None:
     logger.info("    08:30 UTC Monitoring alerts + persistance model_health_log")
     logger.info("    09:00    Drift detection")
     logger.info("    10:00    Brain IA (prédictions)")
+    logger.info("    10:15 UTC Planification closing snapshots T-30min par match")
     logger.info("    12:00    Value Bets football")
     logger.info("    16:00    Pipeline NHL (analyse + probas)")
     logger.info("    16:15    Fetch cotes NHL")

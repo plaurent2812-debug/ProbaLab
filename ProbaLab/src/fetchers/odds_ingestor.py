@@ -345,6 +345,15 @@ _FOOT_MARKETS = "h2h,btts,totals"
 _NHL_MARKETS = "h2h,totals"
 
 
+def _try_send_telegram(message: str) -> None:
+    """Envoi Telegram tolérant (ne bloque jamais le flow principal)."""
+    try:
+        from src.notifications import send_telegram
+        send_telegram(message)
+    except Exception:
+        logger.exception("[_try_send_telegram] failed to send alert")
+
+
 def _get_api_key() -> str:
     key = os.getenv("THE_ODDS_API_KEY", "").strip()
     if not key:
@@ -368,9 +377,12 @@ def run_snapshot(*, snapshot_type: str) -> int:
     request_id = f"{snapshot_type}-{uuid.uuid4().hex[:12]}"
     total_rows = 0
 
+    total_sport_keys_attempted = 0
+    failures = 0
     for sport, sport_keys in SPORT_KEYS.items():
         markets = _FOOT_MARKETS if sport == "football" else _NHL_MARKETS
         for sport_key in sport_keys:
+            total_sport_keys_attempted += 1
             try:
                 events = fetch_odds(
                     sport_key=sport_key,
@@ -379,13 +391,20 @@ def run_snapshot(*, snapshot_type: str) -> int:
                     bookmakers=bookmakers_param,
                 )
             except OddsAPIQuotaExhausted as exc:
-                logger.error(
+                logger.critical(
                     "[odds_ingestor] Quota exhausted, stopping snapshot: %s", exc
                 )
+                _try_send_telegram(
+                    f"\U0001f534 <b>CRITICAL — The Odds API quota exhausted</b>\n"
+                    f"snapshot_type={snapshot_type}\n"
+                    f"Arrêt de l'ingestion jusqu'au prochain cycle mensuel."
+                )
                 return total_rows
-            except Exception:
+            except Exception as exc:
+                failures += 1
                 logger.exception(
-                    "[odds_ingestor] fetch failed sport_key=%s", sport_key
+                    "[odds_ingestor] fetch failed sport_key=%s err=%s",
+                    sport_key, exc,
                 )
                 continue
 
@@ -401,4 +420,187 @@ def run_snapshot(*, snapshot_type: str) -> int:
                 logger.info(
                     "[odds_ingestor] sport_key=%s rows=%d", sport_key, len(rows)
                 )
+
+    if total_sport_keys_attempted > 0 and failures == total_sport_keys_attempted:
+        _try_send_telegram(
+            f"\U0001f534 <b>CRITICAL — Odds snapshot total failure</b>\n"
+            f"snapshot_type={snapshot_type}\n"
+            f"All {total_sport_keys_attempted} sport_keys failed. Check logs."
+        )
+        raise RuntimeError(
+            f"run_snapshot failed on all {total_sport_keys_attempted} sport_keys"
+        )
     return total_rows
+
+
+def run_snapshot_for_fixtures(fixture_ids: list[str]) -> int:
+    """Closing snapshot ciblé sur une liste de fixture_ids (appelé par date trigger).
+
+    Ne capture que les cotes dont l'event id est dans fixture_ids.
+    Utilise `snapshot_type='closing'` et marque les rows.
+    """
+    if not fixture_ids:
+        return 0
+
+    api_key = _get_api_key()
+    bookmakers_param = ",".join(
+        ODDS_API_KEY_BY_BOOKMAKER[b] for b in BOOKMAKERS_FR
+    )
+    request_id = f"closing-{uuid.uuid4().hex[:12]}"
+    fixture_ids_set = {str(f) for f in fixture_ids}
+    total_rows = 0
+
+    for sport, sport_keys in SPORT_KEYS.items():
+        markets = _FOOT_MARKETS if sport == "football" else _NHL_MARKETS
+        for sport_key in sport_keys:
+            try:
+                events = fetch_odds(
+                    sport_key=sport_key,
+                    markets=markets,
+                    api_key=api_key,
+                    bookmakers=bookmakers_param,
+                )
+            except OddsAPIQuotaExhausted as exc:
+                logger.critical(
+                    "[odds_ingestor] closing quota exhausted: %s", exc
+                )
+                _try_send_telegram(
+                    f"\U0001f534 <b>CRITICAL — Quota exhausted on closing snapshot</b>\n{exc}"
+                )
+                return total_rows
+            except Exception as exc:
+                logger.exception(
+                    "[odds_ingestor] closing fetch failed sport_key=%s err=%s",
+                    sport_key, exc,
+                )
+                continue
+
+            # Filter events to only requested fixture_ids
+            filtered = [e for e in events if str(e.get("id", "")) in fixture_ids_set]
+            if not filtered:
+                continue
+
+            rows = parse_odds_response(
+                filtered,
+                sport=sport,
+                snapshot_type="closing",
+                source_request_id=request_id,
+            )
+            if rows:
+                upsert_odds(rows)
+                total_rows += len(rows)
+                logger.info(
+                    "[odds_ingestor] closing sport_key=%s fixtures=%d rows=%d",
+                    sport_key, len(filtered), len(rows),
+                )
+    return total_rows
+
+
+def _load_today_fixtures_for_closing() -> list[dict]:
+    """Charge les fixtures (foot + NHL) dont kickoff est dans les prochaines 24h UTC.
+
+    Retourne [{fixture_id: str, kickoff_utc: datetime}, ...].
+    """
+    from datetime import timedelta
+
+    now = datetime.now(timezone.utc)
+    horizon = now + timedelta(hours=24)
+
+    out: list[dict] = []
+    # Football fixtures
+    try:
+        rows = (
+            supabase.table("fixtures")
+            .select("api_fixture_id,date")
+            .gte("date", now.isoformat())
+            .lt("date", horizon.isoformat())
+            .execute()
+            .data
+        ) or []
+        for r in rows:
+            if not r.get("date") or not r.get("api_fixture_id"):
+                continue
+            k = datetime.fromisoformat(str(r["date"]).replace("Z", "+00:00"))
+            if k.tzinfo is None:
+                continue
+            out.append({
+                "fixture_id": str(r["api_fixture_id"]),
+                "kickoff_utc": k.astimezone(timezone.utc),
+            })
+    except Exception:
+        logger.exception("[_load_today_fixtures_for_closing] football load failed")
+
+    # NHL fixtures (separate table, same column names as football)
+    try:
+        rows = (
+            supabase.table("nhl_fixtures")
+            .select("api_fixture_id,date")
+            .gte("date", now.isoformat())
+            .lt("date", horizon.isoformat())
+            .execute()
+            .data
+        ) or []
+        for r in rows:
+            if not r.get("date") or not r.get("api_fixture_id"):
+                continue
+            k = datetime.fromisoformat(str(r["date"]).replace("Z", "+00:00"))
+            if k.tzinfo is None:
+                continue
+            out.append({
+                "fixture_id": str(r["api_fixture_id"]),
+                "kickoff_utc": k.astimezone(timezone.utc),
+            })
+    except Exception:
+        logger.exception("[_load_today_fixtures_for_closing] nhl load failed")
+
+    return out
+
+
+def schedule_closing_snapshots_for_today(scheduler) -> int:
+    """Enregistre des date-triggers T-30min pour chaque fixture de la journée.
+
+    Appelé par job_schedule_closing_snapshots à 10:15 UTC après job_brain.
+    Dedup via id='closing_<fixture_id>' + replace_existing=True.
+
+    Returns: nombre de jobs planifiés.
+    """
+    from datetime import timedelta
+
+    fixtures = _load_today_fixtures_for_closing()
+    if not fixtures:
+        logger.info("[schedule_closing_snapshots] no fixtures in next 24h")
+        return 0
+
+    now = datetime.now(timezone.utc)
+    scheduled = 0
+    for fx in fixtures:
+        trigger_at = fx["kickoff_utc"] - timedelta(minutes=30)
+        if trigger_at <= now:
+            # Match already started / very close; skip
+            logger.debug(
+                "[schedule_closing_snapshots] skip past trigger fixture=%s kickoff=%s",
+                fx["fixture_id"], fx["kickoff_utc"],
+            )
+            continue
+        job_id = f"closing_{fx['fixture_id']}"
+        try:
+            scheduler.add_job(
+                run_snapshot_for_fixtures,
+                trigger="date",
+                run_date=trigger_at,
+                args=[[fx["fixture_id"]]],
+                id=job_id,
+                replace_existing=True,
+                misfire_grace_time=120,
+            )
+            scheduled += 1
+        except Exception:
+            logger.exception(
+                "[schedule_closing_snapshots] failed to add job for fixture=%s",
+                fx["fixture_id"],
+            )
+    logger.info(
+        "[schedule_closing_snapshots] scheduled=%d over %d fixtures",
+        scheduled, len(fixtures),
+    )
+    return scheduled
