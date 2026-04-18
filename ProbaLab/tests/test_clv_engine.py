@@ -61,3 +61,69 @@ def test_compute_clv_clamped_to_one_on_degenerate_closing():
 def test_compute_clv_floored_at_minus_one():
     clv = compute_clv(model_prob=0.0, closing_fair_prob=0.50)
     assert clv == -1.0
+
+
+def test_aggregate_clv_by_market_1x2():
+    from src.monitoring.clv_engine import aggregate_clv_by_market
+
+    predictions = [
+        {
+            "fixture_id": "fx1",
+            "pred_home": 60.0,
+            "pred_draw": 25.0,
+            "pred_away": 15.0,
+            "actual_result": "H",
+        },
+        {
+            "fixture_id": "fx2",
+            "pred_home": 40.0,
+            "pred_draw": 30.0,
+            "pred_away": 30.0,
+            "actual_result": "A",
+        },
+    ]
+    closing_odds = [
+        # fx1 Pinnacle h/d/a : 1.80 / 3.60 / 4.80 (fair ~55/27/17)
+        {"fixture_id": "fx1", "bookmaker": "pinnacle", "market": "1x2",
+         "selection": "home", "odds": 1.80, "line": None},
+        {"fixture_id": "fx1", "bookmaker": "pinnacle", "market": "1x2",
+         "selection": "draw", "odds": 3.60, "line": None},
+        {"fixture_id": "fx1", "bookmaker": "pinnacle", "market": "1x2",
+         "selection": "away", "odds": 4.80, "line": None},
+        # fx2 Pinnacle 2.50 / 3.20 / 2.80 (fair ~38/30/33)
+        {"fixture_id": "fx2", "bookmaker": "pinnacle", "market": "1x2",
+         "selection": "home", "odds": 2.50, "line": None},
+        {"fixture_id": "fx2", "bookmaker": "pinnacle", "market": "1x2",
+         "selection": "draw", "odds": 3.20, "line": None},
+        {"fixture_id": "fx2", "bookmaker": "pinnacle", "market": "1x2",
+         "selection": "away", "odds": 2.80, "line": None},
+    ]
+
+    result = aggregate_clv_by_market(
+        predictions=predictions,
+        closing_odds_rows=closing_odds,
+        market="1x2",
+        bookmaker="pinnacle",
+    )
+    assert result["n_matches"] == 2
+    # CLV on the model's "pick" (side with highest prob) against fair closing
+    # fx1 pick = home (60%) vs ~55% fair → positive CLV
+    # fx2 pick = home (40%) vs ~38% fair → slightly positive
+    assert -0.5 < result["clv_mean"] < 0.5
+    assert "clv_home" in result
+    assert "clv_draw" in result
+    assert "clv_away" in result
+
+
+def test_aggregate_clv_returns_zero_n_when_no_closing():
+    from src.monitoring.clv_engine import aggregate_clv_by_market
+
+    predictions = [{"fixture_id": "fx99", "pred_home": 50, "pred_draw": 30,
+                    "pred_away": 20, "actual_result": "H"}]
+    result = aggregate_clv_by_market(
+        predictions=predictions,
+        closing_odds_rows=[],
+        market="1x2",
+        bookmaker="pinnacle",
+    )
+    assert result["n_matches"] == 0
