@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -431,3 +432,55 @@ def test_parse_totals_skips_outcomes_without_point():
     assert totals == [], (
         "Outcomes without 'point' must be skipped to avoid line=0 garbage rows"
     )
+
+
+def test_upsert_odds_calls_supabase_with_on_conflict_ignore(monkeypatch):
+    from src.fetchers import odds_ingestor
+
+    inserted_batches: list[list[dict]] = []
+
+    class FakeTable:
+        def upsert(self, rows, on_conflict=None, ignore_duplicates=None):
+            inserted_batches.append(rows)
+            return self
+
+        def execute(self):
+            return MagicMock(data=inserted_batches[-1])
+
+    class FakeSupabase:
+        def table(self, name):
+            assert name == "closing_odds"
+            return FakeTable()
+
+    monkeypatch.setattr(odds_ingestor, "supabase", FakeSupabase())
+
+    rows = [
+        {
+            "sport": "football", "fixture_id": "fx1",
+            "match_start": datetime(2026, 4, 20, 15, tzinfo=timezone.utc),
+            "bookmaker": "pinnacle", "market": "1x2", "selection": "home",
+            "line": None, "odds": 1.50, "implied_prob": 0.6667,
+            "overround": 1.05, "snapshot_type": "opening",
+            "source_request_id": "req-upsert",
+        }
+    ]
+    n = odds_ingestor.upsert_odds(rows)
+    assert n == 1
+    assert len(inserted_batches) == 1
+    # match_start doit être sérialisé en ISO 8601 pour Supabase
+    assert isinstance(inserted_batches[0][0]["match_start"], str)
+
+
+def test_upsert_odds_empty_list_is_noop(monkeypatch):
+    from src.fetchers import odds_ingestor
+
+    called = []
+
+    class FakeSupabase:
+        def table(self, name):
+            called.append(name)
+            raise AssertionError("should not be called")
+
+    monkeypatch.setattr(odds_ingestor, "supabase", FakeSupabase())
+    assert odds_ingestor.upsert_odds([]) == 0
+    assert called == []

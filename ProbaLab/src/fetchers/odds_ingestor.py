@@ -18,6 +18,7 @@ from typing import Any
 
 import httpx
 
+from src.config import supabase
 from src.fetchers.bookmaker_registry import get_bookmaker_from_api_key, teams_match
 
 logger = logging.getLogger("football_ia.odds_ingestor")
@@ -209,6 +210,7 @@ ODDS_API_BASE = "https://api.the-odds-api.com/v4"
 _MAX_RETRIES = 3
 _RETRY_DELAYS = [1.0, 2.0, 4.0]
 _HTTP_TIMEOUT = 30.0
+_UPSERT_CHUNK = 500
 
 assert len(_RETRY_DELAYS) >= _MAX_RETRIES, (
     "_RETRY_DELAYS must have at least _MAX_RETRIES entries"
@@ -289,3 +291,37 @@ def fetch_odds(
     raise RuntimeError(
         f"fetch_odds exhausted retries for sport={sport_key}: {last_error}"
     )
+
+
+def upsert_odds(rows: list[dict]) -> int:
+    """Insert rows in closing_odds avec ON CONFLICT DO NOTHING.
+
+    Retourne le nombre de rows soumis (pas le nombre d'inserts réussis —
+    Supabase ne renvoie pas le count pour ignore_duplicates=True).
+    """
+    if not rows:
+        return 0
+
+    # Sérialiser datetimes en ISO 8601
+    serialized: list[dict] = []
+    for r in rows:
+        copy = dict(r)
+        ms = copy.get("match_start")
+        if isinstance(ms, datetime):
+            copy["match_start"] = ms.isoformat()
+        serialized.append(copy)
+
+    total = 0
+    for i in range(0, len(serialized), _UPSERT_CHUNK):
+        chunk = serialized[i : i + _UPSERT_CHUNK]
+        (
+            supabase.table("closing_odds")
+            .upsert(
+                chunk,
+                on_conflict="fixture_id,bookmaker,market,selection,line,snapshot_type",
+                ignore_duplicates=True,
+            )
+            .execute()
+        )
+        total += len(chunk)
+    return total
