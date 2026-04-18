@@ -128,3 +128,21 @@ def run_feature_drift_check(
         "n_drifted": n_drifted,
         "per_feature": per_feature,
     }
+
+
+def drift_result_to_alert(result: dict, *, threshold: int = 5) -> str | None:
+    """Retourne un message HTML Telegram si n_drifted >= threshold, sinon None."""
+    n_drifted = result.get("n_drifted", 0)
+    if n_drifted < threshold:
+        return None
+    drifted_names = [
+        name for name, info in (result.get("per_feature") or {}).items()
+        if info.get("drift_detected")
+    ][:10]
+    lines = [
+        "\u26a0\ufe0f <b>CRITICAL — Feature drift</b>",
+        f"n_drifted={n_drifted} / {result.get('n_features')}",
+        f"alpha={result.get('alpha')}",
+        "Features: " + ", ".join(drifted_names),
+    ]
+    return "\n".join(lines)

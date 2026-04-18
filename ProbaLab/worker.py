@@ -232,6 +232,29 @@ def job_daily_clv_snapshot() -> None:
         logger.exception("[job_daily_clv_snapshot] Error")
 
 
+def job_feature_drift_check() -> None:
+    """09:30 UTC — KS test training vs prod, alerte Telegram si drift CRITICAL."""
+    try:
+        from src.monitoring.feature_drift import (
+            drift_result_to_alert,
+            run_feature_drift_check,
+        )
+        from src.notifications import send_telegram
+
+        result = run_feature_drift_check(alpha=0.01, window_days=30)
+        alert = drift_result_to_alert(result, threshold=5)
+        if alert:
+            send_telegram(alert)
+            logger.warning("[job_feature_drift_check] drift alert sent")
+        else:
+            logger.info(
+                "[job_feature_drift_check] n_drifted=%d / %d",
+                result["n_drifted"], result["n_features"],
+            )
+    except Exception:
+        logger.exception("[job_feature_drift_check] Error")
+
+
 def job_drift_check() -> None:
     """09:00 — détection drift Brier 7j vs 30j."""
     try:
@@ -374,6 +397,10 @@ def main() -> None:
                       CronTrigger(hour=9, minute=0, timezone="UTC"),
                       id="daily_clv_snapshot", max_instances=1, coalesce=True,
                       misfire_grace_time=1800, replace_existing=True)
+    scheduler.add_job(job_feature_drift_check,
+                      CronTrigger(hour=9, minute=30, timezone="UTC"),
+                      id="feature_drift_check", max_instances=1, coalesce=True,
+                      misfire_grace_time=1800, replace_existing=True)
     scheduler.add_job(job_nhl_evaluation, CronTrigger(hour=8, minute=0),
                       id="nhl_eval", max_instances=1, coalesce=True)
     scheduler.add_job(job_football_evaluation, CronTrigger(hour=8, minute=30),
@@ -426,6 +453,7 @@ def main() -> None:
     logger.info("    08:30 UTC Monitoring alerts + persistance model_health_log")
     logger.info("    09:00    Drift detection")
     logger.info("    09:00 UTC Daily CLV snapshot")
+    logger.info("    09:30 UTC Feature drift check")
     logger.info("    10:00    Brain IA (prédictions)")
     logger.info("    10:15 UTC Planification closing snapshots T-30min par match")
     logger.info("    12:00    Value Bets football")

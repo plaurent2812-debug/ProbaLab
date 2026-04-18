@@ -66,3 +66,28 @@ def test_run_feature_drift_check_aggregates(monkeypatch):
     assert "home_form" in result["per_feature"]
     assert result["per_feature"]["home_form"]["drift_detected"] is True
     assert result["n_drifted"] >= 1
+
+
+def test_drift_result_to_alert_triggers_when_many_drifted():
+    from src.monitoring.feature_drift import drift_result_to_alert
+
+    result = {
+        "n_drifted": 6,
+        "n_features": 43,
+        "alpha": 0.01,
+        "per_feature": {
+            f"feat_{i}": {"drift_detected": True, "p_value": 1e-5,
+                          "n_train": 1000, "n_prod": 200}
+            for i in range(6)
+        },
+    }
+    alert = drift_result_to_alert(result, threshold=5)
+    assert alert is not None
+    assert "CRITICAL" in alert
+
+
+def test_drift_result_to_alert_none_when_below_threshold():
+    from src.monitoring.feature_drift import drift_result_to_alert
+
+    result = {"n_drifted": 2, "n_features": 43, "per_feature": {}}
+    assert drift_result_to_alert(result, threshold=5) is None
