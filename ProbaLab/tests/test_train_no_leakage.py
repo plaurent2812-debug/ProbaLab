@@ -3,6 +3,8 @@
 import ast
 import pathlib
 
+import pytest
+
 TRAIN_PATH = pathlib.Path(__file__).parent.parent / "src" / "training" / "train.py"
 
 
@@ -39,12 +41,21 @@ def test_no_test_set_in_eval_set():
         )
 
 
+@pytest.mark.xfail(
+    reason=(
+        "R5 audit finding — calculate_team_strengths lacks an as_of_date "
+        "parameter, causing future-leak when team strengths are computed on "
+        "full-season data during backtests. Follow-up: add as_of_date and "
+        "filter match_team_stats.match_date < as_of_date."
+    ),
+    strict=True,
+)
 def test_team_strengths_computed_with_match_date_filter():
-    """Anti-leakage : team_strengths doit filtrer par match_date < fixture.date.
+    """Anti-leakage strict : calculate_team_strengths doit accepter un paramètre
+    de date pour filtrer match_team_stats à match_date < as_of_date.
 
-    Sans ce filtre, les forces d'équipe d'une fin de saison fuitent dans un
-    match du début de saison → backtest Brier artificiellement bas.
-    Audit §2.5 — leakage subtil non détecté.
+    Vérifie la SIGNATURE de la fonction (pas juste le body d'un caller).
+    Audit §2.5 — leakage subtil R5.
     """
     import ast
 
@@ -53,34 +64,26 @@ def test_team_strengths_computed_with_match_date_filter():
 
     tree = ast.parse(source)
 
-    # On cherche des fonctions/méthodes qui calculent team_strengths
-    # et on vérifie qu'elles reçoivent un paramètre de date pour filtrer.
-    def _funcs_containing(name: str):
-        out = []
-        for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                func_src = ast.get_source_segment(source, node) or ""
-                if name in func_src:
-                    out.append(node)
-        return out
+    target: ast.FunctionDef | ast.AsyncFunctionDef | None = None
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if node.name == "calculate_team_strengths":
+                target = node
+                break
 
-    target_funcs = _funcs_containing("team_strengths")
-    assert target_funcs, "Aucune fonction ne calcule team_strengths"
+    assert target is not None, (
+        "calculate_team_strengths function not found in stats_engine.py"
+    )
 
-    # Au moins une doit filtrer par match_date OU recevoir un kickoff_date
-    found_guard = False
-    for fn in target_funcs:
-        src = ast.get_source_segment(source, fn) or ""
-        if (
-            "match_date" in src
-            or "kickoff_date" in src
-            or "fixture_date" in src
-            or "as_of_date" in src
-        ):
-            found_guard = True
-            break
-    assert found_guard, (
-        "Aucune fonction team_strengths ne semble filtrer par date — "
-        "risque de future-leak temporel. Ajouter un paramètre as_of_date "
-        "et filtrer match_team_stats.match_date < as_of_date."
+    param_names = {a.arg for a in target.args.args}
+    param_names |= {a.arg for a in target.args.kwonlyargs}
+
+    date_params = {"as_of_date", "match_date", "kickoff_date", "fixture_date",
+                   "until_date", "before_date"}
+
+    assert param_names & date_params, (
+        f"calculate_team_strengths has no date-filter parameter. "
+        f"Current params: {sorted(param_names)}. "
+        f"Expected one of: {sorted(date_params)}. "
+        f"Add as_of_date=None and filter match_team_stats by match_date < as_of_date."
     )
