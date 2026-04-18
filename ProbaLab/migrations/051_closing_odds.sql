@@ -23,7 +23,7 @@ create table if not exists closing_odds (
   snapshot_at timestamptz not null default now(),
   source_request_id text,
   constraint closing_odds_unique
-    unique (fixture_id, bookmaker, market, selection, line, snapshot_type)
+    unique nulls not distinct (fixture_id, bookmaker, market, selection, line, snapshot_type)
 );
 
 create index if not exists idx_closing_odds_fixture
