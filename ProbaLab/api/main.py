@@ -45,6 +45,7 @@ from api.routers import push as push_router
 from api.routers import search as search_router
 from api.routers import teams as teams_router
 from api.routers import telegram as telegram_router
+from api.routers import value_bets as value_bets_router
 
 logger = logging.getLogger(__name__)
 
@@ -113,6 +114,7 @@ app.include_router(performance_router.router)
 app.include_router(predictions_router.router)
 app.include_router(search_router.router)
 app.include_router(teams_router.router)
+app.include_router(value_bets_router.router)
 
 # ─── CORS Middleware ─────────────────────────────────────────────
 
