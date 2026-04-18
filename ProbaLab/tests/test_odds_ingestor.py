@@ -105,5 +105,40 @@ def test_parse_skips_unknown_bookmakers():
     assert rows == []
 
 
+def test_parse_raises_on_naive_commence_time():
+    """Defense against silent timezone drift if Odds API returns naive ISO."""
+    sample = [
+        {
+            "id": "event_naive",
+            "sport_key": "soccer_epl",
+            "commence_time": "2026-04-20T19:00:00",  # no Z, no offset
+            "home_team": "A",
+            "away_team": "B",
+            "bookmakers": [
+                {
+                    "key": "pinnacle",
+                    "title": "Pinnacle",
+                    "last_update": "2026-04-19T10:00:00Z",
+                    "markets": [
+                        {
+                            "key": "h2h",
+                            "outcomes": [
+                                {"name": "A", "price": 1.80},
+                                {"name": "B", "price": 4.50},
+                                {"name": "Draw", "price": 3.60},
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+    ]
+    with pytest.raises(ValueError, match="timezone-aware"):
+        parse_odds_response(
+            sample, sport="football", snapshot_type="opening",
+            source_request_id="req-naive",
+        )
+
+
 def test_quota_exhausted_is_an_exception():
     assert issubclass(OddsAPIQuotaExhausted, Exception)

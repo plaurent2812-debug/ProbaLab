@@ -67,12 +67,16 @@ def parse_odds_response(
     """
     rows: list[dict] = []
     for event in events:
-        fixture_id = event["id"]
+        fixture_id = str(event["id"])
         home_team = event.get("home_team", "")
         away_team = event.get("away_team", "")
-        match_start = datetime.fromisoformat(
-            event["commence_time"].replace("Z", "+00:00")
-        ).astimezone(timezone.utc)
+        raw_commence = event["commence_time"]
+        parsed_commence = datetime.fromisoformat(raw_commence.replace("Z", "+00:00"))
+        if parsed_commence.tzinfo is None:
+            raise ValueError(
+                f"commence_time must be timezone-aware: {raw_commence!r}"
+            )
+        match_start = parsed_commence.astimezone(timezone.utc)
 
         for bk_block in event.get("bookmakers", []):
             bk = get_bookmaker_from_api_key(bk_block["key"])
