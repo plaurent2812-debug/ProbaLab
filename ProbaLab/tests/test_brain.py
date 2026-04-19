@@ -141,3 +141,22 @@ class TestBlendPredictions:
         assert result["proba_over_15"] == 78
         assert result["proba_over_35"] == 30
         assert result["proba_penalty"] == 28
+
+
+def test_brain_py_writes_features_to_stats_json():
+    """C2 regression — brain.py must populate stats_json['features'] from context.
+
+    AST check: verify the assignment `final["stats_json"]["features"] = <snapshot>`
+    exists in the brain module source.
+    """
+    import pathlib
+
+    src = pathlib.Path("src/brain.py").read_text()
+    assert "stats_json\"][\"features\"]" in src or 'stats_json"]["features"]' in src, (
+        "brain.py must write stats_json['features'] so monitoring/feature_drift "
+        "can read prod feature distributions. See C2 in H2-SS1 review."
+    )
+    # Also assert FEATURE_COLS is iterated
+    assert "for col in FEATURE_COLS" in src, (
+        "brain.py must iterate FEATURE_COLS when building the features snapshot."
+    )

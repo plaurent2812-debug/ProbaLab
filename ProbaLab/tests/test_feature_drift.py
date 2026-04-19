@@ -1,6 +1,8 @@
 """Tests pour feature_drift — KS test training vs prod."""
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
 import numpy as np
 
 from src.monitoring.feature_drift import (
@@ -91,3 +93,43 @@ def test_drift_result_to_alert_none_when_below_threshold():
 
     result = {"n_drifted": 2, "n_features": 43, "per_feature": {}}
     assert drift_result_to_alert(result, threshold=5) is None
+
+
+def test_load_prod_distribution_reads_stats_json_features(monkeypatch):
+    """C2 regression — _load_prod_distribution must read predictions.stats_json.features."""
+    from src.constants import FEATURE_COLS
+    from src.monitoring import feature_drift
+
+    sample_feature = FEATURE_COLS[0]
+
+    fake_rows = [
+        {"stats_json": {"features": {sample_feature: 1.5, "other_col": 999}}},
+        {"stats_json": {"features": {sample_feature: 2.0}}},
+        {"stats_json": {"features": {sample_feature: 2.5}}},
+        {"stats_json": {}},  # no features key — skipped
+        {"stats_json": None},  # null stats_json — skipped
+    ]
+
+    class FakeTable:
+        def select(self, _cols):
+            return self
+        def gte(self, _col, _val):
+            return self
+        def limit(self, _n):
+            return self
+        def execute(self):
+            return MagicMock(data=fake_rows)
+
+    class FakeSupabase:
+        def table(self, _name):
+            return FakeTable()
+
+    monkeypatch.setattr(feature_drift, "supabase", FakeSupabase())
+
+    result = feature_drift._load_prod_distribution(window_days=30)
+    values = result[sample_feature]
+    # Should have extracted 3 values (1.5, 2.0, 2.5); rows without features skipped
+    assert len(values) == 3
+    assert 1.5 in values.tolist()
+    assert 2.0 in values.tolist()
+    assert 2.5 in values.tolist()

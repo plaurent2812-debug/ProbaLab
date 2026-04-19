@@ -24,6 +24,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from src.ai_service import ask_gemini, extract_json, get_gemini_client  # noqa: F401 — re-exported
 from src.config import logger, supabase
+from src.constants import FEATURE_COLS
 from src.deepthink import generate_football_deepthink
 from src.models.scorer_engine import predict_scorers
 from src.models.stats_engine import analyze_match, update_elo_from_results
@@ -278,6 +279,20 @@ def run_brain() -> None:
                     "market_away": market_snapshot.get("market_away"),
                     "overround": market_snapshot.get("overround"),
                 }
+
+            # Feature drift tracking: snapshot FEATURE_COLS values for daily KS test
+            # (src/monitoring/feature_drift.py reads from stats_json.features)
+            features_snapshot: dict[str, float | None] = {}
+            for col in FEATURE_COLS:
+                val = ctx.get(col)
+                if val is None:
+                    features_snapshot[col] = None
+                else:
+                    try:
+                        features_snapshot[col] = float(val)
+                    except (TypeError, ValueError):
+                        features_snapshot[col] = None
+            final["stats_json"]["features"] = features_snapshot
 
             insert_data = {
                 "fixture_id": fix["id"],
