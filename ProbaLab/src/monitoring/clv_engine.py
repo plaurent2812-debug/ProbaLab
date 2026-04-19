@@ -184,17 +184,67 @@ def _model_probs_for_market(pred: dict, market: str) -> list[float] | None:
 
 
 def _load_predictions_for_date(target: date) -> list[dict]:
-    """Charge les prediction_results pour les matchs dont fixtures.date == target."""
+    """Charge les prediction_results pour les matchs dont match_date == target.
+
+    Joint prediction_results × fixtures (et nhl_fixtures) par fixture_id
+    pour filtrer sur la vraie date du match (pas created_at du post-match eval).
+    """
     start = datetime(target.year, target.month, target.day, tzinfo=timezone.utc)
     end = start + timedelta(days=1)
-    rows = (
-        supabase.table("prediction_results")
-        .select("*")
-        .gte("created_at", start.isoformat())
-        .lt("created_at", end.isoformat())
-        .execute()
-        .data
-    ) or []
+
+    # Step 1: fixture_ids (football + NHL) whose match date is in window
+    fixture_ids: set[str] = set()
+
+    try:
+        foot_rows = (
+            supabase.table("fixtures")
+            .select("id")
+            .gte("date", start.isoformat())
+            .lt("date", end.isoformat())
+            .execute()
+            .data
+        ) or []
+        fixture_ids.update(str(r["id"]) for r in foot_rows if r.get("id"))
+    except Exception:
+        logger.exception("[_load_predictions_for_date] football fixtures load failed")
+
+    try:
+        nhl_rows = (
+            supabase.table("nhl_fixtures")
+            .select("game_id")
+            .gte("game_date", start.isoformat())
+            .lt("game_date", end.isoformat())
+            .execute()
+            .data
+        ) or []
+        fixture_ids.update(str(r["game_id"]) for r in nhl_rows if r.get("game_id"))
+    except Exception:
+        logger.exception("[_load_predictions_for_date] nhl fixtures load failed")
+
+    if not fixture_ids:
+        return []
+
+    # Step 2: load prediction_results matching those fixture_ids
+    # PostgREST supports .in_() but chunks large lists — keep it simple
+    fixture_id_list = list(fixture_ids)
+    rows: list[dict] = []
+    CHUNK = 200
+    for i in range(0, len(fixture_id_list), CHUNK):
+        chunk = fixture_id_list[i : i + CHUNK]
+        try:
+            r = (
+                supabase.table("prediction_results")
+                .select("*")
+                .in_("fixture_id", chunk)
+                .execute()
+                .data
+            ) or []
+            rows.extend(r)
+        except Exception:
+            logger.exception(
+                "[_load_predictions_for_date] prediction_results chunk failed"
+            )
+
     return rows
 
 
