@@ -3,6 +3,8 @@
 import ast
 import pathlib
 
+import pytest
+
 TRAIN_PATH = pathlib.Path(__file__).parent.parent / "src" / "training" / "train.py"
 
 
@@ -37,3 +39,51 @@ def test_no_test_set_in_eval_set():
             f"Data leakage at {TRAIN_PATH}:{lineno} — eval_set uses {x_name} "
             f"which is the test set. Use a separate X_val from train split instead."
         )
+
+
+@pytest.mark.xfail(
+    reason=(
+        "R5 audit finding — calculate_team_strengths lacks an as_of_date "
+        "parameter, causing future-leak when team strengths are computed on "
+        "full-season data during backtests. Follow-up: add as_of_date and "
+        "filter match_team_stats.match_date < as_of_date."
+    ),
+    strict=True,
+)
+def test_team_strengths_computed_with_match_date_filter():
+    """Anti-leakage strict : calculate_team_strengths doit accepter un paramètre
+    de date pour filtrer match_team_stats à match_date < as_of_date.
+
+    Vérifie la SIGNATURE de la fonction (pas juste le body d'un caller).
+    Audit §2.5 — leakage subtil R5.
+    """
+    import ast
+
+    with open("src/models/stats_engine.py") as f:
+        source = f.read()
+
+    tree = ast.parse(source)
+
+    target: ast.FunctionDef | ast.AsyncFunctionDef | None = None
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if node.name == "calculate_team_strengths":
+                target = node
+                break
+
+    assert target is not None, (
+        "calculate_team_strengths function not found in stats_engine.py"
+    )
+
+    param_names = {a.arg for a in target.args.args}
+    param_names |= {a.arg for a in target.args.kwonlyargs}
+
+    date_params = {"as_of_date", "match_date", "kickoff_date", "fixture_date",
+                   "until_date", "before_date"}
+
+    assert param_names & date_params, (
+        f"calculate_team_strengths has no date-filter parameter. "
+        f"Current params: {sorted(param_names)}. "
+        f"Expected one of: {sorted(date_params)}. "
+        f"Add as_of_date=None and filter match_team_stats by match_date < as_of_date."
+    )

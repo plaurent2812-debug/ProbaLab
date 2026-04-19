@@ -4,7 +4,11 @@ worker.py — Cron worker pour Railway (service séparé du web).
 Schedule optimisé pour le Smart Betting Assistant (value bets).
 Flux : Data → Odds → Predict → Edge → Picks → Alertes.
 
-Toutes les heures sont en Europe/Paris.
+Scheduling conventions:
+  - Legacy jobs: Europe/Paris (scheduler default)
+  - H2-SS1 jobs (odds/CLV/drift): explicit timezone="UTC" per CronTrigger
+    to align with CLAUDE.md "Timezones: tout en UTC sans exception"
+  - DST transitions may shift the relative order of Paris/UTC jobs
 
 Usage :
   python worker.py
@@ -20,6 +24,11 @@ from src.logging_config import setup_logging
 
 setup_logging()
 logger = logging.getLogger("worker")
+
+# Module-level scheduler reference. Assigned inside main() at startup so that
+# jobs (e.g. job_schedule_closing_snapshots) can register additional date
+# triggers dynamically at runtime.
+scheduler: "BlockingScheduler | None" = None
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -184,6 +193,72 @@ def job_football_evaluation() -> None:
         logger.exception("[job_football_eval] Error")
 
 
+def job_odds_opening_snapshot() -> None:
+    """08:00 UTC — snapshot opening odds (J+1 matchs)."""
+    try:
+        from src.fetchers.odds_ingestor import run_snapshot
+        n = run_snapshot(snapshot_type="opening")
+        logger.info("[job_odds_opening_snapshot] rows=%d", n)
+    except Exception:
+        logger.exception("[job_odds_opening_snapshot] Error")
+
+
+def job_schedule_closing_snapshots() -> None:
+    """10:15 UTC — planifie les closing snapshots T-30min pour chaque fixture du jour.
+
+    Utilise le scheduler global (module-level `scheduler`) pour enregistrer
+    des date-triggers. Appelle `run_snapshot_for_fixtures([fixture_id])` T-30min
+    avant chaque kickoff (spec H2-SS1 §5 : closing = T-30min, précision requise
+    pour le dataset CLV).
+    """
+    try:
+        if scheduler is None:
+            logger.warning(
+                "[job_schedule_closing_snapshots] scheduler is None; skipping"
+            )
+            return
+        from src.fetchers.odds_ingestor import schedule_closing_snapshots_for_today
+        n = schedule_closing_snapshots_for_today(scheduler)
+        logger.info("[job_schedule_closing_snapshots] scheduled=%d", n)
+    except Exception:
+        logger.exception("[job_schedule_closing_snapshots] Error")
+
+
+def job_daily_clv_snapshot() -> None:
+    """09:00 UTC — calcul CLV J-1 vs Pinnacle + moyenne FR, upsert model_health_log."""
+    try:
+        from src.monitoring.clv_engine import run_daily_clv_snapshot
+        out = run_daily_clv_snapshot()
+        logger.info(
+            "[job_daily_clv_snapshot] n_matches=%d", out.get("n_matches_clv", 0)
+        )
+    except Exception:
+        logger.exception("[job_daily_clv_snapshot] Error")
+
+
+def job_feature_drift_check() -> None:
+    """09:30 UTC — KS test training vs prod, alerte Telegram si drift CRITICAL."""
+    try:
+        from src.monitoring.feature_drift import (
+            drift_result_to_alert,
+            run_feature_drift_check,
+        )
+        from src.notifications import send_telegram
+
+        result = run_feature_drift_check(alpha=0.01, window_days=30)
+        alert = drift_result_to_alert(result, threshold=5)
+        if alert:
+            send_telegram(alert)
+            logger.warning("[job_feature_drift_check] drift alert sent")
+        else:
+            logger.info(
+                "[job_feature_drift_check] n_drifted=%d / %d",
+                result["n_drifted"], result["n_features"],
+            )
+    except Exception:
+        logger.exception("[job_feature_drift_check] Error")
+
+
 def job_drift_check() -> None:
     """09:00 — détection drift Brier 7j vs 30j."""
     try:
@@ -296,6 +371,7 @@ def job_weekly_retrain() -> None:
 
 
 def main() -> None:
+    global scheduler
     scheduler = BlockingScheduler(timezone="Europe/Paris")
 
     # ── Continu ─────────────────────────────────────────────
@@ -313,6 +389,22 @@ def main() -> None:
                       id="data_pipeline", max_instances=1, coalesce=True)
     scheduler.add_job(job_fetch_odds, CronTrigger(hour=7, minute=45),
                       id="fetch_odds", max_instances=1, coalesce=True)
+    scheduler.add_job(job_odds_opening_snapshot,
+                      CronTrigger(hour=8, minute=0, timezone="UTC"),
+                      id="odds_opening_snapshot", max_instances=1, coalesce=True,
+                      misfire_grace_time=1800, replace_existing=True)
+    scheduler.add_job(job_schedule_closing_snapshots,
+                      CronTrigger(hour=10, minute=15, timezone="UTC"),
+                      id="schedule_closing_snapshots", max_instances=1, coalesce=True,
+                      misfire_grace_time=1800, replace_existing=True)
+    scheduler.add_job(job_daily_clv_snapshot,
+                      CronTrigger(hour=9, minute=0, timezone="UTC"),
+                      id="daily_clv_snapshot", max_instances=1, coalesce=True,
+                      misfire_grace_time=1800, replace_existing=True)
+    scheduler.add_job(job_feature_drift_check,
+                      CronTrigger(hour=9, minute=30, timezone="UTC"),
+                      id="feature_drift_check", max_instances=1, coalesce=True,
+                      misfire_grace_time=1800, replace_existing=True)
     scheduler.add_job(job_nhl_evaluation, CronTrigger(hour=8, minute=0),
                       id="nhl_eval", max_instances=1, coalesce=True)
     scheduler.add_job(job_football_evaluation, CronTrigger(hour=8, minute=30),
@@ -364,7 +456,10 @@ def main() -> None:
     logger.info("    08:30    Évaluation foot + calibration")
     logger.info("    08:30 UTC Monitoring alerts + persistance model_health_log")
     logger.info("    09:00    Drift detection")
+    logger.info("    09:00 UTC Daily CLV snapshot")
+    logger.info("    09:30 UTC Feature drift check")
     logger.info("    10:00    Brain IA (prédictions)")
+    logger.info("    10:15 UTC Planification closing snapshots T-30min par match")
     logger.info("    12:00    Value Bets football")
     logger.info("    16:00    Pipeline NHL (analyse + probas)")
     logger.info("    16:15    Fetch cotes NHL")
@@ -375,6 +470,16 @@ def main() -> None:
     logger.info("  HEBDOMADAIRE")
     logger.info("    Dim 03:00  ML retrain complet")
     logger.info("=" * 56)
+
+    # H2-SS1: catchup — re-plan closing snapshots in case of mid-day worker restart
+    # APScheduler MemoryJobStore loses date triggers across restarts; this call
+    # rebuilds them for the remaining fixtures of the current day.
+    try:
+        from src.fetchers.odds_ingestor import schedule_closing_snapshots_for_today
+        n = schedule_closing_snapshots_for_today(scheduler)
+        logger.info("[startup] closing_snapshots catchup scheduled=%d", n)
+    except Exception:
+        logger.exception("[startup] closing_snapshots catchup failed (non-fatal)")
 
     try:
         scheduler.start()

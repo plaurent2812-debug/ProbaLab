@@ -203,15 +203,15 @@ CREATE TABLE closing_odds (
   snapshot_type TEXT NOT NULL CHECK (snapshot_type IN ('opening','closing','intraday')),
   snapshot_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   source_request_id TEXT,
-  UNIQUE (fixture_id, bookmaker, market, selection, line, snapshot_type)
+  UNIQUE NULLS NOT DISTINCT (fixture_id, bookmaker, market, selection, line, snapshot_type)
 );
 
 CREATE INDEX idx_closing_odds_fixture ON closing_odds (fixture_id);
-CREATE INDEX idx_closing_odds_snapshot ON closing_odds (snapshot_at DESC);
+CREATE INDEX idx_closing_odds_snapshot_at ON closing_odds (snapshot_at DESC);
 CREATE INDEX idx_closing_odds_bookmaker_market ON closing_odds (bookmaker, market);
 
 ALTER TABLE closing_odds ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "closing_odds_service_role" ON closing_odds
+CREATE POLICY "service_role_all_closing_odds" ON closing_odds
   FOR ALL TO service_role USING (true) WITH CHECK (true);
 ```
 
