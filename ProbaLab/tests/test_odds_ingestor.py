@@ -12,6 +12,28 @@ from src.fetchers.odds_ingestor import (
     parse_odds_response,
     to_implied_prob,
 )
+from src.fetchers.odds_ingestor import (
+    _resolve_fixture_id as _real_resolve_fixture_id,
+)
+
+# Save the real resolver reference BEFORE any monkeypatching so the dedicated
+# resolver tests can exercise the actual implementation.
+
+
+@pytest.fixture(autouse=True)
+def _patch_resolver(monkeypatch):
+    """Auto-patch _resolve_fixture_id with a deterministic fake for all tests.
+
+    Tests that need to exercise the real resolver (or a different fake) can
+    re-patch inside their body — monkeypatch is LIFO, so the later setattr wins.
+    Tests that assert `fixture_id` values should use the resolved pattern
+    `resolved-<home[:3]>-<away[:3]>`.
+    """
+    from src.fetchers import odds_ingestor
+    monkeypatch.setattr(
+        odds_ingestor, "_resolve_fixture_id",
+        lambda sport, h, a, ms: f"resolved-{(h or '')[:3]}-{(a or '')[:3]}",
+    )
 
 
 def test_to_implied_prob_basic():
@@ -66,7 +88,8 @@ def test_parse_1x2_response_returns_rows():
     assert home_row["odds"] == 1.50
     assert home_row["implied_prob"] == pytest.approx(0.6667, abs=1e-3)
     assert home_row["sport"] == "football"
-    assert home_row["fixture_id"] == "event_abc123"
+    # fixture_id is now the resolved internal ID, not the Odds API event UUID
+    assert home_row["fixture_id"] == "resolved-Par-Oly"
     assert home_row["snapshot_type"] == "opening"
     assert home_row["source_request_id"] == "req-1"
     assert isinstance(home_row["match_start"], datetime)
@@ -616,12 +639,14 @@ def test_run_snapshot_for_fixtures_filters_events(monkeypatch):
     monkeypatch.setattr(odds_ingestor, "upsert_odds", fake_upsert)
     monkeypatch.setattr(odds_ingestor, "_get_api_key", lambda: "FAKE")
 
-    n = odds_ingestor.run_snapshot_for_fixtures(["target_fx"])
+    # After C1 fix: filter is applied on the resolved internal fixture_id, not
+    # the Odds API event UUID. The autouse resolver returns resolved-<h[:3]>-<a[:3]>.
+    n = odds_ingestor.run_snapshot_for_fixtures(["resolved-Ars-Che"])
     assert n > 0
-    # All upserted rows should belong to target_fx
+    # All upserted rows should belong to the Arsenal/Chelsea resolved id
     for batch in upserted_rows:
         for row in batch:
-            assert row["fixture_id"] == "target_fx"
+            assert row["fixture_id"] == "resolved-Ars-Che"
             assert row["snapshot_type"] == "closing"
 
 
@@ -669,3 +694,149 @@ def test_schedule_closing_snapshots_registers_date_triggers(monkeypatch):
         fx_id = s["id"].replace("closing_", "")
         expected_fx = next(fx for fx in fixtures if fx["fixture_id"] == fx_id)
         assert s["run_date"] == expected_fx["kickoff_utc"] - timedelta(minutes=30)
+
+
+# ---------------------------------------------------------------------------
+# C1 regression — _resolve_fixture_id maps Odds API teams/kickoff → fixtures.id
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_fixture_id_matches_by_teams_and_date(monkeypatch):
+    from src.fetchers import odds_ingestor
+
+    class FakeTable:
+        def select(self, _cols):
+            return self
+
+        def gte(self, _col, _val):
+            return self
+
+        def lt(self, _col, _val):
+            return self
+
+        def execute(self):
+            return MagicMock(data=[
+                {"id": 42, "home_team": "Arsenal", "away_team": "Chelsea",
+                 "date": "2026-04-20T15:00:00Z"},
+                {"id": 43, "home_team": "Tottenham", "away_team": "Fulham",
+                 "date": "2026-04-20T15:30:00Z"},
+            ])
+
+    class FakeSupabase:
+        def table(self, name):
+            assert name == "fixtures"
+            return FakeTable()
+
+    monkeypatch.setattr(odds_ingestor, "supabase", FakeSupabase())
+
+    # Call the real resolver directly (autouse fixture patches the module attribute)
+    resolved = _real_resolve_fixture_id(
+        "football", "Arsenal", "Chelsea",
+        datetime(2026, 4, 20, 15, 0, tzinfo=timezone.utc),
+    )
+    assert resolved == "42"
+
+
+def test_resolve_fixture_id_returns_none_when_no_match(monkeypatch):
+    from src.fetchers import odds_ingestor
+
+    class FakeTable:
+        def select(self, _cols):
+            return self
+
+        def gte(self, _col, _val):
+            return self
+
+        def lt(self, _col, _val):
+            return self
+
+        def execute(self):
+            return MagicMock(data=[])
+
+    class FakeSupabase:
+        def table(self, _name):
+            return FakeTable()
+
+    monkeypatch.setattr(odds_ingestor, "supabase", FakeSupabase())
+
+    resolved = _real_resolve_fixture_id(
+        "football", "NoMatch FC", "NeverHeardOf",
+        datetime(2026, 4, 20, 15, 0, tzinfo=timezone.utc),
+    )
+    assert resolved is None
+
+
+def test_resolve_fixture_id_uses_teams_match_normalization(monkeypatch):
+    """Lesson 69 — 'St. Louis Blues' in API resolves to 'St Louis Blues' in DB."""
+    from src.fetchers import odds_ingestor
+
+    class FakeTable:
+        def select(self, _cols):
+            return self
+
+        def gte(self, _col, _val):
+            return self
+
+        def lt(self, _col, _val):
+            return self
+
+        def execute(self):
+            return MagicMock(data=[
+                {"game_id": 2026020500, "home_team": "St Louis Blues",
+                 "away_team": "Utah Mammoth",
+                 "game_date": "2026-04-20T23:00:00Z"},
+            ])
+
+    class FakeSupabase:
+        def table(self, name):
+            assert name == "nhl_fixtures"
+            return FakeTable()
+
+    monkeypatch.setattr(odds_ingestor, "supabase", FakeSupabase())
+
+    resolved = _real_resolve_fixture_id(
+        "nhl", "St. Louis Blues", "Utah Hockey Club",
+        datetime(2026, 4, 20, 23, 0, tzinfo=timezone.utc),
+    )
+    assert resolved == "2026020500"
+
+
+def test_parse_skips_event_when_fixture_not_resolved(monkeypatch):
+    """Si le résolveur renvoie None, l'event doit être skip (pas inséré)."""
+    from src.fetchers import odds_ingestor
+
+    # Override the autouse patch to simulate a failed resolution
+    monkeypatch.setattr(
+        odds_ingestor, "_resolve_fixture_id",
+        lambda sport, h, a, ms: None,
+    )
+
+    sample = [
+        {
+            "id": "unresolvable_event",
+            "sport_key": "soccer_epl",
+            "commence_time": "2026-04-20T15:00:00Z",
+            "home_team": "Arsenal",
+            "away_team": "Chelsea",
+            "bookmakers": [
+                {
+                    "key": "pinnacle",
+                    "markets": [
+                        {
+                            "key": "h2h",
+                            "outcomes": [
+                                {"name": "Arsenal", "price": 1.80},
+                                {"name": "Chelsea", "price": 4.50},
+                                {"name": "Draw", "price": 3.60},
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+    ]
+    rows = odds_ingestor.parse_odds_response(
+        sample, sport="football", snapshot_type="opening",
+        source_request_id="req-skip",
+    )
+    assert rows == []

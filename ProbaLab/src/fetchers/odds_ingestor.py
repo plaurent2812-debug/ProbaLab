@@ -15,7 +15,7 @@ import logging
 import os
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import httpx
@@ -30,6 +30,49 @@ from src.fetchers.bookmaker_registry import (
 )
 
 logger = logging.getLogger("football_ia.odds_ingestor")
+
+
+def _resolve_fixture_id(
+    sport: str,
+    home_team: str,
+    away_team: str,
+    match_start_utc: datetime,
+) -> str | None:
+    """Résout (home_team, away_team, kickoff) → fixtures.id interne.
+
+    Returns str(fixtures.id) pour compat avec closing_odds.fixture_id TEXT,
+    ou None si aucun match trouvé dans ±24h. Fallback lesson 69 via teams_match.
+    """
+    window_start = (match_start_utc - timedelta(days=1)).isoformat()
+    window_end = (match_start_utc + timedelta(days=1)).isoformat()
+
+    table = "fixtures" if sport == "football" else "nhl_fixtures"
+    date_col = "date" if sport == "football" else "game_date"
+    id_col = "id" if sport == "football" else "game_id"
+
+    try:
+        rows = (
+            supabase.table(table)
+            .select(f"{id_col},home_team,away_team,{date_col}")
+            .gte(date_col, window_start)
+            .lt(date_col, window_end)
+            .execute()
+            .data
+        ) or []
+    except Exception:
+        logger.exception(
+            "[_resolve_fixture_id] load failed sport=%s home=%s away=%s",
+            sport, home_team, away_team,
+        )
+        return None
+
+    for row in rows:
+        db_home = row.get("home_team", "")
+        db_away = row.get("away_team", "")
+        if teams_match(home_team, db_home) and teams_match(away_team, db_away):
+            return str(row[id_col])
+
+    return None
 
 
 class OddsAPIQuotaExhausted(Exception):  # noqa: N818 — nom contractuel (cf. spec H2-SS1)
@@ -117,7 +160,7 @@ def parse_odds_response(
     """
     rows: list[dict] = []
     for event in events:
-        fixture_id = str(event["id"])
+        odds_api_event_id = str(event["id"])
         home_team = event.get("home_team", "")
         away_team = event.get("away_team", "")
         raw_commence = event["commence_time"]
@@ -127,6 +170,14 @@ def parse_odds_response(
                 f"commence_time must be timezone-aware: {raw_commence!r}"
             )
         match_start = parsed_commence.astimezone(timezone.utc)
+
+        fixture_id = _resolve_fixture_id(sport, home_team, away_team, match_start)
+        if fixture_id is None:
+            logger.debug(
+                "[parse_odds_response] unresolved event=%s home=%s away=%s kickoff=%s",
+                odds_api_event_id, home_team, away_team, match_start.isoformat(),
+            )
+            continue
 
         for bk_block in event.get("bookmakers", []):
             bk = get_bookmaker_from_api_key(bk_block["key"])
@@ -475,24 +526,25 @@ def run_snapshot_for_fixtures(fixture_ids: list[str]) -> int:
                 )
                 continue
 
-            # Filter events to only requested fixture_ids
-            filtered = [e for e in events if str(e.get("id", "")) in fixture_ids_set]
-            if not filtered:
-                continue
-
+            # Parse first, then filter by resolved internal fixture_id.
+            # The Odds API event UUID != fixtures.id, so filtering on e["id"]
+            # would never match the internal IDs passed to this function.
             rows = parse_odds_response(
-                filtered,
+                events,
                 sport=sport,
                 snapshot_type="closing",
                 source_request_id=request_id,
             )
-            if rows:
-                upsert_odds(rows)
-                total_rows += len(rows)
-                logger.info(
-                    "[odds_ingestor] closing sport_key=%s fixtures=%d rows=%d",
-                    sport_key, len(filtered), len(rows),
-                )
+            rows = [r for r in rows if r["fixture_id"] in fixture_ids_set]
+            if not rows:
+                continue
+
+            upsert_odds(rows)
+            total_rows += len(rows)
+            logger.info(
+                "[odds_ingestor] closing sport_key=%s rows=%d",
+                sport_key, len(rows),
+            )
     return total_rows
 
 
@@ -501,8 +553,6 @@ def _load_today_fixtures_for_closing() -> list[dict]:
 
     Retourne [{fixture_id: str, kickoff_utc: datetime}, ...].
     """
-    from datetime import timedelta
-
     now = datetime.now(timezone.utc)
     horizon = now + timedelta(hours=24)
 
@@ -564,8 +614,6 @@ def schedule_closing_snapshots_for_today(scheduler) -> int:
 
     Returns: nombre de jobs planifiés.
     """
-    from datetime import timedelta
-
     fixtures = _load_today_fixtures_for_closing()
     if not fixtures:
         logger.info("[schedule_closing_snapshots] no fixtures in next 24h")
