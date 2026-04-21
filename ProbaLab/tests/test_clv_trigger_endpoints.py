@@ -120,3 +120,72 @@ def test_clv_daily_snapshot_500_on_exception(client, auth_headers, monkeypatch):
 
     resp = client.post("/api/trigger/clv/daily-snapshot", headers=auth_headers, json={})
     assert resp.status_code == 500
+
+
+# ═══════════════════════════════════════════════════════════════
+#  /api/trigger/clv/drift
+# ═══════════════════════════════════════════════════════════════
+
+
+def test_clv_drift_requires_auth(client):
+    resp = client.post("/api/trigger/clv/drift", json={})
+    assert resp.status_code == 401
+
+
+def test_clv_drift_no_alert_below_threshold(client, auth_headers, monkeypatch):
+    """Si drift_result_to_alert renvoie None, send_telegram ne doit pas être appelé."""
+    from src.monitoring import feature_drift
+
+    def fake_run(*, alpha: float, window_days: int) -> dict:
+        return {"n_drifted": 2, "n_features": 43, "per_feature": {}}
+
+    monkeypatch.setattr(feature_drift, "run_feature_drift_check", fake_run)
+    monkeypatch.setattr(feature_drift, "drift_result_to_alert", lambda _r, **_kw: None)
+
+    telegram_calls: list[str] = []
+    import api.routers.trigger as trigger_module
+
+    def fake_send(msg: str) -> bool:
+        telegram_calls.append(msg)
+        return True
+
+    monkeypatch.setattr(trigger_module, "send_telegram", fake_send, raising=False)
+
+    resp = client.post("/api/trigger/clv/drift", headers=auth_headers, json={})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "ok"
+    assert body["n_drifted"] == 2
+    assert body["alert_sent"] is False
+    assert telegram_calls == []
+
+
+def test_clv_drift_sends_telegram_when_threshold_exceeded(client, auth_headers, monkeypatch):
+    """Si drift_result_to_alert renvoie un message, send_telegram doit être appelé 1 fois."""
+    from src.monitoring import feature_drift
+
+    def fake_run(*, alpha: float, window_days: int) -> dict:
+        return {"n_drifted": 7, "n_features": 43, "per_feature": {}}
+
+    monkeypatch.setattr(feature_drift, "run_feature_drift_check", fake_run)
+    monkeypatch.setattr(
+        feature_drift,
+        "drift_result_to_alert",
+        lambda _r, **_kw: "\u26a0 drift alert",
+    )
+
+    telegram_calls: list[str] = []
+    import api.routers.trigger as trigger_module
+
+    def fake_send(msg: str) -> bool:
+        telegram_calls.append(msg)
+        return True
+
+    monkeypatch.setattr(trigger_module, "send_telegram", fake_send, raising=False)
+
+    resp = client.post("/api/trigger/clv/drift", headers=auth_headers, json={})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["n_drifted"] == 7
+    assert body["alert_sent"] is True
+    assert len(telegram_calls) == 1

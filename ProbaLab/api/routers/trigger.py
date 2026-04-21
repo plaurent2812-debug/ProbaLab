@@ -26,6 +26,7 @@ from pydantic import BaseModel
 
 from src.brain import ask_gemini, extract_json
 from src.config import api_get, logger, supabase
+from src.notifications import send_telegram
 
 # ─── Telegram Config ────────────────────────────────────────────
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
@@ -1048,3 +1049,45 @@ def clv_daily_snapshot_endpoint() -> dict:
         payload.get("variant_id", "?"),
     )
     return {"status": "ok", "payload": payload}
+
+
+@router.post("/clv/drift")
+def clv_drift_check() -> dict:
+    """09:30 UTC — KS test training vs prod, alerte Telegram si drift CRITICAL.
+
+    Déclenché par Trigger.dev (schedule `clv-feature-drift`).
+    """
+    from src.monitoring.feature_drift import (
+        drift_result_to_alert,
+        run_feature_drift_check,
+    )
+
+    try:
+        result = run_feature_drift_check(alpha=0.01, window_days=30)
+    except Exception as exc:
+        logger.exception("[clv/drift] run_feature_drift_check failed")
+        raise HTTPException(
+            status_code=500, detail=f"run_feature_drift_check failed: {exc}"
+        ) from exc
+
+    alert = drift_result_to_alert(result, threshold=5)
+    alert_sent = False
+    if alert:
+        try:
+            send_telegram(alert)
+            alert_sent = True
+        except Exception:
+            logger.exception("[clv/drift] send_telegram failed (alert not sent)")
+
+    logger.info(
+        "[clv/drift] n_drifted=%d / %d alert_sent=%s",
+        result.get("n_drifted", 0),
+        result.get("n_features", 0),
+        alert_sent,
+    )
+    return {
+        "status": "ok",
+        "n_drifted": result.get("n_drifted", 0),
+        "n_features": result.get("n_features", 0),
+        "alert_sent": alert_sent,
+    }
