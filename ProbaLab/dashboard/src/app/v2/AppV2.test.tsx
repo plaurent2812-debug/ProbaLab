@@ -24,13 +24,13 @@ describe('AppV2', () => {
     );
   });
 
-  it('renders MatchesV2 at /matchs', () => {
-    render(
+  it('renders MatchesV2 at /matchs', async () => {
+    renderWithProviders(
       <MemoryRouter initialEntries={['/matchs']}>
         <AppV2Content />
       </MemoryRouter>
     );
-    expect(screen.getByText(/MatchesV2 WIP/i)).toBeInTheDocument();
+    expect(await screen.findByTestId('matches-v2-page')).toBeInTheDocument();
   });
 
   it('renders MatchDetailV2 at /matchs/:fixtureId', () => {
