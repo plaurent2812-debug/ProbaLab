@@ -33,13 +33,17 @@ describe('AppV2', () => {
     expect(await screen.findByTestId('matches-v2-page')).toBeInTheDocument();
   });
 
-  it('renders MatchDetailV2 at /matchs/:fixtureId', () => {
-    render(
-      <MemoryRouter initialEntries={['/matchs/abc-123']}>
+  it('renders MatchDetailV2 at /matchs/:fixtureId', async () => {
+    vi.spyOn(v2User, 'useV2User').mockReturnValue({ role: 'premium', isVisitor: false });
+    renderWithProviders(
+      <MemoryRouter initialEntries={['/matchs/fx-1']}>
         <AppV2Content />
       </MemoryRouter>
     );
-    expect(screen.getByText(/MatchDetailV2 WIP/i)).toBeInTheDocument();
+    expect(await screen.findByTestId('match-detail-v2')).toHaveAttribute(
+      'data-fixture-id',
+      'fx-1',
+    );
   });
 
   it('renders PremiumV2 at /premium', () => {
