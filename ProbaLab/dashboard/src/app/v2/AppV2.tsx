@@ -1,8 +1,8 @@
-import { Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { v2Routes } from './routes';
 import { LayoutShell } from '../../components/v2/layout/LayoutShell';
 
-export function AppV2() {
+export function AppV2Content() {
   return (
     <div className="v2-root">
       <LayoutShell>
@@ -13,6 +13,14 @@ export function AppV2() {
         </Routes>
       </LayoutShell>
     </div>
+  );
+}
+
+export function AppV2() {
+  return (
+    <BrowserRouter>
+      <AppV2Content />
+    </BrowserRouter>
   );
 }
 
