@@ -55,3 +55,4 @@ htmlcov/
 
 # Git worktrees
 .worktrees/
+.superpowers/
