@@ -997,3 +997,30 @@ def run_reflection():
     except Exception as e:
         logger.error(f"[Reflection] ❌ Erreur critique: {e}")
         return {"status": "error", "message": str(e)}
+
+
+# ═══════════════════════════════════════════════════════════════
+#  H2-SS1 — Pipeline CLV (ajouté 2026-04-21)
+# ═══════════════════════════════════════════════════════════════
+
+
+@router.post("/clv/opening")
+def clv_opening_snapshot() -> dict:
+    """08:00 UTC — snapshot opening odds via The Odds API Dev.
+
+    Déclenché par Trigger.dev (schedule `clv-opening-snapshot`).
+    """
+    import time
+
+    from src.fetchers.odds_ingestor import run_snapshot
+
+    t0 = time.monotonic()
+    try:
+        n = run_snapshot(snapshot_type="opening")
+    except Exception as exc:
+        logger.exception("[clv/opening] run_snapshot failed")
+        raise HTTPException(status_code=500, detail=f"run_snapshot failed: {exc}") from exc
+
+    duration_ms = int((time.monotonic() - t0) * 1000)
+    logger.info("[clv/opening] rows_submitted=%d duration_ms=%d", n, duration_ms)
+    return {"status": "ok", "rows_submitted": n, "duration_ms": duration_ms}
