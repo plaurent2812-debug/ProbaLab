@@ -1,22 +1,18 @@
 """
 api/routers/trigger.py — Endpoints admin/trigger pour ProbaLab.
 
-IMPORTANT — SOURCE DE VÉRITÉ DU SCHEDULING :
-  APScheduler (worker.py) est la SEULE source de scheduling automatique.
-  Les endpoints ci-dessous sont des déclenchements AD-HOC manuels uniquement
-  (admin, debug, re-run, backtest).  Ne jamais en faire des crons depuis
-  Trigger.dev ou un scheduler externe — cela créerait une double source
-  silencieuse (leçon 64 NHL, 2026-04-17).
+SOURCE DE VÉRITÉ DU SCHEDULING (MAJ 2026-04-21) :
+  En production, Trigger.dev Cloud est le scheduler actif — il appelle
+  ces endpoints via HTTP POST authentifiés par CRON_SECRET.
+  `worker.py` (APScheduler) n'est PAS lancé sur Railway — les cron jobs
+  qui y sont définis sont dormants. Toute nouvelle routine périodique
+  doit passer par Trigger.dev + un endpoint ici, PAS par APScheduler.
 
-ENDPOINTS SUPPRIMÉS le 2026-04-17 (duplicates des crons APScheduler) :
-  - POST /update-live-scores       → remplacé par job_live (*/5 min)
-  - POST /nhl-update-live-scores   → remplacé par job_live (*/5 min, NHL branch)
-  - POST /run-daily-pipeline       → remplacé par job_data_pipeline + job_brain
-  - POST /daily-recap              → remplacé par job_results (*/15 min)
-  - POST /detect-value-bets        → remplacé par job_football_picks (12:00)
-  - POST /nhl-fetch-odds           → remplacé par job_nhl_fetch_odds (16:15/23:15)
-  - POST /nhl-run-pipeline         → remplacé par job_nhl_pipeline (16:00/23:00)
-  - POST /nhl-evaluate-performance → remplacé par job_nhl_evaluation (08:00)
+ENDPOINTS CLV (H2-SS1, ajoutés 2026-04-21) sous /api/trigger/clv/* :
+  - POST /clv/opening          → run_snapshot("opening")  [08:00 UTC]
+  - POST /clv/daily-snapshot   → run_daily_clv_snapshot() [09:00 UTC]
+  - POST /clv/drift            → run_feature_drift_check()[09:30 UTC]
+  - POST /clv/closing-tick     → snapshot closing T-30min [every 15 min]
 """
 
 from __future__ import annotations
@@ -30,6 +26,7 @@ from pydantic import BaseModel
 
 from src.brain import ask_gemini, extract_json
 from src.config import api_get, logger, supabase
+from src.notifications import send_telegram
 
 # ─── Telegram Config ────────────────────────────────────────────
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
@@ -1001,3 +998,209 @@ def run_reflection():
     except Exception as e:
         logger.error(f"[Reflection] ❌ Erreur critique: {e}")
         return {"status": "error", "message": str(e)}
+
+
+# ═══════════════════════════════════════════════════════════════
+#  H2-SS1 — Pipeline CLV (ajouté 2026-04-21)
+# ═══════════════════════════════════════════════════════════════
+
+
+@router.post("/clv/opening")
+def clv_opening_snapshot() -> dict:
+    """08:00 UTC — snapshot opening odds via The Odds API Dev.
+
+    Déclenché par Trigger.dev (schedule `clv-opening-snapshot`).
+    """
+    import time
+
+    from src.fetchers.odds_ingestor import run_snapshot
+
+    t0 = time.monotonic()
+    try:
+        n = run_snapshot(snapshot_type="opening")
+    except Exception as exc:
+        logger.exception("[clv/opening] run_snapshot failed")
+        raise HTTPException(status_code=500, detail=f"run_snapshot failed: {exc}") from exc
+
+    duration_ms = int((time.monotonic() - t0) * 1000)
+    logger.info("[clv/opening] rows_submitted=%d duration_ms=%d", n, duration_ms)
+    return {"status": "ok", "rows_submitted": n, "duration_ms": duration_ms}
+
+
+@router.post("/clv/daily-snapshot")
+def clv_daily_snapshot_endpoint() -> dict:
+    """09:00 UTC — CLV J-1 vs Pinnacle + moyenne FR, upsert model_health_log.
+
+    Déclenché par Trigger.dev (schedule `clv-daily-snapshot`).
+    """
+    from src.monitoring.clv_engine import run_daily_clv_snapshot
+
+    try:
+        payload = run_daily_clv_snapshot()
+    except Exception as exc:
+        logger.exception("[clv/daily-snapshot] run_daily_clv_snapshot failed")
+        raise HTTPException(
+            status_code=500, detail=f"run_daily_clv_snapshot failed: {exc}"
+        ) from exc
+
+    logger.info(
+        "[clv/daily-snapshot] n_matches=%d variant=%s",
+        payload.get("n_matches_clv", 0),
+        payload.get("variant_id", "?"),
+    )
+    return {"status": "ok", "payload": payload}
+
+
+@router.post("/clv/drift")
+def clv_drift_check() -> dict:
+    """09:30 UTC — KS test training vs prod, alerte Telegram si drift CRITICAL.
+
+    Déclenché par Trigger.dev (schedule `clv-feature-drift`).
+    """
+    from src.monitoring.feature_drift import (
+        drift_result_to_alert,
+        run_feature_drift_check,
+    )
+
+    try:
+        result = run_feature_drift_check(alpha=0.01, window_days=30)
+    except Exception as exc:
+        logger.exception("[clv/drift] run_feature_drift_check failed")
+        raise HTTPException(
+            status_code=500, detail=f"run_feature_drift_check failed: {exc}"
+        ) from exc
+
+    alert = drift_result_to_alert(result, threshold=5)
+    alert_sent = False
+    if alert:
+        try:
+            send_telegram(alert)
+            alert_sent = True
+        except Exception:
+            logger.exception("[clv/drift] send_telegram failed (alert not sent)")
+
+    logger.info(
+        "[clv/drift] n_drifted=%d / %d alert_sent=%s",
+        result.get("n_drifted", 0),
+        result.get("n_features", 0),
+        alert_sent,
+    )
+    return {
+        "status": "ok",
+        "n_drifted": result.get("n_drifted", 0),
+        "n_features": result.get("n_features", 0),
+        "alert_sent": alert_sent,
+    }
+
+
+@router.post("/clv/closing-tick")
+def clv_closing_tick() -> dict:
+    """Polling toutes les 15 min — snapshot closing odds pour fixtures dont kickoff ∈ [now+15, now+45].
+
+    Déclenché par Trigger.dev (schedule `clv-closing-tick`, cron `*/15 * * * *`).
+
+    Dedup : avant d'appeler The Odds API, on vérifie quelles fixtures sont déjà présentes
+    en `closing_odds` avec `snapshot_type='closing'` pour économiser le quota API.
+    """
+    from datetime import timedelta
+
+    from src.fetchers.odds_ingestor import run_snapshot_for_fixtures
+
+    now = datetime.now(timezone.utc)
+    window_start = (now + timedelta(minutes=15)).isoformat()
+    window_end = (now + timedelta(minutes=45)).isoformat()
+
+    # 1. Fixtures football en fenêtre
+    try:
+        foot = (
+            supabase.table("fixtures")
+            .select("id")
+            .gte("date", window_start)
+            .lt("date", window_end)
+            .execute()
+            .data
+        ) or []
+    except Exception:
+        logger.exception("[clv/closing-tick] football fixtures load failed")
+        foot = []
+
+    # 2. Fixtures NHL en fenêtre
+    try:
+        nhl = (
+            supabase.table("nhl_fixtures")
+            .select("game_id")
+            .gte("game_date", window_start)
+            .lt("game_date", window_end)
+            .execute()
+            .data
+        ) or []
+    except Exception:
+        logger.exception("[clv/closing-tick] nhl fixtures load failed")
+        nhl = []
+
+    fixture_ids = [str(f["id"]) for f in foot if f.get("id") is not None] + [
+        str(f["game_id"]) for f in nhl if f.get("game_id") is not None
+    ]
+
+    if not fixture_ids:
+        logger.info(
+            "[clv/closing-tick] no fixtures in window [%s, %s]",
+            window_start,
+            window_end,
+        )
+        return {"status": "ok", "snapshots": 0, "message": "no fixtures in window"}
+
+    # 3. Dedup : quelles fixtures sont déjà closing-snapshottées ?
+    try:
+        done_rows = (
+            supabase.table("closing_odds")
+            .select("fixture_id")
+            .in_("fixture_id", fixture_ids)
+            .eq("snapshot_type", "closing")
+            .execute()
+            .data
+        ) or []
+    except Exception:
+        logger.exception("[clv/closing-tick] dedup query failed — proceeding without dedup")
+        # Alerte Telegram : burn de quota silencieux possible (re-snapshot des fixtures
+        # déjà captures si dedup échoue).  On ne bloque pas le flow sur un échec Telegram.
+        try:
+            send_telegram(
+                f"\u26a0\ufe0f <b>[clv/closing-tick] dedup query failed</b>\n"
+                f"Proceeding with full snapshot of {len(fixture_ids)} fixtures — "
+                f"possible quota burn. Investigate Supabase health."
+            )
+        except Exception:
+            logger.exception("[clv/closing-tick] telegram alert failed")
+        done_rows = []
+
+    done_ids = {r["fixture_id"] for r in done_rows if r.get("fixture_id")}
+    to_snapshot = [fid for fid in fixture_ids if fid not in done_ids]
+
+    if not to_snapshot:
+        logger.info(
+            "[clv/closing-tick] all %d fixtures already snapshotted",
+            len(done_ids),
+        )
+        return {"status": "ok", "snapshots": 0, "already_done": len(done_ids)}
+
+    try:
+        n = run_snapshot_for_fixtures(to_snapshot)
+    except Exception as exc:
+        logger.exception("[clv/closing-tick] run_snapshot_for_fixtures failed")
+        raise HTTPException(
+            status_code=500, detail=f"run_snapshot_for_fixtures failed: {exc}"
+        ) from exc
+
+    logger.info(
+        "[clv/closing-tick] snapshots=%d fixture_count=%d (already_done=%d)",
+        n,
+        len(to_snapshot),
+        len(done_ids),
+    )
+    return {
+        "status": "ok",
+        "snapshots": n,
+        "fixture_count": len(to_snapshot),
+        "already_done": len(done_ids),
+    }
