@@ -1091,3 +1091,106 @@ def clv_drift_check() -> dict:
         "n_features": result.get("n_features", 0),
         "alert_sent": alert_sent,
     }
+
+
+@router.post("/clv/closing-tick")
+def clv_closing_tick() -> dict:
+    """Polling toutes les 15 min — snapshot closing odds pour fixtures dont kickoff ∈ [now+15, now+45].
+
+    Déclenché par Trigger.dev (schedule `clv-closing-tick`, cron `*/15 * * * *`).
+
+    Dedup : avant d'appeler The Odds API, on vérifie quelles fixtures sont déjà présentes
+    en `closing_odds` avec `snapshot_type='closing'` pour économiser le quota API.
+    """
+    from datetime import timedelta
+
+    from src.fetchers.odds_ingestor import run_snapshot_for_fixtures
+
+    now = datetime.now(timezone.utc)
+    window_start = (now + timedelta(minutes=15)).isoformat()
+    window_end = (now + timedelta(minutes=45)).isoformat()
+
+    # 1. Fixtures football en fenêtre
+    try:
+        foot = (
+            supabase.table("fixtures")
+            .select("id")
+            .gte("date", window_start)
+            .lt("date", window_end)
+            .execute()
+            .data
+        ) or []
+    except Exception:
+        logger.exception("[clv/closing-tick] football fixtures load failed")
+        foot = []
+
+    # 2. Fixtures NHL en fenêtre
+    try:
+        nhl = (
+            supabase.table("nhl_fixtures")
+            .select("game_id")
+            .gte("game_date", window_start)
+            .lt("game_date", window_end)
+            .execute()
+            .data
+        ) or []
+    except Exception:
+        logger.exception("[clv/closing-tick] nhl fixtures load failed")
+        nhl = []
+
+    fixture_ids = [str(f["id"]) for f in foot if f.get("id") is not None] + [
+        str(f["game_id"]) for f in nhl if f.get("game_id") is not None
+    ]
+
+    if not fixture_ids:
+        logger.info(
+            "[clv/closing-tick] no fixtures in window [%s, %s]",
+            window_start,
+            window_end,
+        )
+        return {"status": "ok", "snapshots": 0, "message": "no fixtures in window"}
+
+    # 3. Dedup : quelles fixtures sont déjà closing-snapshottées ?
+    try:
+        done_rows = (
+            supabase.table("closing_odds")
+            .select("fixture_id")
+            .in_("fixture_id", fixture_ids)
+            .eq("snapshot_type", "closing")
+            .execute()
+            .data
+        ) or []
+    except Exception:
+        logger.exception("[clv/closing-tick] dedup query failed — proceeding without dedup")
+        done_rows = []
+
+    done_ids = {r["fixture_id"] for r in done_rows if r.get("fixture_id")}
+    to_snapshot = [fid for fid in fixture_ids if fid not in done_ids]
+
+    if not to_snapshot:
+        logger.info(
+            "[clv/closing-tick] all %d fixtures already snapshotted",
+            len(done_ids),
+        )
+        return {"status": "ok", "snapshots": 0, "already_done": len(done_ids)}
+
+    try:
+        n = run_snapshot_for_fixtures(to_snapshot)
+    except Exception as exc:
+        logger.exception("[clv/closing-tick] run_snapshot_for_fixtures failed")
+        raise HTTPException(
+            status_code=500, detail=f"run_snapshot_for_fixtures failed: {exc}"
+        ) from exc
+
+    logger.info(
+        "[clv/closing-tick] snapshots=%d fixture_count=%d (already_done=%d)",
+        n,
+        len(to_snapshot),
+        len(done_ids),
+    )
+    return {
+        "status": "ok",
+        "snapshots": n,
+        "fixture_count": len(to_snapshot),
+        "already_done": len(done_ids),
+    }

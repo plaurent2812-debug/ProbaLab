@@ -8,6 +8,7 @@ tout appel DB / réseau réel.
 from __future__ import annotations
 
 import os
+from unittest.mock import MagicMock
 
 # ── Env vars requis AVANT toute import projet ───────────────────
 os.environ.setdefault("SUPABASE_URL", "https://test.supabase.co")
@@ -189,3 +190,159 @@ def test_clv_drift_sends_telegram_when_threshold_exceeded(client, auth_headers, 
     assert body["n_drifted"] == 7
     assert body["alert_sent"] is True
     assert len(telegram_calls) == 1
+
+
+# ═══════════════════════════════════════════════════════════════
+#  /api/trigger/clv/closing-tick
+# ═══════════════════════════════════════════════════════════════
+
+
+def _make_closing_tick_supabase_mock(
+    *,
+    football_rows: list[dict] | None = None,
+    nhl_rows: list[dict] | None = None,
+    already_snapshotted: list[dict] | None = None,
+) -> MagicMock:
+    """Construit un faux client Supabase pour le endpoint closing-tick.
+
+    Le endpoint fait 3 requêtes :
+      1. fixtures.select('id').gte('date', …).lt('date', …).execute()
+      2. nhl_fixtures.select('game_id').gte('game_date', …).lt('game_date', …).execute()
+      3. closing_odds.select('fixture_id').in_('fixture_id', …).eq('snapshot_type','closing').execute()
+    """
+    mock = MagicMock()
+
+    def table_side_effect(name: str):
+        chain = MagicMock()
+        exec_res = MagicMock()
+        if name == "fixtures":
+            exec_res.data = football_rows or []
+        elif name == "nhl_fixtures":
+            exec_res.data = nhl_rows or []
+        elif name == "closing_odds":
+            exec_res.data = already_snapshotted or []
+        else:
+            exec_res.data = []
+        # Chaque appel (.select / .gte / .lt / .in_ / .eq) renvoie le chain lui-même
+        for method in ("select", "gte", "lt", "in_", "eq"):
+            getattr(chain, method).return_value = chain
+        chain.execute.return_value = exec_res
+        return chain
+
+    mock.table.side_effect = table_side_effect
+    return mock
+
+
+def test_clv_closing_tick_requires_auth(client):
+    resp = client.post("/api/trigger/clv/closing-tick", json={})
+    assert resp.status_code == 401
+
+
+def test_clv_closing_tick_no_fixtures_in_window(client, auth_headers, monkeypatch):
+    """Fenêtre vide → 200 avec snapshots=0, run_snapshot_for_fixtures pas appelé."""
+    import api.routers.trigger as trigger_module
+    from src.fetchers import odds_ingestor
+
+    fake_supa = _make_closing_tick_supabase_mock()
+    monkeypatch.setattr(trigger_module, "supabase", fake_supa)
+
+    called_with: list[list[str]] = []
+
+    def fake_run_for(fixture_ids: list[str]) -> int:
+        called_with.append(fixture_ids)
+        return 0
+
+    monkeypatch.setattr(odds_ingestor, "run_snapshot_for_fixtures", fake_run_for)
+
+    resp = client.post("/api/trigger/clv/closing-tick", headers=auth_headers, json={})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "ok"
+    assert body["snapshots"] == 0
+    assert called_with == []
+
+
+def test_clv_closing_tick_snapshots_new_fixtures(client, auth_headers, monkeypatch):
+    """2 fixtures football + 1 NHL en fenêtre, aucun déjà snapshotté → run_snapshot_for_fixtures(3 ids)."""
+    import api.routers.trigger as trigger_module
+    from src.fetchers import odds_ingestor
+
+    fake_supa = _make_closing_tick_supabase_mock(
+        football_rows=[{"id": 111}, {"id": 222}],
+        nhl_rows=[{"game_id": 2026020500}],
+        already_snapshotted=[],
+    )
+    monkeypatch.setattr(trigger_module, "supabase", fake_supa)
+
+    called_with: list[list[str]] = []
+
+    def fake_run_for(fixture_ids: list[str]) -> int:
+        called_with.append(list(fixture_ids))
+        return 18
+
+    monkeypatch.setattr(odds_ingestor, "run_snapshot_for_fixtures", fake_run_for)
+
+    resp = client.post("/api/trigger/clv/closing-tick", headers=auth_headers, json={})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "ok"
+    assert body["snapshots"] == 18
+    assert body["fixture_count"] == 3
+    assert len(called_with) == 1
+    assert set(called_with[0]) == {"111", "222", "2026020500"}
+
+
+def test_clv_closing_tick_skips_already_snapshotted(client, auth_headers, monkeypatch):
+    """2 fixtures, 1 déjà snapshotté → run_snapshot_for_fixtures n'appelle QUE l'autre."""
+    import api.routers.trigger as trigger_module
+    from src.fetchers import odds_ingestor
+
+    fake_supa = _make_closing_tick_supabase_mock(
+        football_rows=[{"id": 111}, {"id": 222}],
+        nhl_rows=[],
+        already_snapshotted=[{"fixture_id": "111"}],
+    )
+    monkeypatch.setattr(trigger_module, "supabase", fake_supa)
+
+    called_with: list[list[str]] = []
+
+    def fake_run_for(fixture_ids: list[str]) -> int:
+        called_with.append(list(fixture_ids))
+        return 6
+
+    monkeypatch.setattr(odds_ingestor, "run_snapshot_for_fixtures", fake_run_for)
+
+    resp = client.post("/api/trigger/clv/closing-tick", headers=auth_headers, json={})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["snapshots"] == 6
+    assert body["fixture_count"] == 1
+    assert called_with == [["222"]]
+
+
+def test_clv_closing_tick_all_already_done_short_circuits(client, auth_headers, monkeypatch):
+    """Toutes les fixtures déjà snapshottées → run_snapshot_for_fixtures PAS appelé."""
+    import api.routers.trigger as trigger_module
+    from src.fetchers import odds_ingestor
+
+    fake_supa = _make_closing_tick_supabase_mock(
+        football_rows=[{"id": 111}],
+        nhl_rows=[],
+        already_snapshotted=[{"fixture_id": "111"}],
+    )
+    monkeypatch.setattr(trigger_module, "supabase", fake_supa)
+
+    called_with: list[list[str]] = []
+
+    def fake_run_for(fixture_ids: list[str]) -> int:
+        called_with.append(list(fixture_ids))
+        return 0
+
+    monkeypatch.setattr(odds_ingestor, "run_snapshot_for_fixtures", fake_run_for)
+
+    resp = client.post("/api/trigger/clv/closing-tick", headers=auth_headers, json={})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["snapshots"] == 0
+    assert body["already_done"] == 1
+    assert called_with == []
