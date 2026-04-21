@@ -44,6 +44,28 @@ describe('HeaderV2', () => {
     expect(screen.getByText('Premium')).toBeInTheDocument();
   });
 
+  it('hides horizontal nav on mobile (< md) via responsive classes', () => {
+    render(
+      <MemoryRouter>
+        <HeaderV2 userRole="free" />
+      </MemoryRouter>
+    );
+    const nav = screen.getByRole('navigation', { name: /navigation$/i });
+    expect(nav.className).toMatch(/hidden/);
+    expect(nav.className).toMatch(/md:flex/);
+  });
+
+  it('hides role badge on mobile (< md) via responsive classes', () => {
+    render(
+      <MemoryRouter>
+        <HeaderV2 userRole="free" />
+      </MemoryRouter>
+    );
+    const badge = screen.getByLabelText(/statut : free/i);
+    expect(badge.className).toMatch(/hidden/);
+    expect(badge.className).toMatch(/md:/);
+  });
+
   it('has no accessibility violations', async () => {
     const { container } = render(
       <MemoryRouter>

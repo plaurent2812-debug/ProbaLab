@@ -36,7 +36,11 @@ export function HeaderV2({ userRole, trialDaysLeft }: HeaderV2Props) {
       <Link to="/" aria-label="ProbaLab" style={{ color: 'var(--primary)', fontWeight: 700 }}>
         ProbaLab
       </Link>
-      <nav aria-label="Navigation" style={{ display: 'flex', gap: 'var(--space-4)' }}>
+      <nav
+        aria-label="Navigation"
+        className="hidden md:flex"
+        style={{ gap: 'var(--space-4)' }}
+      >
         <Link to="/" aria-label="Accueil">Accueil</Link>
         <Link to="/matchs" aria-label="Matchs">Matchs</Link>
         <Link to="/compte" aria-label="Compte">Compte</Link>
@@ -44,6 +48,7 @@ export function HeaderV2({ userRole, trialDaysLeft }: HeaderV2Props) {
       {badge && (
         <span
           aria-label={`Statut : ${badge}`}
+          className="hidden md:inline-block"
           style={{
             fontSize: 12,
             padding: '2px 8px',

@@ -25,6 +25,17 @@ describe('BottomNavV2', () => {
     expect(screen.getByRole('navigation', { name: /navigation mobile/i })).toBeInTheDocument();
   });
 
+  it('is hidden on desktop (>= md) via responsive classes', () => {
+    render(
+      <MemoryRouter>
+        <BottomNavV2 />
+      </MemoryRouter>
+    );
+    const nav = screen.getByRole('navigation', { name: /navigation mobile/i });
+    expect(nav.className).toMatch(/flex/);
+    expect(nav.className).toMatch(/md:hidden/);
+  });
+
   it('has no accessibility violations', async () => {
     const { container } = render(
       <MemoryRouter>

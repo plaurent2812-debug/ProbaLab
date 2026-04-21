@@ -5,13 +5,13 @@ export function BottomNavV2() {
   return (
     <nav
       aria-label="Navigation mobile"
+      className="flex md:hidden"
       style={{
         position: 'fixed',
         bottom: 0,
         left: 0,
         right: 0,
         zIndex: 40,
-        display: 'flex',
         justifyContent: 'space-around',
         alignItems: 'center',
         padding: 'var(--space-2) 0',
