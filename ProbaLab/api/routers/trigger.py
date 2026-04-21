@@ -1162,6 +1162,16 @@ def clv_closing_tick() -> dict:
         ) or []
     except Exception:
         logger.exception("[clv/closing-tick] dedup query failed — proceeding without dedup")
+        # Alerte Telegram : burn de quota silencieux possible (re-snapshot des fixtures
+        # déjà captures si dedup échoue).  On ne bloque pas le flow sur un échec Telegram.
+        try:
+            send_telegram(
+                f"\u26a0\ufe0f <b>[clv/closing-tick] dedup query failed</b>\n"
+                f"Proceeding with full snapshot of {len(fixture_ids)} fixtures — "
+                f"possible quota burn. Investigate Supabase health."
+            )
+        except Exception:
+            logger.exception("[clv/closing-tick] telegram alert failed")
         done_rows = []
 
     done_ids = {r["fixture_id"] for r in done_rows if r.get("fixture_id")}

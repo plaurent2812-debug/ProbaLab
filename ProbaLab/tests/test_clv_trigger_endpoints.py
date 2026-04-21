@@ -346,3 +346,157 @@ def test_clv_closing_tick_all_already_done_short_circuits(client, auth_headers, 
     assert body["snapshots"] == 0
     assert body["already_done"] == 1
     assert called_with == []
+
+
+def test_clv_closing_tick_continues_on_football_error(client, auth_headers, monkeypatch):
+    """I2 regression — if football query raises, NHL processing still happens."""
+    import api.routers.trigger as trigger_module
+    from src.fetchers import odds_ingestor
+
+    fake_supa = MagicMock()
+
+    def table_side_effect(name: str):
+        chain = MagicMock()
+        if name == "fixtures":
+            # Football fails: execute() raises
+            chain.select.return_value = chain
+            chain.gte.return_value = chain
+            chain.lt.return_value = chain
+            chain.execute.side_effect = RuntimeError("supabase 500 football")
+            return chain
+        # NHL succeeds with 1 fixture; dedup returns empty
+        exec_res = MagicMock()
+        if name == "nhl_fixtures":
+            exec_res.data = [{"game_id": 2026020500}]
+        elif name == "closing_odds":
+            exec_res.data = []
+        else:
+            exec_res.data = []
+        for m in ("select", "gte", "lt", "in_", "eq"):
+            getattr(chain, m).return_value = chain
+        chain.execute.return_value = exec_res
+        return chain
+
+    fake_supa.table.side_effect = table_side_effect
+    monkeypatch.setattr(trigger_module, "supabase", fake_supa)
+
+    called_with: list[list[str]] = []
+
+    def fake_run_for(fixture_ids: list[str]) -> int:
+        called_with.append(list(fixture_ids))
+        return 6
+
+    monkeypatch.setattr(odds_ingestor, "run_snapshot_for_fixtures", fake_run_for)
+
+    resp = client.post("/api/trigger/clv/closing-tick", headers=auth_headers, json={})
+    assert resp.status_code == 200
+    body = resp.json()
+    # Only NHL fixture survived
+    assert body["fixture_count"] == 1
+    assert called_with == [["2026020500"]]
+
+
+def test_clv_closing_tick_continues_on_nhl_error(client, auth_headers, monkeypatch):
+    """I2 regression — if NHL query raises, football processing still happens."""
+    import api.routers.trigger as trigger_module
+    from src.fetchers import odds_ingestor
+
+    fake_supa = MagicMock()
+
+    def table_side_effect(name: str):
+        chain = MagicMock()
+        if name == "nhl_fixtures":
+            chain.select.return_value = chain
+            chain.gte.return_value = chain
+            chain.lt.return_value = chain
+            chain.execute.side_effect = RuntimeError("supabase 500 nhl")
+            return chain
+        exec_res = MagicMock()
+        if name == "fixtures":
+            exec_res.data = [{"id": 777}]
+        elif name == "closing_odds":
+            exec_res.data = []
+        else:
+            exec_res.data = []
+        for m in ("select", "gte", "lt", "in_", "eq"):
+            getattr(chain, m).return_value = chain
+        chain.execute.return_value = exec_res
+        return chain
+
+    fake_supa.table.side_effect = table_side_effect
+    monkeypatch.setattr(trigger_module, "supabase", fake_supa)
+
+    called_with: list[list[str]] = []
+
+    def fake_run_for(fixture_ids: list[str]) -> int:
+        called_with.append(list(fixture_ids))
+        return 5
+
+    monkeypatch.setattr(odds_ingestor, "run_snapshot_for_fixtures", fake_run_for)
+
+    resp = client.post("/api/trigger/clv/closing-tick", headers=auth_headers, json={})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["fixture_count"] == 1
+    assert called_with == [["777"]]
+
+
+def test_clv_closing_tick_proceeds_without_dedup_on_dedup_failure(
+    client, auth_headers, monkeypatch
+):
+    """I2+I3 regression — if dedup query fails, full fixture list is snapshotted
+    AND a Telegram alert is fired."""
+    import api.routers.trigger as trigger_module
+    from src.fetchers import odds_ingestor
+
+    fake_supa = MagicMock()
+
+    def table_side_effect(name: str):
+        chain = MagicMock()
+        if name == "closing_odds":
+            # Dedup fails
+            chain.select.return_value = chain
+            chain.in_.return_value = chain
+            chain.eq.return_value = chain
+            chain.execute.side_effect = RuntimeError("supabase 500 dedup")
+            return chain
+        exec_res = MagicMock()
+        if name == "fixtures":
+            exec_res.data = [{"id": 100}, {"id": 200}]
+        elif name == "nhl_fixtures":
+            exec_res.data = []
+        else:
+            exec_res.data = []
+        for m in ("select", "gte", "lt", "in_", "eq"):
+            getattr(chain, m).return_value = chain
+        chain.execute.return_value = exec_res
+        return chain
+
+    fake_supa.table.side_effect = table_side_effect
+    monkeypatch.setattr(trigger_module, "supabase", fake_supa)
+
+    called_with: list[list[str]] = []
+
+    def fake_run_for(fixture_ids: list[str]) -> int:
+        called_with.append(list(fixture_ids))
+        return 12
+
+    monkeypatch.setattr(odds_ingestor, "run_snapshot_for_fixtures", fake_run_for)
+
+    telegram_calls: list[str] = []
+
+    def fake_send(msg: str) -> bool:
+        telegram_calls.append(msg)
+        return True
+
+    monkeypatch.setattr(trigger_module, "send_telegram", fake_send, raising=False)
+
+    resp = client.post("/api/trigger/clv/closing-tick", headers=auth_headers, json={})
+    assert resp.status_code == 200
+    body = resp.json()
+    # Dedup failed → full list (2) goes to run_snapshot_for_fixtures
+    assert body["fixture_count"] == 2
+    assert called_with == [["100", "200"]]
+    # I3 : Telegram alert sent
+    assert len(telegram_calls) == 1
+    assert "dedup query failed" in telegram_calls[0]
