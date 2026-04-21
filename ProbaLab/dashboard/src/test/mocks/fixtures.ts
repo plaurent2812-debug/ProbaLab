@@ -275,6 +275,15 @@ export const mockAnalysisPsgLens: AnalysisPayload = {
   is_teaser: false,
 };
 
+export const mockAnalysisTeaser: AnalysisPayload = {
+  paragraphs: [
+    "Paris Saint-Germain reste sur 4 victoires consécutives à domicile avec un xG moyen de 2,3 et une défense solide (3 clean sheets sur les 5 derniers).",
+  ],
+  generated_at: '2026-04-21T10:00:00Z',
+  is_teaser: true,
+};
+
 export const mockAnalysisById: Record<string, AnalysisPayload> = {
   'fx-1': mockAnalysisPsgLens,
+  'fx-teaser': mockAnalysisTeaser,
 };

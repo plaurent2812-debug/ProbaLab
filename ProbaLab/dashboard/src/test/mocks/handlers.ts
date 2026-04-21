@@ -5,6 +5,7 @@ import {
   mockPerformance,
   mockSafePick,
   mockMatchDetailById,
+  mockAnalysisById,
 } from './fixtures';
 
 const API = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
@@ -55,6 +56,16 @@ export const handlers = [
     const payload = mockMatchDetailById[fixtureId];
     if (!payload) {
       return HttpResponse.json({ error: 'fixture_not_found' }, { status: 404 });
+    }
+    return HttpResponse.json(payload);
+  }),
+
+  // Lot 4 — IA analysis (Gemini paragraphs)
+  http.get(`${API}/api/analysis/:fixtureId`, ({ params }) => {
+    const fixtureId = String(params.fixtureId);
+    const payload = mockAnalysisById[fixtureId];
+    if (!payload) {
+      return HttpResponse.json({ error: 'analysis_not_found' }, { status: 404 });
     }
     return HttpResponse.json(payload);
   }),
