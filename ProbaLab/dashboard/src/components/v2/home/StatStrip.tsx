@@ -7,13 +7,34 @@ interface Props {
   'data-testid'?: string;
 }
 
-function formatDelta(v: number, suffix = '%'): string {
-  const sign = v >= 0 ? '+' : '';
-  return `${sign}${v.toFixed(1)}${suffix} vs 7j`;
+// Defensive helpers: API may return partial/invalid payloads (404 fallback,
+// empty DB, schema drift). We never call .toFixed on possibly-undefined values.
+function isNum(v: unknown): v is number {
+  return typeof v === 'number' && Number.isFinite(v);
+}
+
+function fmtPct(v: unknown, digits = 1): string {
+  return isNum(v) ? `${(v as number).toFixed(digits)}%` : '—';
+}
+
+function fmtBrier(v: unknown): string {
+  return isNum(v) ? (v as number).toFixed(3) : '—';
+}
+
+function fmtBankroll(v: unknown): string {
+  if (!isNum(v)) return '—';
+  return `${(v as number).toLocaleString('fr-FR').replace(/\u202f/g, ' ')} €`;
+}
+
+function fmtDelta(v: unknown, suffix = '%'): string | undefined {
+  if (!isNum(v)) return undefined;
+  const n = v as number;
+  const sign = n >= 0 ? '+' : '';
+  return `${sign}${n.toFixed(1)}${suffix} vs 7j`;
 }
 
 export function StatStrip({ data, loading, 'data-testid': dataTestId = 'stat-strip' }: Props) {
-  if (loading || !data) {
+  if (loading) {
     return (
       <div
         data-testid={dataTestId}
@@ -30,7 +51,17 @@ export function StatStrip({ data, loading, 'data-testid': dataTestId = 'stat-str
       </div>
     );
   }
-  const bankrollStr = `${data.bankroll.value.toLocaleString('fr-FR').replace(/\u202f/g, ' ')} €`;
+
+  // Safe accessors - every field is optional and guarded.
+  const roi = data?.roi30d;
+  const acc = data?.accuracy;
+  const brier = data?.brier7d;
+  const bank = data?.bankroll;
+
+  const roiValue = roi?.value;
+  const accValue = acc?.value;
+  const brierDelta = brier?.deltaVs7d;
+
   return (
     <div
       data-testid={dataTestId}
@@ -38,22 +69,22 @@ export function StatStrip({ data, loading, 'data-testid': dataTestId = 'stat-str
     >
       <StatTile
         label="ROI 30J"
-        value={`${data.roi30d.value.toFixed(1)}%`}
-        delta={formatDelta(data.roi30d.deltaVs7d)}
-        tone={data.roi30d.value >= 0 ? 'positive' : 'negative'}
+        value={fmtPct(roiValue)}
+        delta={fmtDelta(roi?.deltaVs7d)}
+        tone={isNum(roiValue) ? (roiValue >= 0 ? 'positive' : 'negative') : undefined}
       />
       <StatTile
         label="Accuracy"
-        value={`${data.accuracy.value.toFixed(1)}%`}
-        delta={formatDelta(data.accuracy.deltaVs7d)}
+        value={fmtPct(accValue)}
+        delta={fmtDelta(acc?.deltaVs7d)}
       />
       <StatTile
         label="Brier 7J"
-        value={data.brier7d.value.toFixed(3)}
-        delta={formatDelta(data.brier7d.deltaVs7d, '')}
-        tone={data.brier7d.deltaVs7d <= 0 ? 'positive' : 'negative'}
+        value={fmtBrier(brier?.value)}
+        delta={fmtDelta(brierDelta, '')}
+        tone={isNum(brierDelta) ? (brierDelta <= 0 ? 'positive' : 'negative') : undefined}
       />
-      <StatTile label="Bankroll" value={bankrollStr} />
+      <StatTile label="Bankroll" value={fmtBankroll(bank?.value)} />
     </div>
   );
 }

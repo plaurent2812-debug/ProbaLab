@@ -3,14 +3,20 @@ import { useV2User } from '@/hooks/v2/useV2User';
 import { useSafePick } from '@/hooks/v2/useSafePick';
 import { useMatchesOfDay } from '@/hooks/v2/useMatchesOfDay';
 import { usePerformanceSummary } from '@/hooks/v2/usePerformanceSummary';
-import { HeroLanding } from '@/components/v2/home/HeroLanding';
 import { PreviewBlurMatches } from '@/components/v2/home/PreviewBlurMatches';
 import { StatStrip } from '@/components/v2/home/StatStrip';
 import { SafeOfTheDayCard } from '@/components/v2/home/SafeOfTheDayCard';
 import { MatchesList } from '@/components/v2/home/MatchesList';
 import { ValueBetsTeaser } from '@/components/v2/home/ValueBetsTeaser';
 import { PremiumCTA } from '@/components/v2/home/PremiumCTA';
-import { StatTile } from '@/components/v2/system/StatTile';
+// Premium landing sections (visitor-only) — shadcn + framer-motion.
+import { Hero } from '@/components/v2/home/premium/Hero';
+import { StatStripPremium } from '@/components/v2/home/premium/StatStripPremium';
+import { LiveDemoMatch } from '@/components/v2/home/premium/LiveDemoMatch';
+import { HowItWorks } from '@/components/v2/home/premium/HowItWorks';
+import { TrackRecord } from '@/components/v2/home/premium/TrackRecord';
+import { FinalCTA } from '@/components/v2/home/premium/FinalCTA';
+import type { MatchRowData } from '@/types/v2/matches';
 
 const DESKTOP_BREAKPOINT = 1024;
 
@@ -30,6 +36,21 @@ function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+/**
+ * Pick the match most worth showing on the public landing:
+ *   1. highest edge from topValueBet, then
+ *   2. fall back to first match of the day.
+ * Returns undefined when there are no matches — LiveDemoMatch then
+ * renders its own curated fallback (PSG vs Nantes).
+ */
+function pickFeaturedMatch(matches: MatchRowData[] | undefined): MatchRowData | undefined {
+  if (!matches || matches.length === 0) return undefined;
+  const byEdge = [...matches].sort(
+    (a, b) => (b.topValueBet?.edgePct ?? 0) - (a.topValueBet?.edgePct ?? 0),
+  );
+  return byEdge[0];
+}
+
 export function HomeV2() {
   const user = useV2User();
   const date = todayIso();
@@ -38,27 +59,38 @@ export function HomeV2() {
   const perf = usePerformanceSummary();
   const isDesktop = useIsDesktop();
 
+  // ── Visitor landing (public marketing page) ───────────────────────
+  // Dark premium layout with hero, live stats, a real match preview,
+  // "how it works", track record, and final CTA. All sections use
+  // framer-motion reveals and shadcn primitives.
   if (user.isVisitor) {
     return (
       <main
         data-testid="home-landing"
         aria-label="Accueil ProbaLab"
-        className="mx-auto max-w-5xl px-4 md:px-8 pb-10 space-y-8"
+        // Force dark premium background regardless of theme — this is
+        // the public face of the product.
+        className="min-h-screen"
+        style={{ background: '#0a0e1a', color: '#e5e7eb' }}
       >
-        <HeroLanding />
-        {matches.data && <PreviewBlurMatches matches={matches.data.matches} />}
-        <section
-          aria-label="Track record"
-          className="grid grid-cols-1 md:grid-cols-3 gap-3"
-        >
-          <StatTile label="ROI public 30J" value="+12.4%" tone="positive" />
-          <StatTile label="CLV vs Pinnacle" value="+2.1%" tone="positive" />
-          <StatTile label="Accuracy" value="54.2%" />
-        </section>
+        <Hero />
+        <StatStripPremium data={perf.data} />
+        <LiveDemoMatch match={pickFeaturedMatch(matches.data?.matches)} />
+        {/* Keeps a secondary "here are more matches, blurred" teaser so
+            visitors see the breadth of our coverage before committing. */}
+        {matches.data && matches.data.matches.length > 1 && (
+          <section className="mx-auto max-w-6xl px-4 pb-8 md:px-8">
+            <PreviewBlurMatches matches={matches.data.matches} />
+          </section>
+        )}
+        <HowItWorks />
+        <TrackRecord />
+        <FinalCTA />
       </main>
     );
   }
 
+  // ── Connected dashboard (free/trial/premium/admin) ────────────────
   const gating: 'free' | 'trial' | 'premium' =
     user.role === 'free' ? 'free' : user.role === 'trial' ? 'trial' : 'premium';
 
