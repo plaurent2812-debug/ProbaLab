@@ -19,10 +19,27 @@ export function ProbBar({
   awayLabel,
   'data-testid': dataTestId = 'prob-bar',
 }: ProbBarProps) {
-  const sum = home + draw + away;
-  if (Math.abs(sum - 1) > 0.01) {
-    throw new Error(`ProbBar: probabilities must sum to 1, got ${sum}`);
+  // Tolerate missing probabilities (e.g. NHL fixtures without a prediction yet).
+  // Normalize small rounding errors silently; treat sum=0 as a neutral bar.
+  const rawSum = home + draw + away;
+  if (rawSum <= 0) {
+    return (
+      <div
+        role="img"
+        aria-label="Probabilités non disponibles"
+        data-testid={dataTestId}
+        className="flex h-2 w-full rounded overflow-hidden"
+        style={{ background: 'var(--surface-2)' }}
+      />
+    );
   }
+  // Normalize if off from 1 (rounding) by renormalizing proportionally.
+  const normHome = home / rawSum;
+  const normDraw = draw / rawSum;
+  const normAway = away / rawSum;
+  home = normHome;
+  draw = normDraw;
+  away = normAway;
   const max = Math.max(home, draw, away);
   const dominant = home === max ? 'home' : draw === max ? 'draw' : 'away';
   const label = `${homeLabel} ${pct(home)}%, Nul ${pct(draw)}%, ${awayLabel} ${pct(away)}%`;
