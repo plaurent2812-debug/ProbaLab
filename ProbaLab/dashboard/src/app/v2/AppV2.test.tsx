@@ -106,3 +106,71 @@ describe('AppV2', () => {
     expect(screen.getByText(/RegisterV2 WIP/i)).toBeInTheDocument();
   });
 });
+
+// ── Legacy route redirects (Lot 6 — Task 2/3) ─────────────────────
+describe('AppV2 — legacy route redirects', () => {
+  function renderAt(path: string) {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={[path]}>
+          <AppV2Content />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+  }
+
+  it('redirects /paris-du-soir to /matchs?signal=value (MatchesV2 renders)', async () => {
+    renderAt('/paris-du-soir');
+    expect(await screen.findByTestId('matches-v2-page')).toBeInTheDocument();
+  });
+
+  it('redirects /paris-du-soir/football to MatchesV2', async () => {
+    renderAt('/paris-du-soir/football');
+    expect(await screen.findByTestId('matches-v2-page')).toBeInTheDocument();
+  });
+
+  it('redirects /football to MatchesV2', async () => {
+    renderAt('/football');
+    expect(await screen.findByTestId('matches-v2-page')).toBeInTheDocument();
+  });
+
+  it('redirects /football/match/12345 to /matchs/12345 (MatchDetailV2)', async () => {
+    vi.spyOn(v2User, 'useV2User').mockReturnValue({ role: 'premium', isVisitor: false });
+    renderAt('/football/match/12345');
+    expect(await screen.findByTestId('match-detail-v2')).toHaveAttribute(
+      'data-fixture-id',
+      '12345',
+    );
+  });
+
+  it('redirects /nhl to MatchesV2', async () => {
+    renderAt('/nhl');
+    expect(await screen.findByTestId('matches-v2-page')).toBeInTheDocument();
+  });
+
+  it('redirects /nhl/match/98765 to /matchs/98765 (MatchDetailV2)', async () => {
+    vi.spyOn(v2User, 'useV2User').mockReturnValue({ role: 'premium', isVisitor: false });
+    renderAt('/nhl/match/98765');
+    expect(await screen.findByTestId('match-detail-v2')).toHaveAttribute(
+      'data-fixture-id',
+      '98765',
+    );
+  });
+
+  it('redirects /watchlist to AccountV2 bankroll tab', async () => {
+    vi.spyOn(v2User, 'useV2User').mockReturnValue({ role: 'premium', isVisitor: false });
+    renderAt('/watchlist');
+    expect(
+      await screen.findByRole('heading', { level: 1, name: /mon compte/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('redirects /hero-showcase to / (HomeV2)', async () => {
+    vi.spyOn(v2User, 'useV2User').mockReturnValue({ role: 'visitor', isVisitor: true });
+    renderAt('/hero-showcase');
+    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent(
+      /vraie probabilité/i,
+    );
+  });
+});
