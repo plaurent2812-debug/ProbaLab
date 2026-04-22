@@ -46,6 +46,7 @@ from api.routers import search as search_router
 from api.routers import teams as teams_router
 from api.routers import telegram as telegram_router
 from api.routers import value_bets as value_bets_router
+from api.routers.v2 import matches_v2 as v2_matches
 from api.routers.v2 import public_track_record as v2_public_tr
 from api.routers.v2 import safe_pick as v2_safe_pick
 
@@ -121,6 +122,7 @@ app.include_router(value_bets_router.router)
 # ─── V2 Routers (refonte frontend V1) ────────────────────────────
 app.include_router(v2_public_tr.router)
 app.include_router(v2_safe_pick.router)
+app.include_router(v2_matches.router)
 
 # ─── CORS Middleware ─────────────────────────────────────────────
 
