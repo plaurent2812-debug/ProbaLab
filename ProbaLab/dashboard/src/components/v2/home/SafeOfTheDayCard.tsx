@@ -1,3 +1,4 @@
+// ProbaLab/dashboard/src/components/v2/home/SafeOfTheDayCard.tsx — full replacement
 import { Link } from 'react-router-dom';
 import { Star } from 'lucide-react';
 import type { SafePick } from '@/types/v2/matches';
@@ -7,8 +8,32 @@ interface Props {
   'data-testid'?: string;
 }
 
-export function SafeOfTheDayCard({ data, 'data-testid': dataTestId = 'safe-of-the-day-card' }: Props) {
-  if (!data) {
+function isFiniteNumber(v: unknown): v is number {
+  return typeof v === 'number' && Number.isFinite(v);
+}
+
+function fmtOdd(v: unknown): string {
+  return isFiniteNumber(v) ? v.toFixed(2) : '—';
+}
+
+function fmtPctFromUnit(v: unknown): string {
+  return isFiniteNumber(v) ? `${Math.round(v * 100)}%` : '—';
+}
+
+function pctWidth(v: unknown): string {
+  if (!isFiniteNumber(v)) return '0%';
+  const clamped = Math.max(0, Math.min(1, v));
+  return `${Math.round(clamped * 100)}%`;
+}
+
+export function SafeOfTheDayCard({
+  data,
+  'data-testid': dataTestId = 'safe-of-the-day-card',
+}: Props) {
+  const hasMinimumData =
+    data !== null && isFiniteNumber(data.odd) && typeof data.betLabel === 'string';
+
+  if (!hasMinimumData) {
     return (
       <section
         data-testid={dataTestId}
@@ -21,7 +46,13 @@ export function SafeOfTheDayCard({ data, 'data-testid': dataTestId = 'safe-of-th
       </section>
     );
   }
-  const pct = Math.round(data.probability * 100);
+
+  const pctLabel = fmtPctFromUnit(data.probability);
+  const progressWidth = pctWidth(data.probability);
+  const ariaValue = isFiniteNumber(data.probability)
+    ? Math.round(data.probability * 100)
+    : 0;
+
   return (
     <section
       data-testid={dataTestId}
@@ -42,10 +73,7 @@ export function SafeOfTheDayCard({ data, 'data-testid': dataTestId = 'safe-of-th
         </span>
         <span
           className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
-          style={{
-            border: '1px solid var(--border)',
-            color: 'var(--text-muted)',
-          }}
+          style={{ border: '1px solid var(--border)', color: 'var(--text-muted)' }}
         >
           FREE
         </span>
@@ -58,29 +86,31 @@ export function SafeOfTheDayCard({ data, 'data-testid': dataTestId = 'safe-of-th
           className="font-bold tabular-nums"
           style={{ fontSize: 32, color: 'var(--primary)', fontVariantNumeric: 'tabular-nums' }}
         >
-          {data.odd.toFixed(2)}
+          {fmtOdd(data.odd)}
         </span>
         <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
-          Probabilité {pct}%
+          Probabilité {pctLabel}
         </span>
       </div>
       <div
         role="progressbar"
-        aria-valuenow={pct}
+        aria-valuenow={ariaValue}
         aria-valuemin={0}
         aria-valuemax={100}
-        aria-label={`Probabilité ${data.betLabel} ${pct}%`}
+        aria-label={`Probabilité ${data.betLabel} ${pctLabel}`}
         className="mt-2 h-1 w-full rounded-full overflow-hidden"
         style={{ background: 'var(--surface-2)' }}
       >
         <div
           className="h-full"
-          style={{ width: `${pct}%`, background: 'var(--primary)' }}
+          style={{ width: progressWidth, background: 'var(--primary)' }}
         />
       </div>
-      <p className="mt-4 text-sm leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-        {data.justification}
-      </p>
+      {data.justification && (
+        <p className="mt-4 text-sm leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+          {data.justification}
+        </p>
+      )}
       <Link
         to={`/matchs/${data.fixtureId}`}
         className="mt-4 inline-block text-sm font-medium focus-visible:outline focus-visible:outline-2"
