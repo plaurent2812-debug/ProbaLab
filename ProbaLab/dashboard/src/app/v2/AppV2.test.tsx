@@ -135,12 +135,12 @@ describe('AppV2 — legacy route redirects', () => {
     expect(await screen.findByTestId('matches-v2-page')).toBeInTheDocument();
   });
 
-  it('redirects /football/match/12345 to /matchs/12345 (MatchDetailV2)', async () => {
+  it('redirects /football/match/fx-1 to /matchs/fx-1 (MatchDetailV2)', async () => {
     vi.spyOn(v2User, 'useV2User').mockReturnValue({ role: 'premium', isVisitor: false });
-    renderAt('/football/match/12345');
+    renderAt('/football/match/fx-1');
     expect(await screen.findByTestId('match-detail-v2')).toHaveAttribute(
       'data-fixture-id',
-      '12345',
+      'fx-1',
     );
   });
 
@@ -149,12 +149,12 @@ describe('AppV2 — legacy route redirects', () => {
     expect(await screen.findByTestId('matches-v2-page')).toBeInTheDocument();
   });
 
-  it('redirects /nhl/match/98765 to /matchs/98765 (MatchDetailV2)', async () => {
+  it('redirects /nhl/match/fx-1 to /matchs/fx-1 (MatchDetailV2)', async () => {
     vi.spyOn(v2User, 'useV2User').mockReturnValue({ role: 'premium', isVisitor: false });
-    renderAt('/nhl/match/98765');
+    renderAt('/nhl/match/fx-1');
     expect(await screen.findByTestId('match-detail-v2')).toHaveAttribute(
       'data-fixture-id',
-      '98765',
+      'fx-1',
     );
   });
 

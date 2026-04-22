@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import HomeV2 from '../../pages/v2/HomeV2';
 import MatchesV2 from '../../pages/v2/MatchesV2';
 import MatchDetailV2 from '../../pages/v2/MatchDetailV2';
@@ -11,6 +11,7 @@ import BankrollTab from '../../pages/v2/account/BankrollTab';
 import NotificationsTab from '../../pages/v2/account/NotificationsTab';
 import LoginV2 from '../../pages/v2/LoginV2';
 import RegisterV2 from '../../pages/v2/RegisterV2';
+import { V2_REDIRECTS, buildRedirectTarget, type RedirectEntry } from './redirects';
 
 export interface V2Route {
   path: string;
@@ -23,6 +24,24 @@ export interface V2RouteChild {
   path?: string;
   index?: boolean;
   element: ReactElement;
+}
+
+/**
+ * Wrapper that converts a legacy URL into a V2 `<Navigate replace>` at render.
+ *
+ * Reads the current location (via `useLocation`) so that query-string
+ * preservation and `:id` substitution stay stateless and test-friendly.
+ */
+function LegacyRedirect({ entry }: { entry: RedirectEntry }) {
+  const location = useLocation();
+  const target = buildRedirectTarget(
+    entry.from,
+    location.pathname,
+    location.search,
+    entry.preserveQuery,
+    entry.to,
+  );
+  return <Navigate to={target} replace />;
 }
 
 export const v2Routes: readonly V2Route[] = [
@@ -44,4 +63,10 @@ export const v2Routes: readonly V2Route[] = [
   },
   { path: '/login', element: <LoginV2 />, isPublic: true },
   { path: '/register', element: <RegisterV2 />, isPublic: true },
+  // Legacy redirects (Lot 6 Bloc A) — keep last so real routes take precedence.
+  ...V2_REDIRECTS.map<V2Route>((entry) => ({
+    path: entry.from,
+    element: <LegacyRedirect entry={entry} />,
+    isPublic: true,
+  })),
 ] as const;
