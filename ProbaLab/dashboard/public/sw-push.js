@@ -9,18 +9,17 @@
  * target URL on click.
  */
 
-/* eslint-disable no-restricted-globals, no-undef */
+function parsePushData(event) {
+  if (!event.data) return {};
+  try {
+    return event.data.json();
+  } catch {
+    return { body: '' };
+  }
+}
 
 self.addEventListener('push', function (event) {
-  var data = {};
-  try {
-    if (event.data) {
-      data = event.data.json();
-    }
-  } catch (err) {
-    // Fallback : keep data empty so we still render a generic notification.
-  }
-
+  var data = parsePushData(event);
   var title = data.title || 'ProbaLab';
   var options = {
     body: data.body || '',
@@ -28,7 +27,6 @@ self.addEventListener('push', function (event) {
     badge: '/favicon.svg',
     data: data.url || '/',
   };
-
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
