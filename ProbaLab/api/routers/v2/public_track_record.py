@@ -3,6 +3,10 @@
 Exposes aggregated quality metrics (CLV 30d, ROI 90d, Brier 30d,
 Safe-rate 90d, cumulative ROI curve) for the public marketing surface.
 Cached 5 minutes in-process to protect Supabase from bursts.
+
+Column reference (verified against real schema):
+  model_health_log : clv_best_mean_30d, brier_30d, recorded_at
+  best_bets        : result (WIN/LOSS/VOID/PENDING), odds, market, created_at
 """
 
 from __future__ import annotations
@@ -58,6 +62,9 @@ def get_track_record_live(request: Request) -> dict[str, Any]:
 
     Cached 5 minutes per process to smooth Supabase load; timezone UTC.
     The Supabase client is synchronous, so the route stays sync on purpose.
+
+    Each data section is wrapped in try/except so that a missing table or
+    schema drift degrades gracefully (returns 0) rather than causing a 500.
     """
     now_mono = time.monotonic()
     cached = _CACHE.get("live")
@@ -68,62 +75,102 @@ def get_track_record_live(request: Request) -> dict[str, Any]:
     d30 = (now_utc - timedelta(days=30)).isoformat()
     d90 = (now_utc - timedelta(days=90)).isoformat()
 
-    clv_rows = (
-        supabase.table("model_health_log")
-        .select("clv_pct")
-        .gte("created_at", d30)
-        .execute()
-        .data
-        or []
-    )
-    clv_30d = _avg([float(r["clv_pct"]) for r in clv_rows if r.get("clv_pct") is not None], 2)
+    # ── 1. CLV 30d — from model_health_log.clv_best_mean_30d ─────────────
+    clv_30d: float = 0.0
+    try:
+        clv_rows = (
+            supabase.table("model_health_log")
+            .select("clv_best_mean_30d")
+            .gte("recorded_at", d30)
+            .execute()
+            .data
+            or []
+        )
+        clv_30d = _avg(
+            [float(r["clv_best_mean_30d"]) for r in clv_rows if r.get("clv_best_mean_30d") is not None],
+            2,
+        )
+    except Exception:
+        logger.warning("track-record/live: failed to fetch CLV from model_health_log", exc_info=True)
 
-    roi_rows = (
-        supabase.table("best_bets")
-        .select("roi_pct, n_bets")
-        .gte("created_at", d90)
-        .execute()
-        .data
-        or []
-    )
-    roi_90d = _avg([float(r["roi_pct"]) for r in roi_rows if r.get("roi_pct") is not None], 2)
+    # ── 2. Brier 30d — from model_health_log.brier_30d (pre-computed) ────
+    brier_30d: float = 0.0
+    try:
+        brier_rows = (
+            supabase.table("model_health_log")
+            .select("brier_30d")
+            .gte("recorded_at", d30)
+            .execute()
+            .data
+            or []
+        )
+        brier_30d = _avg(
+            [float(r["brier_30d"]) for r in brier_rows if r.get("brier_30d") is not None],
+            3,
+        )
+    except Exception:
+        logger.warning("track-record/live: failed to fetch Brier from model_health_log", exc_info=True)
 
-    brier_rows = (
-        supabase.table("predictions_results")
-        .select("brier")
-        .gte("created_at", d30)
-        .execute()
-        .data
-        or []
-    )
-    brier_30d = _avg([float(r["brier"]) for r in brier_rows if r.get("brier") is not None], 3)
+    # ── 3. ROI 90d + safe_rate 90d + ROI curve — from best_bets ──────────
+    # best_bets columns: result (WIN/LOSS/VOID/PENDING), odds, market, created_at
+    # ROI = (sum(odds-1) for WINs  -  count(LOSSes)) / total_resolved * 100
+    # safe_rate = wins_safe / total_safe_resolved
+    # curve = cumulative ROI per calendar day
+    roi_90d: float = 0.0
+    safe_rate_90d: float = 0.0
+    roi_curve_90d: list[dict[str, Any]] = []
 
-    safe_rows = (
-        supabase.table("best_bets")
-        .select("safe_rate")
-        .gte("created_at", d90)
-        .execute()
-        .data
-        or []
-    )
-    safe_rate_90d = _avg(
-        [float(r["safe_rate"]) for r in safe_rows if r.get("safe_rate") is not None], 3
-    )
+    try:
+        bet_rows = (
+            supabase.table("best_bets")
+            .select("result, odds, market, created_at")
+            .gte("created_at", d90)
+            .in_("result", ["WIN", "LOSS"])
+            .execute()
+            .data
+            or []
+        )
 
-    curve_rows = (
-        supabase.table("best_bets")
-        .select("d, cum_roi")
-        .gte("d", d90)
-        .order("d")
-        .execute()
-        .data
-        or []
-    )
-    roi_curve_90d: list[dict[str, Any]] = [
-        {"date": cast(str, r["d"]), "cumulative_roi": float(r["cum_roi"])}
-        for r in curve_rows
-        if r.get("d") is not None and r.get("cum_roi") is not None
-    ]
+        # Global ROI 90d
+        total_staked = len(bet_rows)
+        total_returned = sum(
+            float(r.get("odds") or 1.0) for r in bet_rows if r["result"] == "WIN"
+        )
+        if total_staked > 0:
+            roi_90d = round((total_returned - total_staked) / total_staked * 100, 2)
+
+        # Safe-rate 90d: WIN rate for SAFE market bets specifically
+        safe_bets = [r for r in bet_rows if (r.get("market") or "").lower() in ("safe_football", "safe_nhl")]
+        safe_resolved = len(safe_bets)
+        safe_wins = sum(1 for r in safe_bets if r["result"] == "WIN")
+        if safe_resolved > 0:
+            safe_rate_90d = round(safe_wins / safe_resolved, 3)
+
+        # ROI curve: cumulative ROI per calendar day
+        # Each day: staked = count of resolved bets that day, returned = sum(odds) for wins
+        daily_staked: dict[str, int] = {}
+        daily_returned: dict[str, float] = {}
+        for r in bet_rows:
+            raw_date = r.get("created_at") or ""
+            day = raw_date[:10] if raw_date else ""
+            if not day:
+                continue
+            daily_staked[day] = daily_staked.get(day, 0) + 1
+            if r["result"] == "WIN":
+                daily_returned[day] = daily_returned.get(day, 0.0) + float(r.get("odds") or 1.0)
+
+        running_staked = 0
+        running_returned = 0.0
+        for day in sorted(daily_staked.keys()):
+            running_staked += daily_staked[day]
+            running_returned += daily_returned.get(day, 0.0)
+            cum_roi = round(
+                (running_returned - running_staked) / running_staked * 100, 2
+            ) if running_staked > 0 else 0.0
+            roi_curve_90d.append({"date": day, "cumulative_roi": cum_roi})
+
+    except Exception:
+        logger.warning("track-record/live: failed to compute ROI/curve from best_bets", exc_info=True)
 
     payload: dict[str, Any] = {
         "clv_30d": clv_30d,
