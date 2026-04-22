@@ -8,6 +8,8 @@ import type {
   BetRow,
   UpdateBetPayload,
 } from '@/hooks/v2/useBankrollBets';
+import type { NotificationRule } from '@/lib/v2/schemas/rules';
+import type { CreateRuleInput } from '@/hooks/v2/useNotificationRules';
 import {
   mockMatches,
   mockPerformance,
@@ -22,6 +24,8 @@ import {
   mockBets,
   mockROIByMarket,
   mockBankrollSettings,
+  mockNotificationChannels,
+  mockNotificationRules,
 } from './fixtures';
 
 const API = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
@@ -231,6 +235,81 @@ export const handlers = [
   ),
 
   http.delete(`${API}/api/user/notifications/push/unsubscribe`, () =>
+    new HttpResponse(null, { status: 204 }),
+  ),
+
+  // Channels status (telegram / email / push)
+  http.get(`${API}/api/user/notifications/channels`, () =>
+    HttpResponse.json(mockNotificationChannels),
+  ),
+
+  // Rules CRUD
+  http.get(`${API}/api/user/notifications/rules`, () =>
+    HttpResponse.json(mockNotificationRules),
+  ),
+
+  http.post(`${API}/api/user/notifications/rules`, async ({ request }) => {
+    const body = (await request.json()) as CreateRuleInput;
+    if (!body?.name || body.name.trim().length === 0) {
+      return HttpResponse.json({ error: 'invalid_name' }, { status: 400 });
+    }
+    const created: NotificationRule = {
+      ...body,
+      id: `rule-${Math.random().toString(36).slice(2, 8)}`,
+    };
+    return HttpResponse.json(created, { status: 201 });
+  }),
+
+  http.put(
+    `${API}/api/user/notifications/rules/:id`,
+    async ({ request, params }) => {
+      const body = (await request.json()) as NotificationRule;
+      const updated: NotificationRule = {
+        ...body,
+        id: String(params.id),
+      };
+      return HttpResponse.json(updated);
+    },
+  ),
+
+  http.patch(
+    `${API}/api/user/notifications/rules/:id`,
+    async ({ request, params }) => {
+      const body = (await request.json()) as Partial<NotificationRule>;
+      const existing = mockNotificationRules.find(
+        (r) => r.id === String(params.id),
+      );
+      const base: NotificationRule = existing ?? {
+        id: String(params.id),
+        name: 'unknown',
+        conditions: [{ type: 'edge_min', value: 5 }],
+        logic: 'AND',
+        channels: ['email'],
+        action: { notify: true, pauseSuggestion: false },
+        enabled: true,
+      };
+      return HttpResponse.json({
+        ...base,
+        ...body,
+        id: String(params.id),
+      } satisfies NotificationRule);
+    },
+  ),
+
+  http.delete(`${API}/api/user/notifications/rules/:id`, () =>
+    new HttpResponse(null, { status: 204 }),
+  ),
+
+  // Telegram connect flow
+  http.post(`${API}/api/user/notifications/telegram/connect-start`, () => {
+    const token = Math.random().toString(36).slice(2, 12).toUpperCase();
+    return HttpResponse.json({
+      token,
+      bot_url: `https://t.me/probalab_bot?start=${token}`,
+    });
+  }),
+
+  http.delete(`${API}/api/user/notifications/telegram`, () =>
     new HttpResponse(null, { status: 204 }),
   ),
 ];

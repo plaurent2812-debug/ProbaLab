@@ -12,6 +12,8 @@ import type { BankrollSummary } from '@/hooks/v2/useBankroll';
 import type { BetRow } from '@/hooks/v2/useBankrollBets';
 import type { ROIByMarketItem } from '@/hooks/v2/useROIByMarket';
 import type { BankrollSettings } from '@/lib/v2/schemas';
+import type { NotificationRule } from '@/lib/v2/schemas/rules';
+import type { NotificationChannelsStatus } from '@/hooks/v2/useNotificationChannels';
 
 export const leagueL1: LeagueRef = {
   id: 'fr-l1',
@@ -468,3 +470,49 @@ export const mockBankrollSettings: BankrollSettings = {
   kellyFraction: 0.25,
   stakeCapPct: 5,
 };
+
+// ---------------------------------------------------------------------------
+// Lot 5 Bloc E — Notification channels + rules
+// ---------------------------------------------------------------------------
+
+export const mockNotificationChannels: NotificationChannelsStatus = {
+  telegram: { connected: false },
+  email: { verified: true, address: 'demo@probalab.net' },
+  push: { subscribed: false, devices: 0 },
+};
+
+/**
+ * Three exemplary rules covering the three main user intents :
+ *  1. catch high-edge value bets (email + telegram).
+ *  2. remind the user of the kick-off of today's Safe pick.
+ *  3. surface a bankroll drawdown with a pause suggestion.
+ */
+export const mockNotificationRules: NotificationRule[] = [
+  {
+    id: 'rule-001',
+    name: 'Value bets haut edge',
+    conditions: [{ type: 'edge_min', value: 8 }],
+    logic: 'AND',
+    channels: ['email', 'telegram'],
+    action: { notify: true, pauseSuggestion: false },
+    enabled: true,
+  },
+  {
+    id: 'rule-002',
+    name: 'Safe du jour kick-off',
+    conditions: [{ type: 'kickoff_within', value: 2 }],
+    logic: 'AND',
+    channels: ['push'],
+    action: { notify: true, pauseSuggestion: false },
+    enabled: true,
+  },
+  {
+    id: 'rule-003',
+    name: 'Drawdown critique',
+    conditions: [{ type: 'bankroll_drawdown', value: 10 }],
+    logic: 'AND',
+    channels: ['email', 'telegram', 'push'],
+    action: { notify: true, pauseSuggestion: true },
+    enabled: false,
+  },
+];
