@@ -5,6 +5,9 @@ import type {
   MatchDetailPayload,
 } from '@/types/v2/match-detail';
 import type { TrackRecordLive } from '@/hooks/v2/useTrackRecordLive';
+import type { ProfileData } from '@/hooks/v2/useProfile';
+import type { SubscriptionData } from '@/hooks/v2/useSubscription';
+import type { Invoice } from '@/hooks/v2/useInvoices';
 
 export const leagueL1: LeagueRef = {
   id: 'fr-l1',
@@ -315,3 +318,42 @@ export const mockTrackRecordLive: TrackRecordLive = {
   roiCurve90d: buildRoiCurve(),
   lastUpdatedAt: '2026-04-22T09:30:00Z',
 };
+
+// -------------- Lot 5 Bloc B — Account (profile / subscription / invoices)
+
+export const mockProfile: ProfileData = {
+  email: 'demo@probalab.net',
+  pseudo: 'demo',
+  avatarUrl: undefined,
+  role: 'premium',
+  trialEnd: undefined,
+};
+
+export const mockSubscription: SubscriptionData = {
+  plan: 'PREMIUM',
+  status: 'active',
+  renewsAt: '2026-05-21T00:00:00Z',
+  cancelAtPeriodEnd: false,
+  planName: 'Premium mensuel',
+};
+
+export const mockInvoices: Invoice[] = [
+  {
+    id: 'in_001',
+    number: 'F-001',
+    amountCents: 1499,
+    currency: 'EUR',
+    status: 'paid',
+    issuedAt: '2026-04-01T00:00:00Z',
+    pdfUrl: 'https://invoices.probalab.net/in_001.pdf',
+  },
+  {
+    id: 'in_002',
+    number: 'F-002',
+    amountCents: 1499,
+    currency: 'EUR',
+    status: 'paid',
+    issuedAt: '2026-03-01T00:00:00Z',
+    pdfUrl: 'https://invoices.probalab.net/in_002.pdf',
+  },
+];

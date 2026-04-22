@@ -1,6 +1,7 @@
 import { http, HttpResponse } from 'msw';
 import type { Sport } from '@/types/v2/matches';
 import type { AddBetRequest, AddBetResponse } from '@/types/v2/match-detail';
+import type { ProfileData, UpdateProfileInput, ChangePasswordInput } from '@/hooks/v2/useProfile';
 import {
   mockMatches,
   mockPerformance,
@@ -8,6 +9,9 @@ import {
   mockMatchDetailById,
   mockAnalysisById,
   mockTrackRecordLive,
+  mockProfile,
+  mockSubscription,
+  mockInvoices,
 } from './fixtures';
 
 const API = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
@@ -76,6 +80,35 @@ export const handlers = [
   http.get(`${API}/api/public/track-record/live`, () =>
     HttpResponse.json(mockTrackRecordLive),
   ),
+
+  // Lot 5 Bloc B — Account profile
+  http.get(`${API}/api/user/profile`, () => HttpResponse.json(mockProfile)),
+
+  http.patch(`${API}/api/user/profile`, async ({ request }) => {
+    const body = (await request.json()) as UpdateProfileInput;
+    const updated: ProfileData = {
+      ...mockProfile,
+      ...(body.pseudo !== undefined ? { pseudo: body.pseudo } : {}),
+      ...(body.avatarUrl !== undefined ? { avatarUrl: body.avatarUrl } : {}),
+      ...(body.email !== undefined ? { email: body.email } : {}),
+    };
+    return HttpResponse.json(updated);
+  }),
+
+  http.post(`${API}/api/user/profile/password`, async ({ request }) => {
+    const body = (await request.json()) as ChangePasswordInput;
+    if (!body?.current || !body?.next || body.next.length < 8) {
+      return HttpResponse.json({ error: 'invalid_payload' }, { status: 400 });
+    }
+    return HttpResponse.json({ ok: true });
+  }),
+
+  http.delete(`${API}/api/user/profile`, () => new HttpResponse(null, { status: 204 })),
+
+  // Lot 5 Bloc B — Account subscription + invoices
+  http.get(`${API}/api/user/subscription`, () => HttpResponse.json(mockSubscription)),
+
+  http.get(`${API}/api/user/invoices`, () => HttpResponse.json(mockInvoices)),
 
   // Lot 4 — Add a bet to the user bankroll
   http.post(`${API}/api/user/bets`, async ({ request }) => {

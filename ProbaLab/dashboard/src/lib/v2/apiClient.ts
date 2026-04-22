@@ -39,3 +39,35 @@ export async function apiPost<TBody, TResponse>(
   }
   return (await res.json()) as TResponse;
 }
+
+/**
+ * PATCH JSON body and parse JSON response. Same error contract as apiPost.
+ */
+export async function apiPatch<TBody, TResponse>(
+  path: string,
+  body: TBody,
+): Promise<TResponse> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: 'PATCH',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    throw new Error(`PATCH ${path} failed: ${res.status}`);
+  }
+  return (await res.json()) as TResponse;
+}
+
+/**
+ * DELETE a resource. Returns `void` — any 2xx counts as success.
+ */
+export async function apiDelete(path: string): Promise<void> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    throw new Error(`DELETE ${path} failed: ${res.status}`);
+  }
+}

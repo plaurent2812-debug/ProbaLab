@@ -47,12 +47,12 @@ describe('AppV2', () => {
   });
 
   it('renders PremiumV2 at /premium', () => {
-    render(
+    renderWithProviders(
       <MemoryRouter initialEntries={['/premium']}>
         <AppV2Content />
       </MemoryRouter>
     );
-    expect(screen.getByText(/PremiumV2 WIP/i)).toBeInTheDocument();
+    expect(screen.getByTestId('premium-v2-page')).toBeInTheDocument();
   });
 
   it('renders AccountV2 with ProfileTab at /compte (index redirect)', () => {
