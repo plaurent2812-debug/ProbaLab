@@ -7,6 +7,7 @@ import {
   mockSafePick,
   mockMatchDetailById,
   mockAnalysisById,
+  mockTrackRecordLive,
 } from './fixtures';
 
 const API = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
@@ -70,6 +71,11 @@ export const handlers = [
     }
     return HttpResponse.json(payload);
   }),
+
+  // Lot 5 — Public live track record (no auth)
+  http.get(`${API}/api/public/track-record/live`, () =>
+    HttpResponse.json(mockTrackRecordLive),
+  ),
 
   // Lot 4 — Add a bet to the user bankroll
   http.post(`${API}/api/user/bets`, async ({ request }) => {

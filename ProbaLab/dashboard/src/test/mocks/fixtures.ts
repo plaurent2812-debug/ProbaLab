@@ -4,6 +4,7 @@ import type {
   AnalysisPayload,
   MatchDetailPayload,
 } from '@/types/v2/match-detail';
+import type { TrackRecordLive } from '@/hooks/v2/useTrackRecordLive';
 
 export const leagueL1: LeagueRef = {
   id: 'fr-l1',
@@ -286,4 +287,31 @@ export const mockAnalysisTeaser: AnalysisPayload = {
 export const mockAnalysisById: Record<string, AnalysisPayload> = {
   'fx-1': mockAnalysisPsgLens,
   'fx-teaser': mockAnalysisTeaser,
+};
+
+// ---------------------------------------------------------------------------
+// Lot 5 — public live track record.
+// 90 synthetic points, ~+12.4% final ROI, gentle drawdown mid-window.
+// ---------------------------------------------------------------------------
+function buildRoiCurve(): Array<{ date: string; roi: number }> {
+  const points: Array<{ date: string; roi: number }> = [];
+  const start = Date.UTC(2026, 0, 22); // 2026-01-22
+  for (let i = 0; i < 90; i += 1) {
+    const t = start + i * 24 * 3600 * 1000;
+    const date = new Date(t).toISOString().slice(0, 10);
+    // Gentle logistic growth with a ~day 40 drawdown, final ~12.4%.
+    const phase = (i - 40) / 22;
+    const roi = 12.4 / (1 + Math.exp(-phase)) - (i > 35 && i < 50 ? 1.6 : 0);
+    points.push({ date, roi: Number(roi.toFixed(2)) });
+  }
+  return points;
+}
+
+export const mockTrackRecordLive: TrackRecordLive = {
+  clv30d: 2.1,
+  roi90d: 12.4,
+  brier30d: 0.208,
+  safeRate90d: 71.8,
+  roiCurve90d: buildRoiCurve(),
+  lastUpdatedAt: '2026-04-22T09:30:00Z',
 };
