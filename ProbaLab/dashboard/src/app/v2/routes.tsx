@@ -9,8 +9,17 @@ import ProfileTab from '../../pages/v2/account/ProfileTab';
 import SubscriptionTab from '../../pages/v2/account/SubscriptionTab';
 import BankrollTab from '../../pages/v2/account/BankrollTab';
 import NotificationsTab from '../../pages/v2/account/NotificationsTab';
-import LoginV2 from '../../pages/v2/LoginV2';
-import RegisterV2 from '../../pages/v2/RegisterV2';
+// ── Legacy pages wired into AppV2 (Lot 6 — cutover prep) ────────────
+// These pages are NOT rebuilt in the V2 design refresh but must stay
+// reachable once VITE_FRONTEND_V2=true. They import @/lib/auth which
+// is already provided by AppV2, so no extra provider plumbing needed.
+import AdminPage from '../../pages/Admin';
+import PerformancePage from '../../pages/Performance';
+import LoginLegacy from '../../pages/Login';
+import UpdatePasswordPage from '../../pages/UpdatePassword';
+import CGUPage from '../../pages/CGU';
+import ConfidentialitePage from '../../pages/Confidentialite';
+import { Protected } from '../../lib/auth';
 import { V2_REDIRECTS, buildRedirectTarget, type RedirectEntry } from './redirects';
 
 export interface V2Route {
@@ -61,8 +70,41 @@ export const v2Routes: readonly V2Route[] = [
       { path: 'notifications', element: <NotificationsTab /> },
     ],
   },
-  { path: '/login', element: <LoginV2 />, isPublic: true },
-  { path: '/register', element: <RegisterV2 />, isPublic: true },
+  // ── Legacy routes kept for cutover (Lot 6) ────────────────────────
+  // Auth pages — legacy Login is the functional implementation; no V2
+  // refresh is scheduled inside this Lot. `/register` is intentionally
+  // NOT wired here: the legacy Login.tsx exposes both Login + Register
+  // tabs on the same route, so redirecting /register -> /login is the
+  // cleanest way to keep the visitor experience consistent.
+  { path: '/login', element: <LoginLegacy />, isPublic: true },
+  { path: '/register', element: <Navigate to="/login" replace />, isPublic: true },
+  { path: '/update-password', element: <UpdatePasswordPage />, isPublic: true },
+  // Legal pages — fully public.
+  { path: '/cgu', element: <CGUPage />, isPublic: true },
+  { path: '/confidentialite', element: <ConfidentialitePage />, isPublic: true },
+  // Admin surfaces — Admin.tsx self-guards via `<Protected requiredRole="admin">`.
+  // Performance.tsx has no internal guard, so wrap it here to mirror
+  // AppLegacy's `<AdminGuard>` behavior.
+  { path: '/admin', element: <AdminPage />, isPublic: false },
+  {
+    path: '/performance',
+    element: (
+      <Protected
+        requiredRole="admin"
+        fallback={
+          <div className="min-h-screen flex items-center justify-center text-muted-foreground">
+            🚫 Accès réservé aux administrateurs
+          </div>
+        }
+      >
+        <PerformancePage />
+      </Protected>
+    ),
+    isPublic: false,
+  },
+  // Old /profile legacy URL — redirect to the V2 account hub so old
+  // bookmarks and emails keep working.
+  { path: '/profile', element: <Navigate to="/compte/profil" replace />, isPublic: false },
   // Legacy redirects (Lot 6 Bloc A) — keep last so real routes take precedence.
   ...V2_REDIRECTS.map<V2Route>((entry) => ({
     path: entry.from,

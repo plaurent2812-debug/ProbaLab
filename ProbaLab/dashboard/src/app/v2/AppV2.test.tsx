@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { AppV2Content } from './AppV2';
 import * as v2User from '@/hooks/v2/useV2User';
 
@@ -88,22 +88,138 @@ describe('AppV2', () => {
     expect(screen.queryByTestId('tab-notifications-stub')).not.toBeInTheDocument();
   });
 
-  it('renders LoginV2 at /login', () => {
+  it('renders legacy Login at /login', async () => {
     render(
       <MemoryRouter initialEntries={['/login']}>
         <AppV2Content />
       </MemoryRouter>
     );
-    expect(screen.getByText(/LoginV2 WIP/i)).toBeInTheDocument();
+    // Legacy Login.tsx exposes a Connexion/Inscription tab group.
+    expect(
+      await screen.findByRole('tab', { name: /connexion/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /inscription/i })).toBeInTheDocument();
   });
 
-  it('renders RegisterV2 at /register', () => {
+  it('redirects /register to /login (no V2 register page in Lot 6)', async () => {
     render(
       <MemoryRouter initialEntries={['/register']}>
         <AppV2Content />
       </MemoryRouter>
     );
-    expect(screen.getByText(/RegisterV2 WIP/i)).toBeInTheDocument();
+    // After the <Navigate replace />, the legacy Login page renders.
+    expect(
+      await screen.findByRole('tab', { name: /connexion/i }),
+    ).toBeInTheDocument();
+  });
+});
+
+// ── Legacy pages wired into AppV2 (Lot 6 — cutover prep) ─────────
+// These assert that routes kept from V1 (admin, perf, legal, auth
+// utilities, old /profile alias) don't fall through to a 404 when
+// VITE_FRONTEND_V2=true. The legacy pages call `useAuth()`, so we
+// mock `@/lib/auth` to avoid pulling in the real Supabase client
+// (which would hang on `getSession()` without env vars).
+vi.mock('@/lib/auth', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/auth')>('@/lib/auth');
+  return {
+    ...actual,
+    useAuth: () => ({
+      user: null,
+      profile: null,
+      role: 'free',
+      loading: false,
+      signIn: vi.fn(),
+      signUp: vi.fn(),
+      signOut: vi.fn(),
+      resetPassword: vi.fn(),
+      hasAccess: (_requiredRole: string) => false,
+      isPremium: false,
+      isAdmin: false,
+    }),
+    Protected: ({
+      fallback = null,
+    }: {
+      children?: ReactNode;
+      requiredRole?: string;
+      fallback?: ReactNode;
+    }) => fallback,
+  };
+});
+
+describe('AppV2 — legacy pages wired for cutover', () => {
+  function renderAt(path: string) {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={[path]}>
+          <AppV2Content />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+  }
+
+  it('renders legacy CGU page at /cgu', async () => {
+    renderAt('/cgu');
+    expect(
+      await screen.findByRole('heading', {
+        level: 1,
+        name: /conditions générales d'utilisation/i,
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it('renders legacy Confidentialité page at /confidentialite', async () => {
+    renderAt('/confidentialite');
+    expect(
+      await screen.findByRole('heading', {
+        level: 1,
+        name: /politique de confidentialité/i,
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it('renders legacy UpdatePassword page at /update-password', async () => {
+    renderAt('/update-password');
+    // The page exposes an <h1>Nouveau mot de passe</h1>.
+    expect(
+      await screen.findByRole('heading', {
+        level: 1,
+        name: /nouveau mot de passe/i,
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it('renders legacy Admin route at /admin (guard fallback ok)', () => {
+    renderAt('/admin');
+    // Admin.tsx self-guards: when no admin session, the fallback
+    // "🚫 Accès non autorisé" renders. The critical assertion for
+    // cutover is that AppV2 does NOT fall back to a 404 / blank.
+    // Either the fallback OR the admin dashboard shell is acceptable.
+    // We just assert the LayoutShell wrapper is present and HomeV2 isn't.
+    expect(screen.getByTestId('layout-shell')).toBeInTheDocument();
+    expect(screen.queryByText(/vraie probabilité/i)).not.toBeInTheDocument();
+  });
+
+  it('renders legacy Performance route at /performance with guard', () => {
+    renderAt('/performance');
+    // Wrapped in <Protected requiredRole="admin"> — without an admin
+    // session, the guard fallback renders. This just confirms the
+    // route is wired (not a 404) and HomeV2 isn't bleeding through.
+    expect(screen.getByTestId('layout-shell')).toBeInTheDocument();
+    expect(screen.queryByText(/vraie probabilité/i)).not.toBeInTheDocument();
+  });
+
+  it('redirects /profile to /compte/profil (legacy alias)', async () => {
+    vi.spyOn(v2User, 'useV2User').mockReturnValue({
+      role: 'premium',
+      isVisitor: false,
+    });
+    renderAt('/profile');
+    // After the <Navigate replace />, AccountV2 renders with ProfileTab.
+    expect(
+      await screen.findByRole('heading', { level: 1, name: /mon compte/i }),
+    ).toBeInTheDocument();
   });
 });
 
