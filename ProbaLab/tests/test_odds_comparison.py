@@ -1,20 +1,19 @@
 """tests/test_odds_comparison.py — Route tests for /api/odds/:id/comparison.
 
 Drive the sync FastAPI route via ``__wrapped__`` to bypass slowapi (lesson 64)
-and the ``mock_supabase`` fixture so no real network call happens.
+and the ``mock_supabase`` fixture so no real network call happens. Routes in
+``api/routers/v2/`` are defined as plain sync functions (no ``pytest-asyncio``
+installed) — keep tests synchronous to match.
 """
 
 from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from api.routers.v2.odds_comparison import get_odds_comparison
 
 
-@pytest.mark.asyncio
-async def test_odds_comparison_shape(mock_supabase, fake_user):
+def test_odds_comparison_shape(mock_supabase, fake_user):
     """Route returns {fixture_id, comparison} with best-odds flagged correctly."""
     mock_supabase.execute.return_value = MagicMock(
         data=[
@@ -23,7 +22,7 @@ async def test_odds_comparison_shape(mock_supabase, fake_user):
         ]
     )
 
-    out = await get_odds_comparison.__wrapped__(
+    out = get_odds_comparison.__wrapped__(
         fixture_id="f1", request=MagicMock(), user=fake_user
     )
 
@@ -32,12 +31,11 @@ async def test_odds_comparison_shape(mock_supabase, fake_user):
     assert out["comparison"]["1X2"]["H"][0]["is_best"] is True
 
 
-@pytest.mark.asyncio
-async def test_odds_comparison_empty_when_no_rows(mock_supabase, fake_user):
+def test_odds_comparison_empty_when_no_rows(mock_supabase, fake_user):
     """No rows in closing_odds → comparison is an empty dict (no crash)."""
     mock_supabase.execute.return_value = MagicMock(data=[])
 
-    out = await get_odds_comparison.__wrapped__(
+    out = get_odds_comparison.__wrapped__(
         fixture_id="unknown-fixture", request=MagicMock(), user=fake_user
     )
 
@@ -45,12 +43,11 @@ async def test_odds_comparison_empty_when_no_rows(mock_supabase, fake_user):
     assert out["comparison"] == {}
 
 
-@pytest.mark.asyncio
-async def test_odds_comparison_queries_closing_odds(mock_supabase, fake_user):
+def test_odds_comparison_queries_closing_odds(mock_supabase, fake_user):
     """The route targets the ``closing_odds`` table (not legacy fixture_odds)."""
     mock_supabase.execute.return_value = MagicMock(data=[])
 
-    await get_odds_comparison.__wrapped__(
+    get_odds_comparison.__wrapped__(
         fixture_id="f42", request=MagicMock(), user=fake_user
     )
 
