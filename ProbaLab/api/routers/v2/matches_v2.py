@@ -173,12 +173,9 @@ def _fetch_football_rows(
     try:
         query = (
             supabase.table("fixtures")
-            .select(
-                "id, api_fixture_id, home_team, away_team, "
-                "date, status, home_goals, away_goals, league_id, league_name"
-            )
-            .gte("date", f"{iso}T00:00:00Z")
-            .lt("date", f"{next_day_iso}T00:00:00Z")
+            .select("*")
+            .gte("date", iso)
+            .lt("date", next_day_iso)
         )
         if league_filter:
             query = query.in_("league_id", league_filter)
@@ -196,11 +193,7 @@ def _fetch_football_rows(
     try:
         predictions = (
             supabase.table("predictions")
-            .select(
-                "fixture_id, proba_home, proba_draw, proba_away, proba_btts, "
-                "proba_over_2_5, proba_over_15, confidence_score, recommended_bet, "
-                "kelly_edge, value_bet, correct_score"
-            )
+            .select("*")
             .in_("fixture_id", fixture_ids)
             .order("created_at")
             .execute()
@@ -280,9 +273,9 @@ def _fetch_nhl_rows(
     try:
         fixtures = (
             supabase.table("nhl_fixtures")
-            .select("id, home_team, away_team, date, status, home_goals, away_goals, stats_json")
-            .gte("date", f"{iso}T00:00:00Z")
-            .lt("date", f"{next_day_iso}T00:00:00Z")
+            .select("*")
+            .gte("date", iso)
+            .lt("date", next_day_iso)
             .execute()
             .data
             or []
