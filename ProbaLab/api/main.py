@@ -51,6 +51,7 @@ from api.routers.v2 import odds_comparison as v2_odds_comparison
 from api.routers.v2 import public_track_record as v2_public_tr
 from api.routers.v2 import safe_pick as v2_safe_pick
 from api.routers.v2 import user_bankroll as v2_user_bankroll
+from api.routers.v2 import user_notifications as v2_user_notifications
 
 logger = logging.getLogger(__name__)
 
@@ -127,6 +128,7 @@ app.include_router(v2_safe_pick.router)
 app.include_router(v2_matches.router)
 app.include_router(v2_odds_comparison.router)
 app.include_router(v2_user_bankroll.router)
+app.include_router(v2_user_notifications.router)
 
 # ─── CORS Middleware ─────────────────────────────────────────────
 
