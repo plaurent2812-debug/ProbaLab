@@ -273,8 +273,8 @@ def get_safe_pick(
         fixtures = (
             supabase.table("fixtures")
             .select("id, api_fixture_id, home_team, away_team, date, status, league_id, league_name")
-            .gte("date", f"{iso}T00:00:00Z")
-            .lt("date", f"{next_day_iso}T00:00:00Z")
+            .gte("date", iso)
+            .lt("date", next_day_iso)
             .execute()
             .data
             or []
@@ -342,8 +342,8 @@ def get_safe_pick(
         nhl_fixtures = (
             supabase.table("nhl_fixtures")
             .select("id, home_team, away_team, date, status, stats_json")
-            .gte("date", f"{iso}T00:00:00Z")
-            .lt("date", f"{next_day_iso}T00:00:00Z")
+            .gte("date", iso)
+            .lt("date", next_day_iso)
             .execute()
             .data
             or []
