@@ -147,6 +147,22 @@ def mock_supabase(monkeypatch):
     mock.execute.return_value = MagicMock(data=[], count=0)
     monkeypatch.setattr("src.config.supabase", mock)
     monkeypatch.setattr("api.auth.supabase", mock, raising=False)
+    # Patch every already-imported module that re-exported ``supabase`` via
+    # ``from src.config import supabase`` — those modules hold their own
+    # reference, so patching ``src.config.supabase`` alone is not enough.
+    import sys
+
+    for mod_name, mod in list(sys.modules.items()):
+        if mod is None:
+            continue
+        if not (
+            mod_name.startswith("api.routers.v2")
+            or mod_name.startswith("src.models")
+            or mod_name.startswith("src.notifications")
+        ):
+            continue
+        if hasattr(mod, "supabase"):
+            monkeypatch.setattr(f"{mod_name}.supabase", mock, raising=False)
     return mock
 
 

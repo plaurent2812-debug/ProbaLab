@@ -4,14 +4,12 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
-
-from api.routers.v2.public_track_record import get_track_record_live
+from api.routers.v2.public_track_record import _CACHE, get_track_record_live
 
 
-@pytest.mark.asyncio
-async def test_track_record_live_shape(mock_supabase):
+def test_track_record_live_shape(mock_supabase):
     """The endpoint must expose the expected shape with 5 top-level keys and a curve list."""
+    _CACHE.clear()  # the route caches 5 min in-process; isolate the test
     mock_supabase.execute.side_effect = [
         MagicMock(data=[{"clv_pct": 3.1}, {"clv_pct": 4.2}]),  # model_health_log
         MagicMock(data=[{"roi_pct": 12.5, "n_bets": 140}]),    # best_bets aggregated
@@ -25,7 +23,7 @@ async def test_track_record_live_shape(mock_supabase):
         ),
     ]
 
-    out = await get_track_record_live.__wrapped__(request=MagicMock())
+    out = get_track_record_live.__wrapped__(request=MagicMock())
 
     assert set(out.keys()) == {
         "clv_30d",
