@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from '../../lib/auth';
 import { v2Routes } from './routes';
 import { LayoutShell } from '../../components/v2/layout/LayoutShell';
+import { ErrorBoundary } from '../../components/v2/system/ErrorBoundary';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -17,23 +18,25 @@ export function AppV2Content() {
   return (
     <div className="v2-root">
       <LayoutShell>
-        <Routes>
-          {v2Routes.map((route) => (
-            <Route key={route.path} path={route.path} element={route.element}>
-              {route.children?.map((child, idx) =>
-                child.index ? (
-                  <Route key={`idx-${route.path}`} index element={child.element} />
-                ) : (
-                  <Route
-                    key={`${route.path}-${child.path ?? idx}`}
-                    path={child.path}
-                    element={child.element}
-                  />
-                ),
-              )}
-            </Route>
-          ))}
-        </Routes>
+        <ErrorBoundary>
+          <Routes>
+            {v2Routes.map((route) => (
+              <Route key={route.path} path={route.path} element={route.element}>
+                {route.children?.map((child, idx) =>
+                  child.index ? (
+                    <Route key={`idx-${route.path}`} index element={child.element} />
+                  ) : (
+                    <Route
+                      key={`${route.path}-${child.path ?? idx}`}
+                      path={child.path}
+                      element={child.element}
+                    />
+                  ),
+                )}
+              </Route>
+            ))}
+          </Routes>
+        </ErrorBoundary>
       </LayoutShell>
     </div>
   );
