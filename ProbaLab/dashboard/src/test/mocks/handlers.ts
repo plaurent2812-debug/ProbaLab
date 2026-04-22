@@ -12,8 +12,10 @@ import type { NotificationRule } from '@/lib/v2/schemas/rules';
 import type { CreateRuleInput } from '@/hooks/v2/useNotificationRules';
 import {
   mockMatches,
+  mockMatchesBackendResponse,
   mockPerformance,
-  mockSafePick,
+  mockSafePickResponse,
+  mockSafePickEmptyResponse,
   mockMatchDetailById,
   mockAnalysisById,
   mockTrackRecordLive,
@@ -31,40 +33,43 @@ import {
 const API = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
 
 export const handlers = [
-  http.get(`${API}/api/safe-pick`, () => HttpResponse.json(mockSafePick)),
+  http.get(`${API}/api/safe-pick`, ({ request }) => {
+    const url = new URL(request.url);
+    if (url.searchParams.get('date') === '2026-04-22-empty') {
+      return HttpResponse.json(mockSafePickEmptyResponse);
+    }
+    return HttpResponse.json(mockSafePickResponse);
+  }),
 
+  // Returns the real backend shape (grouped by league, snake_case) — the
+  // `useMatchesOfDay` hook owns the flattening + camelCase adaptation.
   http.get(`${API}/api/matches`, ({ request }) => {
     const url = new URL(request.url);
     const sports = url.searchParams.get('sports')?.split(',').filter(Boolean);
     const valueOnly = url.searchParams.get('value_only') === 'true';
 
-    let matches = mockMatches;
-    if (sports && sports.length) {
-      const allowed = new Set<Sport>(sports as Sport[]);
-      matches = matches.filter((m) => allowed.has(m.sport));
-    }
-    if (valueOnly) {
-      matches = matches.filter((m) => m.signals.includes('value'));
-    }
+    // Apply filters at the group level. Each group may or may not match
+    // the requested sports / value-only filter; empty groups are dropped.
+    const filteredGroups = mockMatchesBackendResponse.groups
+      .map((g) => {
+        let matches = g.matches;
+        if (sports && sports.length) {
+          const allowed = new Set<Sport>(sports as Sport[]);
+          matches = matches.filter((m) => allowed.has(m.sport));
+        }
+        if (valueOnly) {
+          matches = matches.filter((m) => (m.signals ?? []).includes('value'));
+        }
+        return { ...g, matches };
+      })
+      .filter((g) => g.matches.length > 0);
 
-    const bySport: Record<Sport, number> = {
-      football: matches.filter((m) => m.sport === 'football').length,
-      nhl: matches.filter((m) => m.sport === 'nhl').length,
-    };
-
-    const byLeague = matches.reduce<Record<string, number>>((acc, m) => {
-      acc[m.league.id] = (acc[m.league.id] ?? 0) + 1;
-      return acc;
-    }, {});
+    const total = filteredGroups.reduce((acc, g) => acc + g.matches.length, 0);
 
     return HttpResponse.json({
-      date: url.searchParams.get('date') ?? '2026-04-21',
-      matches,
-      counts: {
-        total: matches.length,
-        bySport,
-        byLeague,
-      },
+      date: url.searchParams.get('date') ?? mockMatchesBackendResponse.date,
+      total,
+      groups: filteredGroups,
     });
   }),
 

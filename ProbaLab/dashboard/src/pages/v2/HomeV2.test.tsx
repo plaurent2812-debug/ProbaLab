@@ -54,7 +54,10 @@ describe('HomeV2', () => {
     mockUser({ role: 'free', isVisitor: false });
     renderWithProviders(<HomeV2 />);
     await waitFor(() => expect(screen.getByText(/ROI 30J/i)).toBeInTheDocument());
-    expect(await screen.findByText('PSG gagne vs Lens')).toBeInTheDocument();
+    // Adapter builds "HOME · 1X2 (PSG vs Lens)" from the backend safe-pick
+    // payload (see useSafePick.ts::adaptSafePick). Match on the team names
+    // suffix so the assertion stays meaningful even if the prefix evolves.
+    expect(await screen.findByText(/PSG vs Lens/)).toBeInTheDocument();
     expect(screen.getByTestId('premium-cta')).toBeInTheDocument();
   });
 
