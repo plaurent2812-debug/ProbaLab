@@ -13,7 +13,8 @@ import type { CreateRuleInput } from '@/hooks/v2/useNotificationRules';
 import {
   mockMatches,
   mockPerformance,
-  mockSafePick,
+  mockSafePickResponse,
+  mockSafePickEmptyResponse,
   mockMatchDetailById,
   mockAnalysisById,
   mockTrackRecordLive,
@@ -31,7 +32,13 @@ import {
 const API = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
 
 export const handlers = [
-  http.get(`${API}/api/safe-pick`, () => HttpResponse.json(mockSafePick)),
+  http.get(`${API}/api/safe-pick`, ({ request }) => {
+    const url = new URL(request.url);
+    if (url.searchParams.get('date') === '2026-04-22-empty') {
+      return HttpResponse.json(mockSafePickEmptyResponse);
+    }
+    return HttpResponse.json(mockSafePickResponse);
+  }),
 
   http.get(`${API}/api/matches`, ({ request }) => {
     const url = new URL(request.url);

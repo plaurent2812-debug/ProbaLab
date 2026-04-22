@@ -97,6 +97,34 @@ export const mockSafePick: SafePick = {
     "PSG enchaîne 5 victoires à domicile avec xG moyen 2.3. Lens absent de ses 3 cadres défensifs. Valeur cote 1.85 vs proba 58% → edge 7.3%.",
 };
 
+// Wrapper shape returned by the real backend (GET /api/safe-pick).
+// Keep this as the single source of truth for MSW.
+export const mockSafePickResponse = {
+  date: '2026-04-21',
+  safe_pick: {
+    type: 'single' as const,
+    fixture_id: 'fx-1',
+    odds: 1.85,
+    confidence: 0.58,
+    market: '1X2',
+    selection: 'home',
+    kickoff_utc: '2026-04-21T19:00:00Z',
+    league_id: 61,
+    league_name: 'Ligue 1',
+    home_team: 'PSG',
+    away_team: 'Lens',
+    sport: 'football',
+    odds_source: 'real',
+  },
+  fallback_message: null,
+};
+
+export const mockSafePickEmptyResponse = {
+  date: '2026-04-22',
+  safe_pick: null,
+  fallback_message: "Aucun pari Safe ne correspond aux critères aujourd'hui. Revenez demain.",
+};
+
 export const mockPerformance: PerformanceSummary = {
   roi30d: { value: 12.4, deltaVs7d: 0.8 },
   accuracy: { value: 54.2, deltaVs7d: -0.3 },
