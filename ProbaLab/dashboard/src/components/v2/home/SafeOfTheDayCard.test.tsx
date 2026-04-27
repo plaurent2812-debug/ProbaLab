@@ -44,9 +44,12 @@ describe('SafeOfTheDayCard', () => {
     expect(screen.getByText(/FREE/)).toBeInTheDocument();
   });
 
-  it('renders the SAFE label with no emoji', () => {
+  it('renders the recommended pick label with analysis-first wording', () => {
     renderCard();
-    expect(screen.getByText(/SAFE · PRONOSTIC DU JOUR/i)).toBeInTheDocument();
+    expect(screen.getByText(/PRONO · RECOMMANDÉ/i)).toBeInTheDocument();
+    expect(screen.getByText(/Niveau de risque/i)).toBeInTheDocument();
+    expect(screen.getByText(/Confiance/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Risque bankroll/i)).not.toBeInTheDocument();
   });
 
   it('accepts a data-testid prop', () => {
@@ -64,26 +67,13 @@ describe('SafeOfTheDayCard', () => {
     expect(screen.getByText(/pas de pronostic safe/i)).toBeInTheDocument();
   });
 
-  // Regression tests for the blank-page crash in prod (2026-04-22).
-  it('never crashes when odd is undefined (partial payload)', () => {
+  it('does not crash when odd is missing from a partial payload', () => {
     const partial = { ...mockSafePick, odd: undefined as unknown as number };
-    expect(() =>
-      render(
-        <MemoryRouter>
-          <SafeOfTheDayCard data={partial} />
-        </MemoryRouter>,
-      ),
-    ).not.toThrow();
+    expect(() => renderCard({ data: partial })).not.toThrow();
   });
 
-  it('never crashes when probability is missing', () => {
+  it('does not crash when probability is missing from a partial payload', () => {
     const partial = { ...mockSafePick, probability: undefined as unknown as number };
-    expect(() =>
-      render(
-        <MemoryRouter>
-          <SafeOfTheDayCard data={partial} />
-        </MemoryRouter>,
-      ),
-    ).not.toThrow();
+    expect(() => renderCard({ data: partial })).not.toThrow();
   });
 });

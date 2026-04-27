@@ -29,14 +29,14 @@ const LEAGUES: { key: League; label: string }[] = [
 ];
 
 const SIGNALS: { key: SignalKind; label: string; Icon: typeof Zap }[] = [
-  { key: 'value', label: 'Value bet ≥5%', Icon: Zap },
+  { key: 'value', label: 'Signal modèle fort', Icon: Zap },
   { key: 'safe', label: 'Safe du jour', Icon: Star },
   { key: 'high_confidence', label: 'Confiance élevée', Icon: TrendingUp },
 ];
 
 const SORTS: { key: MatchesSort; label: string }[] = [
   { key: 'kickoff', label: 'Heure' },
-  { key: 'edge', label: 'Edge' },
+  { key: 'edge', label: 'Signal' },
   { key: 'confidence', label: 'Confiance' },
   { key: 'league', label: 'Ligue' },
 ];
@@ -81,9 +81,22 @@ export function FilterSidebar({
     <aside
       data-testid={dataTestId}
       aria-label="Filtres"
-      className="flex w-full flex-col gap-6 md:w-[220px]"
-      style={{ color: 'var(--text)' }}
+      className="flex w-full flex-col gap-5 rounded-[26px] p-4 md:w-[260px]"
+      style={{
+        color: 'var(--text)',
+        border: '1px solid rgba(148,163,184,0.18)',
+        background:
+          'linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.018)), var(--surface)',
+      }}
     >
+      <div>
+        <div className="text-sm font-black tracking-[-0.04em]" style={{ color: 'var(--text)' }}>
+          Affiner la sélection
+        </div>
+        <p className="mt-1 text-xs leading-5" style={{ color: 'var(--text-muted)' }}>
+          Filtre les matchs utiles sans perdre la synthèse principale.
+        </p>
+      </div>
       <section>
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
           Sport

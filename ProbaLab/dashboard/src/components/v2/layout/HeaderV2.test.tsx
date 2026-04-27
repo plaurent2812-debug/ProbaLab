@@ -17,6 +17,63 @@ describe('HeaderV2', () => {
     expect(screen.getByRole('link', { name: /compte/i })).toBeInTheDocument();
   });
 
+  it('renders a premium sport-intelligence brand block instead of a plain text logo', () => {
+    render(
+      <MemoryRouter>
+        <HeaderV2 userRole="free" />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByTestId('header-brand-mark')).toHaveTextContent('P');
+    expect(screen.getByText(/analyses & probabilités/i)).toBeInTheDocument();
+  });
+
+  it('uses a pill navigation group with an active visual state', () => {
+    render(
+      <MemoryRouter initialEntries={['/matchs']}>
+        <HeaderV2 userRole="free" />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByTestId('header-nav-pill-group')).toBeInTheDocument();
+    const matchs = screen.getByRole('link', { name: /^matchs$/i });
+    expect(matchs).toHaveAttribute('aria-current', 'page');
+    expect(matchs).toHaveAttribute('data-active', 'true');
+  });
+
+  it('shows a conversion CTA for free users', () => {
+    render(
+      <MemoryRouter>
+        <HeaderV2 userRole="free" />
+      </MemoryRouter>
+    );
+
+    const cta = screen.getByRole('link', { name: /passer premium/i });
+    expect(cta).toHaveAttribute('href', '/premium');
+  });
+
+  it('shows admin access only for admin users', () => {
+    render(
+      <MemoryRouter>
+        <HeaderV2 userRole="admin" />
+      </MemoryRouter>
+    );
+
+    const admin = screen.getByRole('link', { name: /^admin$/i });
+    expect(admin).toHaveAttribute('href', '/admin');
+    expect(screen.queryByRole('link', { name: /passer premium/i })).not.toBeInTheDocument();
+  });
+
+  it('does not show admin access for non-admin users', () => {
+    render(
+      <MemoryRouter>
+        <HeaderV2 userRole="premium" />
+      </MemoryRouter>
+    );
+
+    expect(screen.queryByRole('link', { name: /^admin$/i })).not.toBeInTheDocument();
+  });
+
   it('shows Free badge when userRole is free', () => {
     render(
       <MemoryRouter>

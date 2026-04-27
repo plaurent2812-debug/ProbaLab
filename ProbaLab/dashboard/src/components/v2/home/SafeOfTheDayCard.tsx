@@ -56,11 +56,11 @@ export function SafeOfTheDayCard({
   return (
     <section
       data-testid={dataTestId}
-      className="rounded-xl p-6 shadow-sm"
+      className="rounded-[24px] p-5"
       style={{
-        borderLeft: '3px solid var(--primary)',
+        border: '1px solid rgba(96,165,250,0.24)',
         background:
-          'linear-gradient(135deg, rgba(16,185,129,0.12) 0%, var(--surface) 70%)',
+          'radial-gradient(circle at 0% 0%, rgba(96,165,250,0.18), transparent 36%), linear-gradient(160deg, rgba(15,23,42,0.96), rgba(17,24,39,0.88))',
       }}
     >
       <div className="flex items-center justify-between mb-4">
@@ -69,7 +69,7 @@ export function SafeOfTheDayCard({
           style={{ color: 'var(--primary)' }}
         >
           <Star aria-hidden="true" size={14} />
-          SAFE · PRONOSTIC DU JOUR
+          PRONO · RECOMMANDÉ
         </span>
         <span
           className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
@@ -111,6 +111,30 @@ export function SafeOfTheDayCard({
           {data.justification}
         </p>
       )}
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        <div
+          className="rounded-xl p-3"
+          style={{ border: '1px solid var(--border)', background: 'rgba(255,255,255,0.03)' }}
+        >
+          <span className="block text-[11px]" style={{ color: 'var(--text-muted)' }}>
+            Niveau de risque
+          </span>
+          <strong className="mt-1 block text-sm" style={{ color: 'var(--primary)' }}>
+            Prudent
+          </strong>
+        </div>
+        <div
+          className="rounded-xl p-3"
+          style={{ border: '1px solid var(--border)', background: 'rgba(255,255,255,0.03)' }}
+        >
+          <span className="block text-[11px]" style={{ color: 'var(--text-muted)' }}>
+            Confiance
+          </span>
+          <strong className="mt-1 block text-sm" style={{ color: 'var(--text)' }}>
+            {pctLabel}
+          </strong>
+        </div>
+      </div>
       <Link
         to={`/matchs/${data.fixtureId}`}
         className="mt-4 inline-block text-sm font-medium focus-visible:outline focus-visible:outline-2"

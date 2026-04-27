@@ -17,7 +17,7 @@ interface BackendMatchesResponse {
 const API = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
 
 describe('MSW handlers', () => {
-  it('GET /api/safe-pick returns a SafePick shape', async () => {
+  it('GET /api/safe-pick returns the backend wrapper shape', async () => {
     const res = await fetch(`${API}/api/safe-pick?date=2026-04-21`);
     expect(res.status).toBe(200);
     // Handler now returns the real backend wrapper shape {date, safe_pick, fallback_message}.

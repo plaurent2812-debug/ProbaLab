@@ -68,23 +68,23 @@ export function StatStrip({ data, loading, 'data-testid': dataTestId = 'stat-str
       className="grid grid-cols-2 md:grid-cols-4 gap-3"
     >
       <StatTile
-        label="ROI 30J"
+        label="Résultat 30J"
         value={fmtPct(roiValue)}
         delta={fmtDelta(roi?.deltaVs7d)}
         tone={isNum(roiValue) ? (roiValue >= 0 ? 'positive' : 'negative') : undefined}
       />
       <StatTile
-        label="Accuracy"
+        label="Précision"
         value={fmtPct(accValue)}
         delta={fmtDelta(acc?.deltaVs7d)}
       />
       <StatTile
-        label="Brier 7J"
+        label="Qualité probas 7J"
         value={fmtBrier(brier?.value)}
         delta={fmtDelta(brierDelta, '')}
         tone={isNum(brierDelta) ? (brierDelta <= 0 ? 'positive' : 'negative') : undefined}
       />
-      <StatTile label="Bankroll" value={fmtBankroll(bank?.value)} />
+      <StatTile label="Capital suivi" value={fmtBankroll(bank?.value)} />
     </div>
   );
 }

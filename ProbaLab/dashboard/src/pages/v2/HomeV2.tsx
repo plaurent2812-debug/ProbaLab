@@ -36,6 +36,10 @@ function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function lastUpdateUtc(): string {
+  return new Date().toISOString().slice(11, 16);
+}
+
 /**
  * Pick the match most worth showing on the public landing:
  *   1. highest edge from topValueBet, then
@@ -95,6 +99,13 @@ export function HomeV2() {
     user.role === 'free' ? 'free' : user.role === 'trial' ? 'trial' : 'premium';
 
   const showPremiumCTA = user.role !== 'premium' && user.role !== 'admin';
+  const matchCount = matches.data?.matches.length ?? 0;
+  const signalCount = matches.data?.matches.filter((match) => match.topValueBet).length ?? 0;
+  const daySummary = matches.isLoading
+    ? 'Chargement des analyses'
+    : matches.isError
+      ? 'Analyses indisponibles'
+      : `${matchCount} matchs analysés · ${signalCount} signaux forts`;
 
   return (
     <main
@@ -102,6 +113,97 @@ export function HomeV2() {
       aria-label="Tableau de bord ProbaLab"
       className="mx-auto max-w-7xl px-4 md:px-8 py-6 space-y-6"
     >
+      <section
+        aria-labelledby="analysis-heading"
+        className="overflow-hidden rounded-[28px] p-5 md:p-7"
+        style={{
+          border: '1px solid rgba(96,165,250,0.24)',
+          background:
+            'radial-gradient(circle at 12% 0%, rgba(96,165,250,0.18), transparent 34%), radial-gradient(circle at 86% 12%, rgba(34,211,238,0.12), transparent 28%), linear-gradient(135deg, rgba(7,17,31,0.98), rgba(15,23,42,0.92))',
+          boxShadow: '0 24px 80px rgba(0,0,0,0.28)',
+        }}
+      >
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-end">
+          <div>
+            <p
+              className="mb-3 text-xs font-bold uppercase tracking-[0.22em]"
+              style={{ color: 'var(--primary)' }}
+            >
+              Centre d'analyse ProbaLab
+            </p>
+            <h1
+              id="analysis-heading"
+              className="max-w-3xl text-4xl font-black leading-[0.95] tracking-[-0.06em] md:text-6xl"
+              style={{ color: 'var(--text)' }}
+            >
+              Analyses et probabilités sportives
+            </h1>
+            <p
+              className="mt-4 max-w-2xl text-sm leading-6 md:text-base"
+              style={{ color: 'var(--text-muted)' }}
+            >
+              Les matchs du jour, les probabilités clés et les signaux du modèle pour décider plus vite.
+            </p>
+            <div className="mt-5 flex flex-wrap gap-2">
+              {['Probabilités 1X2', 'Scénarios modèles', 'Pronos recommandés'].map((label) => (
+                <span
+                  key={label}
+                  className="rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em]"
+                  style={{
+                    border: '1px solid rgba(96,165,250,0.26)',
+                    background: 'rgba(96,165,250,0.08)',
+                    color: 'var(--text)',
+                  }}
+                >
+                  {label}
+                </span>
+              ))}
+            </div>
+          </div>
+          <aside
+            aria-label="Résumé de journée"
+            className="rounded-2xl p-4"
+            style={{
+              border: '1px solid var(--border)',
+              background: 'rgba(15,23,42,0.78)',
+            }}
+          >
+            <p
+              className="text-xs font-bold uppercase tracking-[0.18em]"
+              style={{ color: 'var(--text-faint)' }}
+            >
+              Résumé de journée
+            </p>
+            <p className="mt-3 text-2xl font-black tracking-[-0.05em]" style={{ color: 'var(--text)' }}>
+              {daySummary}
+            </p>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <div
+                className="rounded-xl p-3"
+                style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}
+              >
+                <span className="block text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                  Confiance modèle
+                </span>
+                <strong className="mt-1 block text-sm" style={{ color: '#60a5fa' }}>
+                  Analyse active
+                </strong>
+              </div>
+              <div
+                className="rounded-xl p-3"
+                style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}
+              >
+                <span className="block text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                  Dernière mise à jour UTC
+                </span>
+                <strong className="mt-1 block text-sm tabular-nums" style={{ color: 'var(--text)' }}>
+                  {lastUpdateUtc()}
+                </strong>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </section>
       <StatStrip data={perf.data} loading={perf.isLoading} />
       <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
         <div className="space-y-6">

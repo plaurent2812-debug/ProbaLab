@@ -19,20 +19,35 @@ describe('MatchesTableDesktop', () => {
   it('renders one row per match grouped by league', () => {
     renderTable();
     // 3 fixtures, 3 distinct leagues, so 3 LeagueGroups each with one row
-    expect(screen.getAllByTestId('match-row-desktop')).toHaveLength(3);
+    expect(screen.getAllByTestId('match-row')).toHaveLength(3);
   });
 
   it('shows kickoff time, team shorts and odd for each row', () => {
     renderTable();
     expect(screen.getByText('PSG')).toBeInTheDocument();
     expect(screen.getByText('LEN')).toBeInTheDocument();
-    // Top value bet best odd for fx-3 is 1.92
     expect(screen.getByText(/1\.92/)).toBeInTheDocument();
+  });
+
+  it('uses analysis-first chips instead of betting jargon', () => {
+    renderTable();
+    expect(screen.getByText(/Prono recommandé/i)).toBeInTheDocument();
+    expect(screen.getByText(/Signal \+7\.2%/i)).toBeInTheDocument();
+    expect(screen.queryByText(/SAFE/i)).not.toBeInTheDocument();
+  });
+
+  it('renders each match as a decision card with clear sections', () => {
+    renderTable();
+    const firstRow = screen.getAllByTestId('match-row')[0];
+
+    expect(within(firstRow).getByText(/probabilités/i)).toBeInTheDocument();
+    expect(within(firstRow).getByText(/lecture rapide/i)).toBeInTheDocument();
+    expect(within(firstRow).getByRole('link', { name: /ouvrir l'analyse/i })).toBeInTheDocument();
   });
 
   it('renders a detail link per row', () => {
     renderTable();
-    const rows = screen.getAllByTestId('match-row-desktop');
+    const rows = screen.getAllByTestId('match-row');
     rows.forEach((row) => {
       expect(within(row).getAllByRole('link').length).toBeGreaterThan(0);
     });

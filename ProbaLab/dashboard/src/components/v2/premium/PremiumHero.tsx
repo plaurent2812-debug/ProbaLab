@@ -12,7 +12,7 @@ interface Props {
  *
  * - Label "PROBALAB PREMIUM" in emerald.
  * - Main h1 (44px) carrying the positioning.
- * - CLV subtitle.
+ * - Plain-language analysis subtitle.
  * - Primary CTA → `/register` (Essai gratuit 30 jours).
  * - Secondary CTA → smooth-scroll to the live track record section.
  * - A trust line closes the section (no card required, 1-click cancel).
@@ -52,8 +52,8 @@ export function PremiumHero({
         className="mt-4 max-w-2xl mx-auto text-base md:text-lg"
         style={{ color: 'var(--text-muted)' }}
       >
-        Le seul pronostiqueur français qui publie son CLV vs Pinnacle en temps
-        réel. Des prédictions calibrées, pas des promesses.
+        Des analyses sportives, des probabilités claires et des pronos recommandés
+        quand le modèle détecte un signal solide.
       </p>
       <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
         <Link

@@ -13,12 +13,12 @@ const CONDITION_TYPE_OPTIONS: readonly {
   value: ConditionType;
   label: string;
 }[] = [
-  { value: 'edge_min', label: 'Edge minimum' },
+  { value: 'edge_min', label: 'Signal minimum' },
   { value: 'league_in', label: 'Ligues' },
   { value: 'sport', label: 'Sport' },
   { value: 'confidence', label: 'Confiance' },
   { value: 'kickoff_within', label: "Coup d'envoi dans (heures)" },
-  { value: 'bankroll_drawdown', label: 'Drawdown bankroll' },
+  { value: 'bankroll_drawdown', label: 'Baisse max du capital' },
 ];
 
 export interface ConditionsSectionProps {

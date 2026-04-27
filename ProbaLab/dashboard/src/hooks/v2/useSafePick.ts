@@ -6,7 +6,7 @@ import type { SafePick } from '@/types/v2/matches';
 // `safe_pick` is either a single bet, a 2-leg combo or null.
 interface BackendSingleLeg {
   type: 'single';
-  fixture_id: string;
+  fixture_id: string | number;
   odds: number;
   confidence: number; // 0..1
   market?: string;
@@ -26,6 +26,10 @@ interface BackendSafePickResponse {
   fallback_message: string | null;
 }
 
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
 // Map the backend single-leg payload into the frontend SafePick shape.
 // Combos are intentionally collapsed to `null` for now: the landing card
 // only knows how to render a single bet. When combo rendering is added,
@@ -33,13 +37,21 @@ interface BackendSafePickResponse {
 function adaptSafePick(raw: BackendSafePickResponse): SafePick | null {
   const leg = raw.safe_pick;
   if (!leg || leg.type !== 'single') return null;
-  if (typeof leg.odds !== 'number' || typeof leg.confidence !== 'number') return null;
+  if (!isFiniteNumber(leg.odds) || !isFiniteNumber(leg.confidence)) return null;
 
-  const label = [leg.home_team, leg.away_team].filter(Boolean).join(' vs ') || 'Pronostic Safe';
+  const homeName = leg.home_team ?? '';
+  const awayName = leg.away_team ?? '';
+  const matchup = [homeName, awayName].filter(Boolean).join(' vs ');
+  const selection = leg.selection ? leg.selection.toUpperCase() : '';
+  const market = leg.market ?? '';
   const betLabel =
-    leg.selection && leg.market
-      ? `${leg.selection.toUpperCase()} · ${leg.market} (${label})`
-      : label;
+    market === '1X2' && leg.selection === 'home' && homeName && awayName
+      ? `${homeName} gagne vs ${awayName}`
+      : market === '1X2' && leg.selection === 'away' && homeName && awayName
+        ? `${awayName} gagne vs ${homeName}`
+        : market === '1X2' && leg.selection === 'draw' && matchup
+          ? `Match nul ${matchup}`
+          : [selection, market].filter(Boolean).join(' · ') || matchup || 'Pronostic Safe';
 
   return {
     fixtureId: String(leg.fixture_id),
@@ -47,15 +59,15 @@ function adaptSafePick(raw: BackendSafePickResponse): SafePick | null {
       id: String(leg.league_id ?? 'unknown'),
       name: leg.league_name ?? '',
       country: '',
-      color: '#64748b',
+      color: '#10b981',
     },
     kickoffUtc: leg.kickoff_utc ?? '',
-    home: { id: '', name: leg.home_team ?? '', short: leg.home_team ?? '' },
-    away: { id: '', name: leg.away_team ?? '', short: leg.away_team ?? '' },
+    home: { id: '', name: homeName, short: homeName },
+    away: { id: '', name: awayName, short: awayName },
     betLabel,
     odd: leg.odds,
     probability: leg.confidence,
-    justification: '',
+    justification: raw.fallback_message ?? '',
   };
 }
 

@@ -16,7 +16,7 @@ function formatSignedPct(value: number): string {
 }
 
 /**
- * ROI-per-market card.
+ * Performance-per-market card.
  *
  * Renders:
  *   - an accessible row-list (one `<li>` per market with label, sample
@@ -71,7 +71,7 @@ export function ROIByMarketChart({
           margin: 0,
         }}
       >
-        ROI par marché
+        Performance par marché
       </h3>
 
       <Suspense
@@ -91,7 +91,7 @@ export function ROIByMarketChart({
       </Suspense>
 
       <ul
-        aria-label="Rendement par marché"
+        aria-label="Performance par marché"
         style={{
           listStyle: 'none',
           margin: 0,
@@ -121,7 +121,7 @@ export function ROIByMarketChart({
             >
               <span style={{ fontWeight: 600 }}>{row.market}</span>
               <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>
-                {row.n} paris · {row.wins}W · {row.losses}L
+                {row.n} paris · {row.wins} gagnés · {row.losses} perdus
                 {row.voids > 0 ? ` · ${row.voids}V` : ''}
               </span>
               <span

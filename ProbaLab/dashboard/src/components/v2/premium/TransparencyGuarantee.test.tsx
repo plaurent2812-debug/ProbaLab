@@ -4,11 +4,11 @@ import { axe } from 'jest-axe';
 import { TransparencyGuarantee } from './TransparencyGuarantee';
 
 describe('TransparencyGuarantee', () => {
-  it('renders the transparency guarantee copy with CLV 30j rule', () => {
+  it('renders the transparency guarantee copy with plain-language market signal rule', () => {
     render(<TransparencyGuarantee />);
     expect(screen.getByText(/garantie transparence/i)).toBeInTheDocument();
-    // Copy: "Si le CLV 30 jours devient négatif…" — match robustly.
-    expect(screen.getByText(/CLV 30 jours/i)).toBeInTheDocument();
+    expect(screen.getByText(/signal marché 30 jours/i)).toBeInTheDocument();
+    expect(screen.queryByText(/CLV/i)).not.toBeInTheDocument();
     expect(screen.getByText(/négatif/i)).toBeInTheDocument();
     expect(screen.getByText(/mois offert/i)).toBeInTheDocument();
   });

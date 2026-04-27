@@ -12,11 +12,12 @@ function wrap(ui: React.ReactElement) {
 }
 
 describe('ValueBetsTeaser', () => {
-  it('renders up to 2 value bets with edge and Kelly', () => {
+  it('renders up to 2 opportunities with plain-language signal and confidence', () => {
     render(wrap(<ValueBetsTeaser matches={mockMatches} />));
-    const edgeMatches = screen.getAllByText(/Kelly/);
-    expect(edgeMatches.length).toBeGreaterThanOrEqual(1);
-    expect(edgeMatches.length).toBeLessThanOrEqual(2);
+    const signalMatches = screen.getAllByText(/Signal/i);
+    expect(signalMatches.length).toBeGreaterThanOrEqual(1);
+    expect(signalMatches.length).toBeLessThanOrEqual(2);
+    expect(screen.queryByText(/Kelly/i)).not.toBeInTheDocument();
   });
 
   it('blurs the second item for free users', () => {

@@ -43,10 +43,10 @@ export function StickyActions({
   };
 
   const bankrollLabel = isSuccess
-    ? 'Ajouté au bankroll'
+    ? 'Ajouté au capital'
     : isPending
       ? 'Ajout en cours…'
-      : 'Suivre dans mon bankroll';
+      : 'Suivre dans mon capital';
 
   return (
     <div
@@ -58,7 +58,8 @@ export function StickyActions({
         onClick={handleAdd}
         disabled={disableBankroll}
         aria-busy={isPending}
-        className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 disabled:opacity-60"
+        className="inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-60"
+        style={{ background: 'var(--primary)', color: '#061014' }}
       >
         {isSuccess ? (
           <Check className="h-4 w-4" aria-hidden="true" />
@@ -70,7 +71,12 @@ export function StickyActions({
       <button
         type="button"
         onClick={handleAlert}
-        className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+        className="inline-flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+        style={{
+          borderColor: 'var(--border)',
+          background: 'rgba(255,255,255,0.03)',
+          color: 'var(--text)',
+        }}
       >
         <Bell className="h-4 w-4" aria-hidden="true" />
         Alerte kick-off
@@ -78,7 +84,8 @@ export function StickyActions({
       {isError && (
         <p
           role="alert"
-          className="text-xs text-red-600"
+          className="text-xs"
+          style={{ color: 'var(--danger)' }}
           data-testid="sticky-actions-error"
         >
           L’ajout a échoué. Réessaie.

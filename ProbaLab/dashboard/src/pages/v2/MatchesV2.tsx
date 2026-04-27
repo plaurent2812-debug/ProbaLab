@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { CalendarDays, ShieldCheck, Sparkles, Target } from 'lucide-react';
 import { SportChips, type SportChipsValue } from '@/components/v2/matches/SportChips';
 import { DateScroller } from '@/components/v2/matches/DateScroller';
 import { ValueOnlyToggle } from '@/components/v2/matches/ValueOnlyToggle';
@@ -9,7 +11,7 @@ import { MatchesListMobile } from '@/components/v2/matches/MatchesListMobile';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useMatchesOfDay } from '@/hooks/v2/useMatchesOfDay';
 import type { League } from '@/types/v2/common';
-import type { MatchesFilters, SignalKind, Sport } from '@/types/v2/matches';
+import type { MatchRowData, MatchesFilters, SignalKind, Sport } from '@/types/v2/matches';
 
 const DESKTOP_BREAKPOINT = 768;
 
@@ -38,6 +40,121 @@ function parseList<T extends string>(raw: string | null): T[] | undefined {
 function sportChipsValue(sports: Sport[] | undefined): SportChipsValue {
   if (!sports || sports.length !== 1) return 'all';
   return sports[0];
+}
+
+function countMatchesWithSignal(matches: MatchRowData[], signal: SignalKind): number {
+  return matches.filter((match) => match.signals.includes(signal)).length;
+}
+
+function findPriorityMatch(matches: MatchRowData[]): MatchRowData | null {
+  return (
+    matches.find((match) => match.signals.includes('safe')) ??
+    [...matches]
+      .filter((match) => match.topValueBet)
+      .sort((a, b) => (b.topValueBet?.edgePct ?? 0) - (a.topValueBet?.edgePct ?? 0))[0] ??
+    matches[0] ??
+    null
+  );
+}
+
+function MatchesDayOverview({
+  matches,
+  date,
+}: {
+  matches: MatchRowData[];
+  date: string;
+}) {
+  const priorityMatch = findPriorityMatch(matches);
+  const recommendedCount = countMatchesWithSignal(matches, 'safe');
+  const signalCount = matches.filter((match) => match.topValueBet || match.signals.includes('value')).length;
+  const highConfidenceCount = countMatchesWithSignal(matches, 'high_confidence');
+  const priorityLabel = priorityMatch
+    ? `${priorityMatch.home.short} vs ${priorityMatch.away.short}`
+    : 'Aucun match prioritaire';
+
+  return (
+    <section
+      data-testid="matches-day-overview"
+      aria-labelledby="matches-day-overview-title"
+      className="relative overflow-hidden rounded-[32px] p-5 md:p-6"
+      style={{
+        border: '1px solid rgba(96,165,250,0.24)',
+        background:
+          'radial-gradient(circle at 0% 0%, rgba(96,165,250,0.20), transparent 34%), radial-gradient(circle at 100% 0%, rgba(34,211,238,0.10), transparent 30%), linear-gradient(145deg, rgba(7,17,31,0.98), rgba(15,23,42,0.92))',
+        boxShadow: '0 24px 80px rgba(0,0,0,0.25)',
+      }}
+    >
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_390px] lg:items-end">
+        <div>
+          <div className="flex flex-wrap items-center gap-2 text-xs font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--primary)' }}>
+            <Sparkles className="h-4 w-4" aria-hidden="true" />
+            Lecture du jour
+            <span aria-hidden="true">·</span>
+            <span>{date}</span>
+          </div>
+          <h1
+            id="matches-day-overview-title"
+            className="mt-3 text-4xl font-black tracking-[-0.07em] md:text-5xl"
+            style={{ color: 'var(--text)' }}
+          >
+            Matchs à analyser
+          </h1>
+          <p className="mt-3 max-w-2xl text-sm leading-6" style={{ color: 'var(--text-muted)' }}>
+            Sélectionne vite les affiches utiles : probabilités, signaux du modèle et pronos éventuels sont résumés avant l'analyse complète.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <OverviewMetric icon={<CalendarDays className="h-4 w-4" aria-hidden="true" />} label="Matchs suivis" value={`${matches.length}`} />
+          <OverviewMetric icon={<ShieldCheck className="h-4 w-4" aria-hidden="true" />} label="Pronos recommandés" value={`${recommendedCount}`} />
+          <OverviewMetric icon={<Target className="h-4 w-4" aria-hidden="true" />} label="Signaux modèle" value={`${signalCount}`} />
+          <OverviewMetric icon={<Sparkles className="h-4 w-4" aria-hidden="true" />} label="Confiance élevée" value={`${highConfidenceCount}`} />
+        </div>
+      </div>
+
+      <div
+        className="mt-5 flex flex-wrap items-center gap-3 rounded-2xl p-4"
+        style={{ border: '1px solid var(--border)', background: 'rgba(255,255,255,0.035)' }}
+      >
+        <span className="text-[11px] font-bold uppercase tracking-[0.16em]" style={{ color: 'var(--text-muted)' }}>
+          Match prioritaire
+        </span>
+        <strong className="text-lg font-black tracking-[-0.04em]" style={{ color: 'var(--text)' }}>
+          {priorityLabel}
+        </strong>
+        {priorityMatch?.topValueBet && (
+          <span className="rounded-full px-2.5 py-1 text-xs font-bold" style={{ background: 'rgba(251,191,36,0.12)', color: 'var(--value)' }}>
+            Signal +{priorityMatch.topValueBet.edgePct.toFixed(1)}%
+          </span>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function OverviewMetric({
+  icon,
+  label,
+  value,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div
+      className="rounded-2xl p-3"
+      style={{ border: '1px solid var(--border)', background: 'rgba(255,255,255,0.04)' }}
+    >
+      <div className="flex items-center gap-2 text-[11px] font-semibold" style={{ color: 'var(--text-muted)' }}>
+        {icon}
+        {label}
+      </div>
+      <strong className="mt-2 block text-2xl font-black tabular-nums" style={{ color: 'var(--text)' }}>
+        {value}
+      </strong>
+    </div>
+  );
 }
 
 export function MatchesV2() {
@@ -177,8 +294,9 @@ export function MatchesV2() {
 
       {isDesktop && (
         <>
+          <MatchesDayOverview matches={matches} date={date} />
           <DateScroller value={date} onChange={onDateChange} />
-          <div className="grid gap-6 md:grid-cols-[220px_1fr]">
+          <div className="grid gap-6 md:grid-cols-[260px_1fr]">
             <FilterSidebar
               filters={filters}
               onChange={onFiltersChange}

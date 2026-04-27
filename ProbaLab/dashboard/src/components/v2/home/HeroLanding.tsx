@@ -26,7 +26,7 @@ export function HeroLanding({ 'data-testid': dataTestId = 'hero-landing' }: Prop
         className="mt-4 max-w-xl mx-auto text-base"
         style={{ color: 'var(--text-muted)' }}
       >
-        Le seul pronostiqueur français qui publie son CLV vs Pinnacle en temps réel.
+        Analyses sportives, probabilités claires et pronos recommandés quand le signal est fort.
       </p>
       <div className="mt-8 flex flex-wrap justify-center gap-3">
         <Link

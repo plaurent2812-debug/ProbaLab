@@ -25,7 +25,7 @@ const KELLY_OPTIONS: Array<{ value: 0.1 | 0.25 | 0.5; label: string }> = [
 
 /**
  * Bankroll settings dialog — edits the three tunables that drive the
- * value-betting engine : initial stake (euros), Kelly fraction, and
+ * betting engine : initial stake (euros), automatic stake level, and
  * per-bet cap (percent of bankroll).
  *
  * Prefills from `useBankrollSettings` on open and persists via
@@ -73,8 +73,8 @@ export function BankrollSettingsModal({
     <Modal
       open={open}
       onOpenChange={onOpenChange}
-      title="Paramètres du bankroll"
-      description="Ces valeurs pilotent la mise suggérée (Kelly fractionnel)."
+      title="Paramètres du capital"
+      description="Ces valeurs pilotent la mise suggérée et le risque maximum par pari."
       data-testid={dataTestId}
       footer={
         !isLoading && (
@@ -143,7 +143,7 @@ export function BankrollSettingsModal({
               htmlFor="bankroll-kelly"
               className="block text-sm font-medium text-slate-700 dark:text-slate-300"
             >
-              Fraction de Kelly
+              Niveau de mise automatique
             </label>
             <select
               id="bankroll-kelly"

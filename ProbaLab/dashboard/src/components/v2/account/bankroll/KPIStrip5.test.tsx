@@ -29,11 +29,14 @@ const negative: BankrollSummary = {
 describe('KPIStrip5', () => {
   it('renders the five tiles with their labels', () => {
     render(<KPIStrip5 bankroll={positive} />);
-    expect(screen.getByText(/Bankroll/i)).toBeInTheDocument();
-    expect(screen.getByText(/ROI 30J/i)).toBeInTheDocument();
-    expect(screen.getByText(/Win rate/i)).toBeInTheDocument();
-    expect(screen.getByText(/Drawdown/i)).toBeInTheDocument();
-    expect(screen.getByText(/Kelly actif/i)).toBeInTheDocument();
+    expect(screen.getByText(/Capital suivi/i)).toBeInTheDocument();
+    expect(screen.getByText(/Résultat 30J/i)).toBeInTheDocument();
+    expect(screen.getByText(/Taux de réussite/i)).toBeInTheDocument();
+    expect(screen.getByText(/Baisse max/i)).toBeInTheDocument();
+    expect(screen.getByText(/Mise auto/i)).toBeInTheDocument();
+    expect(screen.queryByText(/ROI/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Win rate/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Drawdown/i)).not.toBeInTheDocument();
   });
 
   it('formats the bankroll value with the EUR currency', () => {
@@ -48,13 +51,13 @@ describe('KPIStrip5', () => {
     expect(screen.getByText(/\+284/)).toBeInTheDocument();
   });
 
-  it('marks a positive ROI 30d tile with tone=positive', () => {
+  it('marks a positive 30d result tile with tone=positive', () => {
     render(<KPIStrip5 bankroll={positive} data-testid="kpi-strip" />);
     const tile = screen.getByTestId('tile-roi-30d');
     expect(tile.querySelector('[data-tone]')).toHaveAttribute('data-tone', 'positive');
   });
 
-  it('marks a negative ROI 30d tile with tone=negative', () => {
+  it('marks a negative 30d result tile with tone=negative', () => {
     render(<KPIStrip5 bankroll={negative} />);
     const tile = screen.getByTestId('tile-roi-30d');
     expect(tile.querySelector('[data-tone]')).toHaveAttribute('data-tone', 'negative');

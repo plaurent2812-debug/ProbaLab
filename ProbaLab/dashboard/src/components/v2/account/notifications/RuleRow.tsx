@@ -42,7 +42,7 @@ const ICON_BY_TYPE: Record<
 function humanReadableCondition(c: RuleCondition): string {
   switch (c.type) {
     case 'edge_min':
-      return `Edge ≥ ${c.value}%`;
+      return `Signal ≥ ${c.value}%`;
     case 'league_in':
       return `Ligue ∈ ${c.value.join(', ')}`;
     case 'sport':
@@ -52,7 +52,7 @@ function humanReadableCondition(c: RuleCondition): string {
     case 'kickoff_within':
       return `Coup d’envoi < ${c.value} h`;
     case 'bankroll_drawdown':
-      return `Drawdown ≥ ${c.value}%`;
+      return `Baisse max ≥ ${c.value}%`;
   }
 }
 

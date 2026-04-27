@@ -41,14 +41,14 @@ describe('NotificationsTab', () => {
 
   it('renders rules from the API', async () => {
     render(wrap(<NotificationsTab />));
-    await screen.findByText(/value bets haut edge/i);
+    await screen.findByText(/signaux forts/i);
     expect(screen.getByText(/safe du jour kick-off/i)).toBeInTheDocument();
   });
 
   it('opens the RuleBuilderModal when "Nouvelle règle" is clicked', async () => {
     const user = userEvent.setup();
     render(wrap(<NotificationsTab />));
-    await screen.findByText(/value bets haut edge/i);
+    await screen.findByText(/signaux forts/i);
     await user.click(
       screen.getByRole('button', { name: /\+?\s*nouvelle règle/i }),
     );
@@ -60,9 +60,9 @@ describe('NotificationsTab', () => {
   it('opens the RuleBuilderModal in edit mode when Modifier is clicked', async () => {
     const user = userEvent.setup();
     render(wrap(<NotificationsTab />));
-    await screen.findByText(/value bets haut edge/i);
+    await screen.findByText(/signaux forts/i);
     await user.click(
-      screen.getByRole('button', { name: /menu value bets haut edge/i }),
+      screen.getByRole('button', { name: /menu signaux forts/i }),
     );
     await user.click(screen.getByRole('menuitem', { name: /modifier/i }));
     expect(
@@ -73,9 +73,9 @@ describe('NotificationsTab', () => {
   it('opens the DeleteRuleConfirm when Supprimer is clicked', async () => {
     const user = userEvent.setup();
     render(wrap(<NotificationsTab />));
-    await screen.findByText(/drawdown critique/i);
+    await screen.findByText(/baisse max critique/i);
     await user.click(
-      screen.getByRole('button', { name: /menu drawdown critique/i }),
+      screen.getByRole('button', { name: /menu baisse max critique/i }),
     );
     await user.click(screen.getByRole('menuitem', { name: /supprimer/i }));
     const dialog = screen.getByRole('dialog');
@@ -84,7 +84,7 @@ describe('NotificationsTab', () => {
       screen.getByRole('heading', { level: 2, name: /supprimer la règle/i }),
     ).toBeInTheDocument();
     // The rule name shows inside the dialog as well as in the list below.
-    expect(dialog.textContent).toMatch(/drawdown critique/i);
+    expect(dialog.textContent).toMatch(/baisse max critique/i);
   });
 
   it('renders a skeleton while channels and rules are loading', () => {
@@ -112,7 +112,7 @@ describe('NotificationsTab', () => {
 
   it('has no axe violations', async () => {
     const { container } = render(wrap(<NotificationsTab />));
-    await screen.findByText(/value bets haut edge/i);
+    await screen.findByText(/signaux forts/i);
     expect(await axe(container)).toHaveNoViolations();
   });
 });

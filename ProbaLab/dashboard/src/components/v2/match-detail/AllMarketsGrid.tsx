@@ -16,23 +16,24 @@ const SIGNUP_MESSAGE = 'Crée un compte pour voir les marchés';
 function MarketCell({ market }: { market: MarketProb }) {
   const pct = Math.round(market.probability * 100);
   const odds = market.best_book_odds ?? market.fair_odds;
-  const cls = market.is_value
-    ? 'border-amber-400 bg-amber-50'
-    : 'border-slate-200 bg-white';
   return (
     <li
       data-testid="market-cell"
       data-value={market.is_value ? 'true' : 'false'}
       data-market-key={market.market_key}
       aria-label={`${market.label}, probabilité ${pct}%`}
-      className={`flex items-center justify-between rounded-lg border p-3 text-sm ${cls}`}
+      className="flex items-center justify-between rounded-xl border p-3 text-sm"
+      style={{
+        borderColor: market.is_value ? 'rgba(251,191,36,0.34)' : 'var(--border)',
+        background: market.is_value ? 'rgba(251,191,36,0.08)' : 'rgba(255,255,255,0.03)',
+      }}
     >
-      <span className="truncate font-medium text-slate-800">
+      <span className="truncate font-medium" style={{ color: 'var(--text)' }}>
         {market.label}
       </span>
       <div className="ml-3 flex shrink-0 items-center gap-3 tabular-nums">
-        <span className="text-slate-600">{pct}%</span>
-        <span className="font-semibold text-slate-900">{odds.toFixed(2)}</span>
+        <span style={{ color: 'var(--text-muted)' }}>{pct}%</span>
+        <span className="font-semibold" style={{ color: market.is_value ? 'var(--value)' : 'var(--text)' }}>{odds.toFixed(2)}</span>
       </div>
     </li>
   );
@@ -44,8 +45,8 @@ export function AllMarketsGrid({
   'data-testid': dataTestId = 'all-markets-grid',
 }: AllMarketsGridProps) {
   const heading = (
-    <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900">
-      <Grid3x3 className="h-4 w-4 text-slate-500" aria-hidden="true" />
+    <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold" style={{ color: 'var(--text)' }}>
+      <Grid3x3 className="h-4 w-4" style={{ color: 'var(--text-muted)' }} aria-hidden="true" />
       Tous les marchés
     </h3>
   );
@@ -54,10 +55,11 @@ export function AllMarketsGrid({
     return (
       <section
         data-testid={dataTestId}
-        className="rounded-xl border border-slate-200 bg-white p-4"
+        className="rounded-[22px] p-4"
+        style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}
       >
         {heading}
-        <p className="text-xs text-slate-500">Aucun marché disponible.</p>
+        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Aucun marché disponible.</p>
       </section>
     );
   }
@@ -66,7 +68,8 @@ export function AllMarketsGrid({
     return (
       <section
         data-testid={dataTestId}
-        className="rounded-xl border border-slate-200 bg-white p-4"
+        className="rounded-[22px] p-4"
+        style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}
       >
         {heading}
         <LockOverlay message={SIGNUP_MESSAGE}>
@@ -90,7 +93,8 @@ export function AllMarketsGrid({
     return (
       <section
         data-testid={dataTestId}
-        className="rounded-xl border border-slate-200 bg-white p-4"
+        className="rounded-[22px] p-4"
+        style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}
       >
         {heading}
         {unlocked.length > 0 && (
@@ -116,7 +120,8 @@ export function AllMarketsGrid({
   return (
     <section
       data-testid={dataTestId}
-      className="rounded-xl border border-slate-200 bg-white p-4"
+      className="rounded-[22px] p-4"
+      style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}
     >
       {heading}
       <ul className="grid grid-cols-1 gap-2 md:grid-cols-2">

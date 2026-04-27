@@ -133,7 +133,7 @@ export function StatStripPremium({ data }: Props) {
       </motion.div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCardPremium
-          label="ROI public"
+          label="Performance publique"
           value={roi30d}
           suffix="%"
           prefix="+"
@@ -143,7 +143,7 @@ export function StatStripPremium({ data }: Props) {
           positive
         />
         <StatCardPremium
-          label="CLV vs Pinnacle"
+          label="Signal marché"
           value={FALLBACK.clv}
           suffix="%"
           prefix="+"
@@ -153,7 +153,7 @@ export function StatStripPremium({ data }: Props) {
           positive
         />
         <StatCardPremium
-          label="Accuracy 1X2"
+          label="Précision 1X2"
           value={accuracy}
           suffix="%"
           delta={accuracyDelta}
@@ -162,7 +162,7 @@ export function StatStripPremium({ data }: Props) {
           positive
         />
         <StatCardPremium
-          label="Bankroll simulée"
+          label="Capital simulé"
           value={bankroll}
           decimals={0}
           suffix=" €"

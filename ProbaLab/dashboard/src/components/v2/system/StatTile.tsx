@@ -32,10 +32,12 @@ export function StatTile({
         display: 'flex',
         flexDirection: 'column',
         gap: 'var(--space-1)',
-        padding: 'var(--space-3)',
-        background: 'var(--surface)',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-md)',
+        minHeight: 92,
+        padding: 'var(--space-4)',
+        background:
+          'linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.012)), var(--surface)',
+        border: '1px solid rgba(148,163,184,0.18)',
+        borderRadius: 'var(--radius-lg)',
       }}
     >
       <span
@@ -43,7 +45,8 @@ export function StatTile({
           fontSize: 12,
           color: 'var(--text-faint)',
           textTransform: 'uppercase',
-          letterSpacing: 0.4,
+          letterSpacing: '0.12em',
+          fontWeight: 800,
         }}
       >
         {label}
@@ -51,9 +54,10 @@ export function StatTile({
       <span
         style={{
           fontSize: 24,
-          fontWeight: 700,
+          fontWeight: 900,
           color: 'var(--text)',
           fontVariantNumeric: 'tabular-nums',
+          letterSpacing: '-0.04em',
         }}
       >
         {value}

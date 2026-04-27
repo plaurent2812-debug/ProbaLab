@@ -26,14 +26,15 @@ describe('LeagueGroup', () => {
     expect(screen.getByTestId('child')).toHaveTextContent('child-content');
   });
 
-  it('applies league color to header', () => {
+  it('uses league color as a premium header accent', () => {
     render(
       <LeagueGroup league={leagueL1} count={1}>
         <div />
       </LeagueGroup>,
     );
     const header = screen.getByRole('heading', { name: /Ligue 1/i });
-    expect(header).toHaveStyle({ backgroundColor: 'rgb(37, 99, 235)' });
+    expect(header).toHaveStyle({ color: 'var(--text)' });
+    expect(header.getAttribute('style')).toContain('37, 99, 235');
   });
 
   it('accepts data-testid prop', () => {

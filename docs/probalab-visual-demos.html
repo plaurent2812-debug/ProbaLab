@@ -1,0 +1,902 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ProbaLab — 5 pistes visuelles</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --page-bg: #070a12;
+      --page-text: #eef2ff;
+      --muted: #94a3b8;
+      --line: rgba(148, 163, 184, 0.22);
+      --panel: rgba(15, 23, 42, 0.82);
+      --panel-2: rgba(30, 41, 59, 0.72);
+      --green: #16f2a5;
+      --amber: #f6c35b;
+      --blue: #74a8ff;
+      --red: #fb7185;
+      --font-display: ui-serif, "Iowan Old Style", "Palatino Linotype", serif;
+      --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 18% 0%, rgba(22, 242, 165, 0.13), transparent 28rem),
+        radial-gradient(circle at 82% 8%, rgba(116, 168, 255, 0.12), transparent 24rem),
+        var(--page-bg);
+      color: var(--page-text);
+      font-family: var(--font-sans);
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .doc-shell {
+      width: min(1440px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 32px 0 64px;
+    }
+
+    .doc-header {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 24px;
+      align-items: end;
+      padding: 24px;
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      background: rgba(7, 10, 18, 0.78);
+      backdrop-filter: blur(18px);
+    }
+
+    .eyebrow {
+      margin: 0 0 10px;
+      color: var(--green);
+      font: 700 12px/1 var(--font-mono);
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin-top: 0;
+    }
+
+    h1 {
+      max-width: 980px;
+      margin-bottom: 12px;
+      font-size: clamp(40px, 6vw, 86px);
+      line-height: 0.92;
+      letter-spacing: -0.07em;
+    }
+
+    .doc-header p {
+      max-width: 840px;
+      margin-bottom: 0;
+      color: var(--muted);
+      font-size: 17px;
+      line-height: 1.6;
+    }
+
+    .nav {
+      position: sticky;
+      top: 12px;
+      z-index: 10;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 18px 0;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(7, 10, 18, 0.84);
+      backdrop-filter: blur(18px);
+    }
+
+    .nav a {
+      padding: 9px 12px;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      color: var(--muted);
+      font: 700 12px/1 var(--font-mono);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .nav a:hover {
+      border-color: var(--line);
+      color: var(--page-text);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .demo {
+      margin-top: 24px;
+      padding: 24px;
+      border: 1px solid var(--line);
+      border-radius: 32px;
+      background: rgba(15, 23, 42, 0.54);
+    }
+
+    .demo-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(260px, 420px);
+      gap: 24px;
+      margin-bottom: 18px;
+      align-items: end;
+    }
+
+    .demo h2 {
+      margin-bottom: 8px;
+      font-size: clamp(28px, 4vw, 52px);
+      line-height: 0.95;
+      letter-spacing: -0.055em;
+    }
+
+    .demo-desc {
+      margin-bottom: 0;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .tag {
+      padding: 7px 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      font: 700 11px/1 var(--font-mono);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .screens {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+
+    .screen {
+      min-height: 640px;
+      overflow: hidden;
+      border-radius: 26px;
+      border: 1px solid var(--line);
+      background: var(--screen-bg, #0b1020);
+      color: var(--screen-text, #edf2ff);
+    }
+
+    .screen-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--line);
+      color: var(--screen-muted, #94a3b8);
+      font: 700 11px/1 var(--font-mono);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .mock {
+      padding: 22px;
+    }
+
+    .mock-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 28px;
+      font-size: 13px;
+    }
+
+    .brand {
+      font-weight: 900;
+      letter-spacing: -0.05em;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 16px;
+      color: var(--screen-muted, #94a3b8);
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 38px;
+      padding: 0 16px;
+      border-radius: 999px;
+      background: var(--accent, var(--green));
+      color: var(--button-text, #061014);
+      font: 900 12px/1 var(--font-mono);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .ghost-button {
+      background: transparent;
+      color: var(--screen-text, #edf2ff);
+      border: 1px solid var(--line);
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(240px, 0.95fr);
+      gap: 18px;
+      align-items: center;
+    }
+
+    .hero-title {
+      margin-bottom: 14px;
+      font-size: clamp(38px, 5vw, 72px);
+      line-height: 0.9;
+      letter-spacing: -0.07em;
+    }
+
+    .hero-copy {
+      color: var(--screen-muted, #94a3b8);
+      line-height: 1.55;
+    }
+
+    .kpi-row,
+    .card-grid,
+    .market-grid {
+      display: grid;
+      gap: 10px;
+    }
+
+    .kpi-row {
+      grid-template-columns: repeat(3, 1fr);
+      margin-top: 18px;
+    }
+
+    .kpi,
+    .mini-card,
+    .market-card,
+    .analysis-card {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--card-bg, rgba(255, 255, 255, 0.05));
+      padding: 14px;
+    }
+
+    .kpi span,
+    .mini-card span,
+    .market-card span {
+      display: block;
+      color: var(--screen-muted, #94a3b8);
+      font: 700 11px/1 var(--font-mono);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .kpi strong,
+    .mini-card strong,
+    .market-card strong {
+      display: block;
+      margin-top: 8px;
+      font-size: 24px;
+      letter-spacing: -0.04em;
+    }
+
+    .match-card {
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: var(--card-bg, rgba(255, 255, 255, 0.05));
+      padding: 18px;
+    }
+
+    .teams {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 12px;
+      align-items: center;
+      margin: 16px 0;
+      text-align: center;
+    }
+
+    .team {
+      padding: 16px 12px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.04);
+      font-weight: 900;
+      letter-spacing: -0.04em;
+    }
+
+    .versus {
+      color: var(--screen-muted, #94a3b8);
+      font: 800 11px/1 var(--font-mono);
+    }
+
+    .prob {
+      display: grid;
+      grid-template-columns: 72% 18% 10%;
+      height: 10px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .prob span:nth-child(1) { background: var(--accent, var(--green)); }
+    .prob span:nth-child(2) { background: rgba(148, 163, 184, 0.55); }
+    .prob span:nth-child(3) { background: rgba(255, 255, 255, 0.16); }
+
+    .split-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 230px;
+      gap: 14px;
+      margin-top: 16px;
+    }
+
+    .list-row {
+      display: grid;
+      grid-template-columns: 52px 1fr auto;
+      gap: 10px;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--line);
+      color: var(--screen-muted, #94a3b8);
+      font-size: 13px;
+    }
+
+    .list-row strong {
+      color: var(--screen-text, #edf2ff);
+    }
+
+    .accent-text {
+      color: var(--accent, var(--green));
+    }
+
+    .demo-trading {
+      --screen-bg: #060a12;
+      --screen-text: #e9fff6;
+      --screen-muted: #8aa79c;
+      --accent: #16f2a5;
+      --button-text: #02100b;
+      --card-bg: rgba(8, 22, 18, 0.86);
+      --line: rgba(22, 242, 165, 0.18);
+    }
+
+    .demo-scoreboard {
+      --screen-bg: #0c111d;
+      --screen-text: #f8fafc;
+      --screen-muted: #9aa6b8;
+      --accent: #4ade80;
+      --button-text: #061014;
+      --card-bg: #101827;
+      --line: rgba(148, 163, 184, 0.2);
+    }
+
+    .demo-editorial {
+      --screen-bg: #f4f0e8;
+      --screen-text: #17130e;
+      --screen-muted: #766b5b;
+      --accent: #9f6b35;
+      --button-text: #fff8ef;
+      --card-bg: rgba(255, 252, 246, 0.75);
+      --line: rgba(73, 54, 34, 0.22);
+    }
+
+    .demo-brutalist {
+      --screen-bg: #f7ff35;
+      --screen-text: #050505;
+      --screen-muted: #353500;
+      --accent: #050505;
+      --button-text: #f7ff35;
+      --card-bg: #fffef1;
+      --line: #050505;
+    }
+
+    .demo-luxury {
+      --screen-bg: #0b0906;
+      --screen-text: #fff6df;
+      --screen-muted: #b8a77f;
+      --accent: #d6b66c;
+      --button-text: #100c04;
+      --card-bg: rgba(31, 24, 13, 0.82);
+      --line: rgba(214, 182, 108, 0.26);
+    }
+
+    .demo-editorial .hero-title,
+    .demo-luxury .hero-title,
+    .demo-editorial h3,
+    .demo-luxury h3 {
+      font-family: var(--font-display);
+      letter-spacing: -0.045em;
+    }
+
+    .demo-brutalist .screen,
+    .demo-brutalist .kpi,
+    .demo-brutalist .mini-card,
+    .demo-brutalist .market-card,
+    .demo-brutalist .match-card,
+    .demo-brutalist .team,
+    .demo-brutalist .analysis-card {
+      border-width: 2px;
+      box-shadow: 6px 6px 0 #050505;
+    }
+
+    .demo-brutalist .button {
+      border: 2px solid #050505;
+      border-radius: 0;
+    }
+
+    .demo-scoreboard .screen {
+      min-height: 560px;
+    }
+
+    .dense-table {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      overflow: hidden;
+      background: var(--card-bg);
+    }
+
+    .dense-header,
+    .dense-row {
+      display: grid;
+      grid-template-columns: 58px 1fr 64px 64px;
+      gap: 8px;
+      align-items: center;
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--line);
+      font-size: 12px;
+    }
+
+    .dense-header {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--screen-muted);
+      font: 800 10px/1 var(--font-mono);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .dense-row:last-child {
+      border-bottom: 0;
+    }
+
+    @media (max-width: 1100px) {
+      .screens,
+      .demo-head,
+      .hero-grid,
+      .split-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .tags {
+        justify-content: flex-start;
+      }
+
+      .screen {
+        min-height: auto;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .doc-shell {
+        width: min(100% - 18px, 1440px);
+        padding-top: 12px;
+      }
+
+      .doc-header,
+      .demo {
+        padding: 16px;
+        border-radius: 22px;
+      }
+
+      .doc-header,
+      .kpi-row,
+      .card-grid,
+      .market-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .mock {
+        padding: 16px;
+      }
+
+      .nav-links {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="doc-shell">
+    <header class="doc-header">
+      <div>
+        <p class="eyebrow">ProbaLab visual lab</p>
+        <h1>5 démos pour choisir la gueule de l’app.</h1>
+        <p>
+          Chaque piste montre deux moments clés : la landing page qui vend la promesse, puis la page d’un match qui
+          doit aider à décider vite, sans ressembler à un site de pronos générique.
+        </p>
+      </div>
+      <div class="tags" aria-label="Contraintes design">
+        <span class="tag">Landing</span>
+        <span class="tag">Match detail</span>
+        <span class="tag">Foot + NHL ready</span>
+      </div>
+    </header>
+
+    <nav class="nav" aria-label="Navigation demos">
+      <a href="#demo-1">1. Cockpit Trading</a>
+      <a href="#demo-2">2. Scoreboard Pro</a>
+      <a href="#demo-3">3. Editorial Premium</a>
+      <a href="#demo-4">4. Data Brutalist</a>
+      <a href="#demo-5">5. Quant Luxury</a>
+    </nav>
+
+    <section class="demo demo-trading" id="demo-1">
+      <div class="demo-head">
+        <div>
+          <p class="eyebrow">Démo 1</p>
+          <h2>Cockpit Trading</h2>
+          <p class="demo-desc">
+            La direction la plus naturelle pour ProbaLab : dark, data, bankroll, CLV, edge, et sensation de poste de
+            décision. C’est premium sans être décoratif.
+          </p>
+        </div>
+        <div class="tags">
+          <span class="tag">Dashboard premium</span>
+          <span class="tag">Value betting</span>
+          <span class="tag">Recommandé</span>
+        </div>
+      </div>
+      <div class="screens">
+        <article class="screen">
+          <div class="screen-label"><span>Landing page</span><span>Trust first</span></div>
+          <div class="mock">
+            <nav class="mock-nav">
+              <div class="brand">ProbaLab</div>
+              <div class="nav-links"><span>Track record</span><span>Marchés</span><span>Bankroll</span></div>
+              <a class="button" href="#">Voir les edges</a>
+            </nav>
+            <div class="hero-grid">
+              <div>
+                <p class="eyebrow">Value betting cockpit</p>
+                <h3 class="hero-title">Arrête de suivre des tips. Pilote tes probabilités.</h3>
+                <p class="hero-copy">
+                  ProbaLab suit la calibration, le Brier, la CLV et le risque bankroll avant de recommander un pari.
+                  Le but : décider avec une preuve, pas avec une intuition.
+                </p>
+                <div class="kpi-row">
+                  <div class="kpi"><span>ROI 30J</span><strong>+8.4%</strong></div>
+                  <div class="kpi"><span>Brier 7J</span><strong>0.182</strong></div>
+                  <div class="kpi"><span>CLV positive</span><strong>61%</strong></div>
+                </div>
+              </div>
+              <div class="match-card">
+                <span class="tag">Live edge</span>
+                <div class="teams">
+                  <div class="team">PSG</div>
+                  <div class="versus">VS</div>
+                  <div class="team">Lens</div>
+                </div>
+                <div class="prob"><span></span><span></span><span></span></div>
+                <div class="list-row"><span>1X2</span><strong>PSG gagne</strong><span class="accent-text">+6.8%</span></div>
+                <div class="list-row"><span>Kelly</span><strong>Mise prudente</strong><span>1.2%</span></div>
+                <div class="list-row"><span>Risque</span><strong>Modéré</strong><span>OK</span></div>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="screen">
+          <div class="screen-label"><span>Page match</span><span>Decision module</span></div>
+          <div class="mock">
+            <nav class="mock-nav">
+              <a class="ghost-button button" href="#">Retour</a>
+              <div class="nav-links"><span>Probas</span><span>Marchés</span><span>Analyse IA</span></div>
+            </nav>
+            <div class="match-card">
+              <p class="eyebrow">Ligue 1 · 21:00 UTC</p>
+              <div class="teams">
+                <div class="team">PSG</div>
+                <div class="versus">VS</div>
+                <div class="team">Lens</div>
+              </div>
+              <div class="prob"><span></span><span></span><span></span></div>
+              <div class="kpi-row">
+                <div class="kpi"><span>Home</span><strong>72%</strong></div>
+                <div class="kpi"><span>Draw</span><strong>18%</strong></div>
+                <div class="kpi"><span>Away</span><strong>10%</strong></div>
+              </div>
+            </div>
+            <div class="split-layout">
+              <div>
+                <div class="market-grid">
+                  <div class="market-card"><span>Best value</span><strong>PSG gagne @1.72</strong></div>
+                  <div class="market-card"><span>Alternative</span><strong>Over 2.5 @1.91</strong></div>
+                  <div class="analysis-card">
+                    <p class="eyebrow">Lecture modèle</p>
+                    <p class="hero-copy">Edge positif, mais taille de mise limitée par volatilité récente de Lens.</p>
+                  </div>
+                </div>
+              </div>
+              <aside class="market-card">
+                <span>Ticket</span>
+                <strong>1.2% bankroll</strong>
+                <p class="hero-copy">Mise recommandée : 12€ pour 1 000€ de bankroll.</p>
+                <a class="button" href="#">Ajouter</a>
+              </aside>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="demo demo-scoreboard" id="demo-2">
+      <div class="demo-head">
+        <div>
+          <p class="eyebrow">Démo 2</p>
+          <h2>Scoreboard Pro</h2>
+          <p class="demo-desc">
+            Version ultra-consultation : plus dense, plus rapide, très bonne pour la page Matchs et le mobile. Moins
+            spectaculaire, mais très efficace au quotidien.
+          </p>
+        </div>
+        <div class="tags">
+          <span class="tag">Dense</span>
+          <span class="tag">Mobile-first</span>
+          <span class="tag">Scan rapide</span>
+        </div>
+      </div>
+      <div class="screens">
+        <article class="screen">
+          <div class="screen-label"><span>Landing page</span><span>Daily scanner</span></div>
+          <div class="mock">
+            <nav class="mock-nav">
+              <div class="brand">ProbaLab</div>
+              <div class="nav-links"><span>Matchs</span><span>Value</span><span>Perf</span></div>
+              <a class="button" href="#">Ouvrir le scanner</a>
+            </nav>
+            <div>
+              <p class="eyebrow">Scanner de value bets</p>
+              <h3 class="hero-title">Tous les matchs utiles. Aucun bruit.</h3>
+              <p class="hero-copy">Les ligues, probabilités et edges sont classés pour aller du signal à la décision.</p>
+            </div>
+            <div class="dense-table">
+              <div class="dense-header"><span>Heure</span><span>Match</span><span>Prob.</span><span>Edge</span></div>
+              <div class="dense-row"><span>19:00</span><strong>PSG - Lens</strong><span>72%</span><span class="accent-text">+6.8</span></div>
+              <div class="dense-row"><span>21:00</span><strong>Lyon - Nice</strong><span>BTTS</span><span class="accent-text">+4.1</span></div>
+              <div class="dense-row"><span>01:00</span><strong>Bruins - Rangers</strong><span>58%</span><span>+2.9</span></div>
+            </div>
+          </div>
+        </article>
+        <article class="screen">
+          <div class="screen-label"><span>Page match</span><span>Compact view</span></div>
+          <div class="mock">
+            <div class="dense-table">
+              <div class="dense-header"><span colspan="4">PSG - Lens · Ligue 1 · 21:00</span></div>
+              <div class="dense-row"><span>1</span><strong>PSG gagne</strong><span>72%</span><span class="accent-text">+6.8</span></div>
+              <div class="dense-row"><span>X</span><strong>Nul</strong><span>18%</span><span>-1.1</span></div>
+              <div class="dense-row"><span>2</span><strong>Lens gagne</strong><span>10%</span><span>-4.6</span></div>
+            </div>
+            <div class="kpi-row">
+              <div class="kpi"><span>Forme PSG</span><strong>8.1</strong></div>
+              <div class="kpi"><span>Forme Lens</span><strong>6.2</strong></div>
+              <div class="kpi"><span>Risque</span><strong>M</strong></div>
+            </div>
+            <div class="analysis-card">
+              <p class="eyebrow">Résumé</p>
+              <p class="hero-copy">Layout pensé pour ouvrir, scanner, décider. Le détail IA arrive sous le tableau.</p>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="demo demo-editorial" id="demo-3">
+      <div class="demo-head">
+        <div>
+          <p class="eyebrow">Démo 3</p>
+          <h2>Premium Editorial</h2>
+          <p class="demo-desc">
+            Plus marque média haut de gamme : parfait pour rassurer, expliquer, convertir. Très fort pour la landing,
+            moins optimal pour le scan quotidien dense.
+          </p>
+        </div>
+        <div class="tags">
+          <span class="tag">Conversion</span>
+          <span class="tag">Narratif</span>
+          <span class="tag">Confiance</span>
+        </div>
+      </div>
+      <div class="screens">
+        <article class="screen">
+          <div class="screen-label"><span>Landing page</span><span>Magazine data</span></div>
+          <div class="mock">
+            <nav class="mock-nav">
+              <div class="brand">ProbaLab Journal</div>
+              <div class="nav-links"><span>Méthode</span><span>Résultats</span><span>Essai</span></div>
+            </nav>
+            <p class="eyebrow">Probabilités sportives vérifiées</p>
+            <h3 class="hero-title">La value ne se raconte pas. Elle se mesure.</h3>
+            <p class="hero-copy">
+              Une expérience plus posée, presque financière, qui met la pédagogie et la preuve avant le pari.
+            </p>
+            <div class="card-grid" style="grid-template-columns: 1.2fr .8fr;">
+              <div class="analysis-card">
+                <p class="eyebrow">Aujourd’hui</p>
+                <h3>PSG - Lens : pourquoi le modèle voit encore une marge.</h3>
+                <p class="hero-copy">La cote reste légèrement trop haute malgré une forme récente solide.</p>
+              </div>
+              <div class="kpi"><span>Preuve 30J</span><strong>ROI +8.4%</strong></div>
+            </div>
+          </div>
+        </article>
+        <article class="screen">
+          <div class="screen-label"><span>Page match</span><span>Story + proof</span></div>
+          <div class="mock">
+            <p class="eyebrow">Analyse du match</p>
+            <h3 class="hero-title">PSG garde l’avantage, mais le prix compte.</h3>
+            <div class="teams">
+              <div class="team">PSG</div>
+              <div class="versus">VS</div>
+              <div class="team">Lens</div>
+            </div>
+            <div class="prob"><span></span><span></span><span></span></div>
+            <div class="analysis-card">
+              <p class="hero-copy">
+                La recommandation reste positive tant que la cote dépasse 1.68. Sous ce seuil, le pari sort du modèle.
+              </p>
+            </div>
+            <div class="kpi-row">
+              <div class="kpi"><span>Edge</span><strong>+6.8%</strong></div>
+              <div class="kpi"><span>Confiance</span><strong>72%</strong></div>
+              <div class="kpi"><span>Mise</span><strong>1.2%</strong></div>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="demo demo-brutalist" id="demo-4">
+      <div class="demo-head">
+        <div>
+          <p class="eyebrow">Démo 4</p>
+          <h2>Data Brutalist</h2>
+          <p class="demo-desc">
+            Très différenciant, frontal, mémorable. Ça peut créer une marque forte, mais c’est plus risqué pour un
+            produit qui doit inspirer confiance financière.
+          </p>
+        </div>
+        <div class="tags">
+          <span class="tag">Radical</span>
+          <span class="tag">Mémorable</span>
+          <span class="tag">Risque marque</span>
+        </div>
+      </div>
+      <div class="screens">
+        <article class="screen">
+          <div class="screen-label"><span>Landing page</span><span>Anti-tipster</span></div>
+          <div class="mock">
+            <nav class="mock-nav">
+              <div class="brand">PROBALAB</div>
+              <a class="button" href="#">ENTER</a>
+            </nav>
+            <h3 class="hero-title">PAS DE TIPS. DES CHIFFRES.</h3>
+            <p class="hero-copy">Une identité coup de poing pour casser les codes du pronostic sportif.</p>
+            <div class="kpi-row">
+              <div class="kpi"><span>ROI</span><strong>+8.4</strong></div>
+              <div class="kpi"><span>EDGE</span><strong>12</strong></div>
+              <div class="kpi"><span>CLV</span><strong>61</strong></div>
+            </div>
+            <div class="match-card">
+              <strong>PSG - LENS</strong>
+              <p>VALUE DÉTECTÉE : PSG @1.72</p>
+            </div>
+          </div>
+        </article>
+        <article class="screen">
+          <div class="screen-label"><span>Page match</span><span>Hard signal</span></div>
+          <div class="mock">
+            <h3 class="hero-title">PSG / LENS</h3>
+            <div class="market-grid">
+              <div class="market-card"><span>SIGNAL</span><strong>BUY PSG</strong></div>
+              <div class="market-card"><span>EDGE</span><strong>+6.8%</strong></div>
+              <div class="market-card"><span>STAKE</span><strong>1.2%</strong></div>
+            </div>
+            <div class="teams">
+              <div class="team">72</div>
+              <div class="versus">18</div>
+              <div class="team">10</div>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="demo demo-luxury" id="demo-5">
+      <div class="demo-head">
+        <div>
+          <p class="eyebrow">Démo 5</p>
+          <h2>Quant Luxury</h2>
+          <p class="demo-desc">
+            Le plus “club premium” : noir, or, finance privée. Très haut de gamme, mais à manier avec sobriété pour ne
+            pas tomber dans le casino chic.
+          </p>
+        </div>
+        <div class="tags">
+          <span class="tag">Luxury</span>
+          <span class="tag">Premium</span>
+          <span class="tag">Sobriété</span>
+        </div>
+      </div>
+      <div class="screens">
+        <article class="screen">
+          <div class="screen-label"><span>Landing page</span><span>Private desk</span></div>
+          <div class="mock">
+            <nav class="mock-nav">
+              <div class="brand">ProbaLab Reserve</div>
+              <div class="nav-links"><span>Models</span><span>Ledger</span><span>Access</span></div>
+            </nav>
+            <div class="hero-grid">
+              <div>
+                <p class="eyebrow">Private probability desk</p>
+                <h3 class="hero-title">Des probabilités sportives avec discipline de portefeuille.</h3>
+                <p class="hero-copy">Une direction conçue pour vendre le sérieux, la rareté et la gestion du risque.</p>
+                <a class="button" href="#">Demander l’accès</a>
+              </div>
+              <div class="match-card">
+                <span class="tag">Safe of the day</span>
+                <div class="teams">
+                  <div class="team">PSG</div>
+                  <div class="versus">VS</div>
+                  <div class="team">Lens</div>
+                </div>
+                <div class="list-row"><span>Edge</span><strong>+6.8%</strong><span>Validé</span></div>
+                <div class="list-row"><span>Bankroll</span><strong>1.2%</strong><span>Prudent</span></div>
+              </div>
+            </div>
+          </div>
+        </article>
+        <article class="screen">
+          <div class="screen-label"><span>Page match</span><span>Concierge data</span></div>
+          <div class="mock">
+            <p class="eyebrow">Match memorandum</p>
+            <h3 class="hero-title">PSG vs Lens</h3>
+            <div class="analysis-card">
+              <p class="hero-copy">
+                Position recommandée : PSG gagne, uniquement au-dessus de 1.68. Exposition maximale : 1.2% bankroll.
+              </p>
+            </div>
+            <div class="market-grid">
+              <div class="market-card"><span>Probability</span><strong>72%</strong></div>
+              <div class="market-card"><span>Fair odds</span><strong>1.39</strong></div>
+              <div class="market-card"><span>Book odds</span><strong>1.72</strong></div>
+              <div class="market-card"><span>Expected value</span><strong>+23.8%</strong></div>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+  </div>
+</body>
+</html>

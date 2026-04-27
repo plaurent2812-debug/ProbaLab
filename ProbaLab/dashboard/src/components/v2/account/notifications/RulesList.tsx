@@ -85,8 +85,8 @@ export function RulesList({
             Aucune règle configurée.
           </p>
           <p className="mt-1">
-            Crée une règle pour recevoir des alertes ciblées (edge minimum,
-            ligues, drawdown…).
+            Crée une règle pour recevoir des alertes ciblées (signal minimum,
+            ligues, baisse max…).
           </p>
         </div>
       )}

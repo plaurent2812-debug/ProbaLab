@@ -16,7 +16,7 @@ interface Props {
 }
 
 /**
- * Cumulative-ROI area chart rendered via Recharts.
+ * Cumulative result area chart rendered via Recharts.
  *
  * Exported as a default export so `React.lazy` can import it
  * without a named-default adapter. Intentionally renders a pure
@@ -52,7 +52,7 @@ export function ROIChart({
             tickFormatter={(v: number) => `${v}%`}
           />
           <Tooltip
-            formatter={(value: number) => [`${value.toFixed(2)}%`, 'ROI cumulé']}
+            formatter={(value: number) => [`${value.toFixed(2)}%`, 'Résultat cumulé']}
             labelFormatter={(label: string) => label}
           />
           <Area

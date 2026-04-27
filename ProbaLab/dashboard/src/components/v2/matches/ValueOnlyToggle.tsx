@@ -25,7 +25,7 @@ export function ValueOnlyToggle({
       }}
     >
       <Zap aria-hidden="true" size={12} />
-      <span>Value bets ≥5%</span>
+      <span>Signaux forts</span>
     </button>
   );
 }

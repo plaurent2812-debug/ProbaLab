@@ -11,7 +11,6 @@ import type {
 import type { NotificationRule } from '@/lib/v2/schemas/rules';
 import type { CreateRuleInput } from '@/hooks/v2/useNotificationRules';
 import {
-  mockMatches,
   mockMatchesBackendResponse,
   mockPerformance,
   mockSafePickResponse,

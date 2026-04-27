@@ -90,6 +90,31 @@ describe('MatchDetailV2', () => {
       expect(screen.getByTestId('prob-bar')).toBeInTheDocument();
     });
 
+    it('frames the match detail as sport analysis and probabilities', async () => {
+      renderAt(<MatchDetailV2 />);
+      await screen.findByTestId('match-detail-v2');
+
+      expect(screen.getByTestId('match-decision-hero')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /décision du match/i })).toBeInTheDocument();
+      expect(screen.getByText(/probabilités clés/i)).toBeInTheDocument();
+      expect(screen.getByText('À surveiller')).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: /voir l'analyse/i })).toHaveAttribute(
+        'href',
+        '#analyse-ia',
+      );
+      expect(screen.getByRole('link', { name: /tous les marchés/i })).toHaveAttribute(
+        'href',
+        '#marches',
+      );
+      expect(screen.getByRole('heading', { name: /lecture du match/i })).toBeInTheDocument();
+      expect(screen.getByText(/scénario probable/i)).toBeInTheDocument();
+      expect(screen.getByText(/confiance modèle/i)).toBeInTheDocument();
+      expect(screen.getByText(/cote juste modèle/i)).toBeInTheDocument();
+      expect(screen.queryByText(/decision cockpit/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/ticket contrôlé/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/risque bankroll/i)).not.toBeInTheDocument();
+    });
+
     it('propagates the desktop right column with sticky layout', async () => {
       renderAt(<MatchDetailV2 />);
       await screen.findByTestId('match-detail-v2');

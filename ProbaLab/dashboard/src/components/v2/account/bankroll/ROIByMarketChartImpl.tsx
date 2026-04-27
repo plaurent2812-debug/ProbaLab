@@ -54,7 +54,7 @@ export function ROIByMarketChartImpl({
           />
           <ReferenceLine x={0} stroke="var(--border)" />
           <Tooltip
-            formatter={(value: number) => [`${value.toFixed(1)}%`, 'ROI']}
+            formatter={(value: number) => [`${value.toFixed(1)}%`, 'Performance']}
             cursor={{ fill: 'rgba(148,163,184,0.12)' }}
           />
           <Bar dataKey="roi_pct" radius={[4, 4, 4, 4]}>

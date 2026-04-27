@@ -62,7 +62,8 @@ describe('AccountV2', () => {
     expect(
       screen.getByRole('link', { name: /abonnement/i }),
     ).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /bankroll/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /capital/i })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /bankroll/i })).not.toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: /notifications/i }),
     ).toBeInTheDocument();

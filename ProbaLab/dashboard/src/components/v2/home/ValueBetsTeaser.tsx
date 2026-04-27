@@ -22,15 +22,19 @@ export function ValueBetsTeaser({
   return (
     <section
       data-testid={dataTestId}
-      className="rounded-xl p-4"
-      style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}
+      className="rounded-[22px] p-4"
+      style={{
+        border: '1px solid rgba(96,165,250,0.20)',
+        background:
+          'linear-gradient(180deg, rgba(96,165,250,0.07), rgba(255,255,255,0.02)), var(--surface)',
+      }}
     >
       <h3
         className="mb-3 flex items-center gap-2 text-sm font-semibold"
         style={{ color: 'var(--text)' }}
       >
-        <Zap size={14} aria-hidden="true" style={{ color: 'var(--value, #f59e0b)' }} />
-        Value bets du jour
+        <Zap size={14} aria-hidden="true" style={{ color: 'var(--primary)' }} />
+        Opportunités du jour
       </h3>
       <ul className="space-y-2">
         {items.map((m, idx) => {
@@ -39,8 +43,12 @@ export function ValueBetsTeaser({
           const content = (
             <Link
               to={`/matchs/${m.fixtureId}`}
-              className="flex items-center justify-between gap-2 text-sm focus-visible:outline focus-visible:outline-2"
-              style={{ color: 'var(--text)' }}
+              className="flex items-center justify-between gap-3 rounded-xl px-3 py-2 text-sm focus-visible:outline focus-visible:outline-2"
+              style={{
+                border: '1px solid var(--border)',
+                background: 'rgba(255,255,255,0.03)',
+                color: 'var(--text)',
+              }}
             >
               <span className="truncate">
                 {m.home.short} vs {m.away.short} · {vb.market}
@@ -49,7 +57,7 @@ export function ValueBetsTeaser({
                 className="shrink-0 tabular-nums text-xs font-semibold"
                 style={{ color: 'var(--value, #f59e0b)', fontVariantNumeric: 'tabular-nums' }}
               >
-                +{vb.edgePct.toFixed(1)}% · Kelly {vb.kellyPct.toFixed(1)}%
+                Signal +{vb.edgePct.toFixed(1)}% · Confiance {vb.confidencePct}%
               </span>
             </Link>
           );
@@ -64,7 +72,7 @@ export function ValueBetsTeaser({
         })}
       </ul>
       <p className="mt-3 text-[11px]" style={{ color: 'var(--text-muted)' }}>
-        {items[0]!.topValueBet!.bestBook} offre la meilleure cote.
+        Sélections issues des probabilités et signaux du modèle.
       </p>
     </section>
   );

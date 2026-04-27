@@ -12,9 +12,8 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Literal
 
-from pydantic import BeforeValidator
-
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BeforeValidator
 
 from src.config import supabase
 
@@ -699,9 +698,7 @@ def _compute_performance_summary(window_days: int) -> dict[str, float]:
             o_d = 1 if actual == "D" else 0
             o_a = 1 if actual == "A" else 0
             brier_sum += (
-                (ph / 100.0 - o_h) ** 2
-                + (pd_ / 100.0 - o_d) ** 2
-                + (pa / 100.0 - o_a) ** 2
+                (ph / 100.0 - o_h) ** 2 + (pd_ / 100.0 - o_d) ** 2 + (pa / 100.0 - o_a) ** 2
             )
             brier_n += 1
 
@@ -736,9 +733,11 @@ def _compute_performance_summary(window_days: int) -> dict[str, float]:
     responses={500: {"description": "Internal server error"}},
 )
 def get_performance_summary(
-    window: Annotated[Literal[7, 30, 90], BeforeValidator(int), Query(
-        description="Rolling window in days. Only 7, 30, or 90 are permitted.",
-    )] = 30,
+    window: Annotated[
+        Literal[7, 30, 90],
+        BeforeValidator(int),
+        Query(description="Rolling window in days. Only 7, 30, or 90 are permitted."),
+    ] = 30,
 ):
     """Return the 4 KPIs consumed by `usePerformanceSummary` on the V2 landing.
 

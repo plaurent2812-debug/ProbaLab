@@ -32,7 +32,7 @@ describe('FilterSidebar', () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
     render(<FilterSidebar filters={baseFilters} onChange={onChange} />);
-    await user.click(screen.getByRole('checkbox', { name: /value bet/i }));
+    await user.click(screen.getByRole('checkbox', { name: /signal modèle fort/i }));
     expect(onChange).toHaveBeenCalledWith(
       expect.objectContaining({ signals: ['value'] }),
     );

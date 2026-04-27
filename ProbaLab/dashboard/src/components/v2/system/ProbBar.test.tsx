@@ -25,10 +25,12 @@ describe('ProbBar', () => {
     expect(dominant).toHaveAttribute('data-dominant', 'true');
   });
 
-  it('throws on probabilities not summing to ~1', () => {
-    expect(() =>
-      render(<ProbBar home={0.5} draw={0.2} away={0.1} homeLabel="A" awayLabel="B" />)
-    ).toThrow(/sum/i);
+  it('normalizes probabilities that do not sum to 1', () => {
+    render(<ProbBar home={0.5} draw={0.2} away={0.1} homeLabel="A" awayLabel="B" />);
+    expect(screen.getByRole('img')).toHaveAttribute(
+      'aria-label',
+      expect.stringMatching(/A 63%.*Nul 25%.*B 13%/i),
+    );
   });
 
   it('has no accessibility violations', async () => {

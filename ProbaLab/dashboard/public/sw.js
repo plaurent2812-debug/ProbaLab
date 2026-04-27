@@ -10,7 +10,7 @@ self.addEventListener("push", function (event) {
     if (event.data) {
       data = event.data.json();
     }
-  } catch (e) {
+  } catch {
     // Fallback to default
   }
 
@@ -36,7 +36,7 @@ self.addEventListener("notificationclick", function (event) {
   const url = event.notification.data?.url || "/paris-du-soir";
 
   event.waitUntil(
-    clients.matchAll({ type: "window", includeUncontrolled: true }).then(function (clientList) {
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(function (clientList) {
       // If the app is already open, focus it
       for (const client of clientList) {
         if (client.url.includes(self.location.origin) && "focus" in client) {
@@ -45,7 +45,7 @@ self.addEventListener("notificationclick", function (event) {
         }
       }
       // Otherwise, open a new window
-      return clients.openWindow(url);
+      return self.clients.openWindow(url);
     })
   );
 });

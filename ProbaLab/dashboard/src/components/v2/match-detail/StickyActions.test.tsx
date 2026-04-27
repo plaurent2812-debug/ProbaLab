@@ -39,14 +39,15 @@ describe('StickyActions', () => {
       </Wrapper>,
     );
     expect(
-      screen.getByRole('button', { name: /suivre.*bankroll/i }),
+      screen.getByRole('button', { name: /suivre.*capital/i }),
     ).toBeInTheDocument();
+    expect(screen.queryByText(/bankroll/i)).not.toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: /alerte.*kick-off/i }),
     ).toBeInTheDocument();
   });
 
-  it('clicking "Suivre bankroll" triggers the add-bet mutation', async () => {
+  it('clicking "Suivre capital" triggers the add-bet mutation', async () => {
     const user = userEvent.setup();
     const { Wrapper } = createWrapper();
     render(
@@ -54,17 +55,17 @@ describe('StickyActions', () => {
         <StickyActions fixtureId="fx-1" recommendation={reco} />
       </Wrapper>,
     );
-    const btn = screen.getByRole('button', { name: /suivre.*bankroll/i });
+    const btn = screen.getByRole('button', { name: /suivre.*capital/i });
     await user.click(btn);
     // The mutation is async; we expect a success state to bubble up.
     await waitFor(() =>
       expect(
-        screen.getByRole('button', { name: /ajouté|bankroll/i }),
+        screen.getByRole('button', { name: /ajouté|capital/i }),
       ).toBeInTheDocument(),
     );
   });
 
-  it('disables the bankroll button while the mutation is pending', async () => {
+  it('disables the capital tracking button while the mutation is pending', async () => {
     const user = userEvent.setup();
     const { Wrapper } = createWrapper();
     render(
@@ -72,7 +73,7 @@ describe('StickyActions', () => {
         <StickyActions fixtureId="fx-1" recommendation={reco} />
       </Wrapper>,
     );
-    const btn = screen.getByRole('button', { name: /suivre.*bankroll/i });
+    const btn = screen.getByRole('button', { name: /suivre.*capital/i });
     await user.click(btn);
     // Immediately after click: either pending (disabled) or success (disabled once success reached)
     await waitFor(() => expect(btn).toBeDisabled());
@@ -132,11 +133,11 @@ describe('StickyActions', () => {
         <StickyActions fixtureId="fx-99" recommendation={reco} />
       </Wrapper>,
     );
-    await user.click(screen.getByRole('button', { name: /suivre.*bankroll/i }));
+    await user.click(screen.getByRole('button', { name: /suivre.*capital/i }));
     // Success message eventually appears — check the button text changes.
     await waitFor(() =>
       expect(
-        screen.getByRole('button', { name: /ajouté|bankroll/i }),
+        screen.getByRole('button', { name: /ajouté|capital/i }),
       ).toBeInTheDocument(),
     );
   });

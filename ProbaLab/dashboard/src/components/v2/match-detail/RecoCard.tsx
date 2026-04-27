@@ -16,46 +16,55 @@ export function RecoCard({
   const kellyPct = (recommendation.kelly_fraction * 100).toFixed(1);
   const edgePct = Math.round(recommendation.edge * 100);
 
-  const ariaLabel = `Recommandation : ${recommendation.market_label} à cote ${recommendation.odds.toFixed(2)} chez ${recommendation.book_name}, confiance ${confidencePct}%, Kelly ${kellyPct}%, edge +${edgePct}%`;
+  const ariaLabel = `Recommandation : ${recommendation.market_label} à cote ${recommendation.odds.toFixed(2)} chez ${recommendation.book_name}, confiance ${confidencePct}%, mise prudente ${kellyPct}%, signal +${edgePct}%`;
 
   return (
     <section
       data-testid={dataTestId}
       aria-label={ariaLabel}
-      className="rounded-2xl border border-emerald-200 border-l-4 border-l-emerald-500 bg-gradient-to-br from-emerald-50 to-white p-5 shadow-sm"
+      className="rounded-[22px] p-5"
+      style={{
+        border: '1px solid rgba(96,165,250,0.22)',
+        background:
+          'linear-gradient(180deg, rgba(96,165,250,0.08), rgba(255,255,255,0.015)), var(--surface)',
+      }}
     >
-      <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
+      <div
+        className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.16em]"
+        style={{ color: 'var(--primary)' }}
+      >
         <TrendingUp className="h-3 w-3" aria-hidden="true" />
-        Recommandation
+        Prono recommandé
       </div>
-      <div className="mt-1 text-base font-semibold text-slate-900">
+      <div className="mt-1 text-base font-semibold" style={{ color: 'var(--text)' }}>
         {recommendation.market_label}
       </div>
       <div
         data-testid="reco-odds"
-        className="mt-2 text-[34px] font-bold leading-none tabular-nums text-emerald-700"
+        className="mt-2 text-[34px] font-black leading-none tabular-nums"
+        style={{ color: 'var(--primary)' }}
       >
         {recommendation.odds.toFixed(2)}
       </div>
-      <div className="mt-1 text-xs text-slate-500">
+      <div className="mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
         chez {recommendation.book_name}
       </div>
       <dl className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">
         <div>
-          <dt className="text-slate-500">Confiance</dt>
-          <dd className="mt-0.5 font-semibold tabular-nums text-slate-900">
+          <dt style={{ color: 'var(--text-muted)' }}>Confiance</dt>
+          <dd className="mt-0.5 font-semibold tabular-nums" style={{ color: 'var(--text)' }}>
             {confidencePct}%
           </dd>
         </div>
         <div>
-          <dt className="text-slate-500">Kelly</dt>
-          <dd className="mt-0.5 font-semibold tabular-nums text-slate-900">
+          <dt style={{ color: 'var(--text-muted)' }}>Mise prudente</dt>
+          <dd className="mt-0.5 font-semibold tabular-nums" style={{ color: 'var(--text)' }}>
             {kellyPct}%
           </dd>
         </div>
         <div>
-          <dt className="text-slate-500">Edge</dt>
-          <dd className="mt-0.5 font-semibold tabular-nums text-emerald-700">
+          <dt style={{ color: 'var(--text-muted)' }}>Signal</dt>
+          <dd className="mt-0.5 font-semibold tabular-nums" style={{ color: 'var(--value)' }}>
             +{edgePct}%
           </dd>
         </div>

@@ -29,7 +29,7 @@ export function TrackRecord() {
             Tous nos derniers paris, publics.
           </h2>
           <p className="mt-3 text-slate-400">
-            Gagnants ET perdants. Pas de cherry-picking.
+            Gagnants et perdants. Pas de sélection favorable.
           </p>
         </div>
         <Badge

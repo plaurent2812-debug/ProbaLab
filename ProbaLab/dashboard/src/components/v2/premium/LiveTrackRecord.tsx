@@ -41,9 +41,9 @@ function toneForDelta(value: number): StatTone {
  *
  * Composition:
  * - Emerald eyebrow + pulsing LIVE dot + last-updated mention.
- * - 4 StatTiles (CLV 30j, ROI 90j, Brier 30j, Safe 90j).
+ * - 4 StatTiles (market signal, result, probability quality, reliable picks).
  * - Period toggle (30j / 90j / 1 an) — purely local UI state.
- * - Area chart (lazy-loaded) rendering cumulative ROI.
+ * - Area chart (lazy-loaded) rendering cumulative result.
  * - Transparency footer linking to the public audit repo.
  */
 export function LiveTrackRecord({
@@ -148,25 +148,25 @@ export function LiveTrackRecord({
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatTile
-          label="CLV 30j"
+          label="Signal marché 30j"
           value={`${data.clv30d >= 0 ? '+' : ''}${data.clv30d.toFixed(1)}%`}
           tone={toneForDelta(data.clv30d)}
           data-testid="tile-clv"
         />
         <StatTile
-          label="ROI 90j"
+          label="Résultat 90j"
           value={`${data.roi90d >= 0 ? '+' : ''}${data.roi90d.toFixed(1)}%`}
           tone={toneForDelta(data.roi90d)}
           data-testid="tile-roi"
         />
         <StatTile
-          label="Brier 30j"
+          label="Qualité des probabilités 30j"
           value={data.brier30d.toFixed(3)}
           tone="neutral"
           data-testid="tile-brier"
         />
         <StatTile
-          label="Safe 90j"
+          label="Pronos fiables 90j"
           value={`${data.safeRate90d.toFixed(1)}%`}
           tone="neutral"
           data-testid="tile-safe"
@@ -184,7 +184,7 @@ export function LiveTrackRecord({
       >
         <div className="flex items-center justify-between">
           <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>
-            ROI cumulé
+            Résultat cumulé
           </p>
           <div role="group" aria-label="Sélection de période" className="inline-flex gap-1">
             {periods.map((p) => {
@@ -226,7 +226,7 @@ export function LiveTrackRecord({
       </div>
 
       <p className="text-center text-xs" style={{ color: 'var(--text-muted)' }}>
-        Toutes les métriques sont calculées sur l'intégralité des paris, sans cherry-picking.{' '}
+        Toutes les métriques sont calculées sur l'intégralité des paris, sans sélection favorable.{' '}
         Source :{' '}
         <a
           href="https://github.com/probalab/track-record"
