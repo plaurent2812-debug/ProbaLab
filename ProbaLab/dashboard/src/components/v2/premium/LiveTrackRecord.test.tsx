@@ -73,10 +73,13 @@ describe('LiveTrackRecord', () => {
     mockedHook.mockReturnValue({ isLoading: false, isError: false, data: sample });
     render(wrap(<LiveTrackRecord />));
 
-    expect(screen.getByText(/CLV 30j/i)).toBeInTheDocument();
-    expect(screen.getByText(/ROI 90j/i)).toBeInTheDocument();
-    expect(screen.getByText(/Brier 30j/i)).toBeInTheDocument();
-    expect(screen.getByText(/Safe 90j/i)).toBeInTheDocument();
+    expect(screen.getByText(/Signal marché 30j/i)).toBeInTheDocument();
+    expect(screen.getByText(/Résultat 90j/i)).toBeInTheDocument();
+    expect(screen.getByText(/Qualité des probabilités 30j/i)).toBeInTheDocument();
+    expect(screen.getByText(/Pronos fiables 90j/i)).toBeInTheDocument();
+    expect(screen.getByText(/Résultat cumulé/i)).toBeInTheDocument();
+    expect(screen.queryByText(/ROI/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Safe 90j/i)).not.toBeInTheDocument();
 
     // 3 period toggle buttons.
     expect(screen.getByRole('button', { name: '30j' })).toBeInTheDocument();
@@ -115,12 +118,12 @@ describe('LiveTrackRecord', () => {
     expect(screen.getByTestId('live-dot')).toBeInTheDocument();
   });
 
-  it('renders the cherry-picking transparency note with the repo link', () => {
+  it('renders the transparent results note with the repo link', () => {
     mockedHook.mockReturnValue({ isLoading: false, isError: false, data: sample });
     render(wrap(<LiveTrackRecord />));
     const link = screen.getByRole('link', { name: /github\.com\/probalab/i });
     expect(link).toHaveAttribute('href', expect.stringContaining('github.com/probalab'));
-    expect(screen.getByText(/sans cherry-picking/i)).toBeInTheDocument();
+    expect(screen.getByText(/sans sélection favorable/i)).toBeInTheDocument();
   });
 
   it('has no axe violations on loaded state', async () => {

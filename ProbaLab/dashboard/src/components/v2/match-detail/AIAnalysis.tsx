@@ -18,7 +18,8 @@ function Paragraphs({ paragraphs }: { paragraphs: string[] }) {
       {paragraphs.map((p, i) => (
         <p
           key={i}
-          className="mb-2 text-sm leading-relaxed text-slate-700 last:mb-0"
+          className="mb-2 text-sm leading-relaxed last:mb-0"
+          style={{ color: 'var(--text-muted)' }}
         >
           {p}
         </p>
@@ -40,10 +41,11 @@ export function AIAnalysis({
     return (
       <section
         data-testid={dataTestId}
-        className="rounded-xl border border-slate-200 bg-white p-4"
+        className="rounded-[22px] p-4"
+        style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}
       >
-        <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900">
-          <Sparkles className="h-4 w-4 text-violet-600" aria-hidden="true" />
+        <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold" style={{ color: 'var(--text)' }}>
+          <Sparkles className="h-4 w-4" style={{ color: 'var(--primary)' }} aria-hidden="true" />
           Analyse IA
         </h3>
         <LockOverlay message={SIGNUP_MESSAGE}>
@@ -59,14 +61,17 @@ export function AIAnalysis({
   return (
     <section
       data-testid={dataTestId}
-      className="rounded-xl border border-slate-200 bg-white p-4"
+      className="rounded-[22px] p-4"
+      style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}
     >
-      <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900">
-        <Sparkles className="h-4 w-4 text-violet-600" aria-hidden="true" />
+      <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold" style={{ color: 'var(--text)' }}>
+        <Sparkles className="h-4 w-4" style={{ color: 'var(--primary)' }} aria-hidden="true" />
         Analyse IA
       </h3>
       {first && (
-        <p className="mb-2 text-sm leading-relaxed text-slate-800">{first}</p>
+        <p className="mb-2 text-sm leading-relaxed" style={{ color: 'var(--text)' }}>
+          {first}
+        </p>
       )}
       {rest.length > 0 &&
         (gated ? (

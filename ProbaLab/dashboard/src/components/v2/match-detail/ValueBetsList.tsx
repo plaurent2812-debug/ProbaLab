@@ -12,17 +12,21 @@ export interface ValueBetsListProps {
   'data-testid'?: string;
 }
 
-const UPGRADE_MESSAGE = 'Débloque tous les value bets avec Premium';
-const SIGNUP_MESSAGE = 'Crée un compte pour voir les value bets';
+const UPGRADE_MESSAGE = 'Débloque tous les signaux avancés avec Premium';
+const SIGNUP_MESSAGE = 'Crée un compte pour voir les signaux avancés';
 
 function ValueBetRow({ bet }: { bet: ValueBet }) {
   return (
     <li
       data-testid="value-bet-row"
-      aria-label={`${bet.label}, edge ${(bet.edge * 100).toFixed(1)}%, cote ${bet.best_odds.toFixed(2)}`}
-      className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm"
+      aria-label={`${bet.label}, signal ${(bet.edge * 100).toFixed(1)}%, cote ${bet.best_odds.toFixed(2)}`}
+      className="flex items-center gap-3 rounded-xl border p-3 text-sm"
+      style={{
+        borderColor: 'rgba(251,191,36,0.24)',
+        background: 'rgba(251,191,36,0.07)',
+      }}
     >
-      <span className="min-w-0 flex-1 truncate font-medium text-slate-900">
+      <span className="min-w-0 flex-1 truncate font-medium" style={{ color: 'var(--text)' }}>
         {bet.label}
       </span>
       <ValueBadge edge={bet.edge} />
@@ -38,25 +42,28 @@ export function ValueBetsList({
   'data-testid': dataTestId = 'value-bets-list',
 }: ValueBetsListProps) {
   const heading = (
-    <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900">
-      <Zap className="h-4 w-4 text-amber-500" aria-hidden="true" />
-      Value bets
+    <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold" style={{ color: 'var(--text)' }}>
+      <Zap className="h-4 w-4" style={{ color: 'var(--value)' }} aria-hidden="true" />
+      Opportunités avancées
     </h3>
   );
 
   const ariaLabel = matchTitle
-    ? `Value bets — ${matchTitle}`
-    : 'Value bets du match';
+    ? `Signaux avancés — ${matchTitle}`
+    : 'Signaux avancés du match';
 
   if (valueBets.length === 0) {
     return (
       <section
         data-testid={dataTestId}
         aria-label={ariaLabel}
-        className="rounded-xl border border-slate-200 bg-white p-4"
+        className="rounded-[22px] p-4"
+        style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}
       >
         {heading}
-        <p className="text-xs text-slate-500">Aucun value bet détecté.</p>
+        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+          Aucun signal avancé détecté.
+        </p>
       </section>
     );
   }
@@ -66,7 +73,8 @@ export function ValueBetsList({
       <section
         data-testid={dataTestId}
         aria-label={ariaLabel}
-        className="rounded-xl border border-slate-200 bg-white p-4"
+        className="rounded-[22px] p-4"
+        style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}
       >
         {heading}
         <LockOverlay message={SIGNUP_MESSAGE}>
@@ -86,7 +94,8 @@ export function ValueBetsList({
       <section
         data-testid={dataTestId}
         aria-label={ariaLabel}
-        className="rounded-xl border border-slate-200 bg-white p-4"
+        className="rounded-[22px] p-4"
+        style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}
       >
         {heading}
         <ul className="mb-2 flex flex-col gap-2">
@@ -107,7 +116,8 @@ export function ValueBetsList({
     <section
       data-testid={dataTestId}
       aria-label={ariaLabel}
-      className="rounded-xl border border-slate-200 bg-white p-4"
+      className="rounded-[22px] p-4"
+      style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}
     >
       {heading}
       <ul className="flex flex-col gap-2">

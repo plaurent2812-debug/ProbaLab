@@ -6,18 +6,18 @@ import { EASE_OUT } from './animations';
 const STEPS = [
   {
     icon: Brain,
-    title: 'Nos modèles calculent',
-    body: '3 couches : Dixon-Coles + ELO, ML calibré (XGBoost), et analyse narrative Gemini. Chaque match → une probabilité réelle.',
+    title: 'On analyse chaque match',
+    body: 'Forme récente, calendrier, niveau des équipes, contexte et cotes du marché sont transformés en probabilités lisibles.',
   },
   {
     icon: LineChart,
-    title: 'On compare aux cotes',
-    body: "On croise nos probas avec les cotes de 12+ bookmakers. Si notre proba > proba implicite de la cote, il y a de la value.",
+    title: 'On explique les probabilités',
+    body: "Vous voyez rapidement l'équipe favorite, le risque du nul, les scénarios probables et les points qui peuvent faire basculer le match.",
   },
   {
     icon: Zap,
-    title: 'On signale les value bets',
-    body: 'Seuls les paris avec un edge ≥5% passent le filtre. Vous recevez une alerte, avec la mise Kelly optimale et le meilleur book.',
+    title: 'On propose les meilleurs pronos',
+    body: 'Quand le signal est assez solide, ProbaLab recommande un prono clair avec le niveau de confiance et les risques à connaître.',
   },
 ];
 
@@ -35,10 +35,9 @@ export function HowItWorks() {
           Comment ça marche
         </p>
         <h2 className="text-3xl font-bold tracking-tight text-white md:text-5xl">
-          La même méthode qu'un{' '}
-          <em className="not-italic text-emerald-400">quant fund</em>.
+          Une méthode claire et vérifiable.
           <br />
-          Appliquée aux paris sportifs.
+          Pensée pour les parieurs sportifs.
         </h2>
       </motion.div>
 

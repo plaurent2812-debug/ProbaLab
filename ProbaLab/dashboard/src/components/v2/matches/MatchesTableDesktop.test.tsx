@@ -26,8 +26,23 @@ describe('MatchesTableDesktop', () => {
     renderTable();
     expect(screen.getByText('PSG')).toBeInTheDocument();
     expect(screen.getByText('LEN')).toBeInTheDocument();
-    // Top value bet best odd for fx-3 is 1.92
     expect(screen.getByText(/1\.92/)).toBeInTheDocument();
+  });
+
+  it('uses analysis-first chips instead of betting jargon', () => {
+    renderTable();
+    expect(screen.getByText(/Prono recommandé/i)).toBeInTheDocument();
+    expect(screen.getByText(/Signal \+7\.2%/i)).toBeInTheDocument();
+    expect(screen.queryByText(/SAFE/i)).not.toBeInTheDocument();
+  });
+
+  it('renders each match as a decision card with clear sections', () => {
+    renderTable();
+    const firstRow = screen.getAllByTestId('match-row-desktop')[0];
+
+    expect(within(firstRow).getByText(/probabilités/i)).toBeInTheDocument();
+    expect(within(firstRow).getByText(/lecture rapide/i)).toBeInTheDocument();
+    expect(within(firstRow).getByRole('link', { name: /ouvrir l'analyse/i })).toBeInTheDocument();
   });
 
   it('renders a detail link per row', () => {

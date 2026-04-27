@@ -47,6 +47,8 @@ describe('AddBetModal', () => {
     expect(
       screen.getByRole('heading', { level: 2, name: /ajouter un pari/i }),
     ).toBeInTheDocument();
+    expect(screen.getByText(/dans ton capital/i)).toBeInTheDocument();
+    expect(screen.queryByText(/bankroll/i)).not.toBeInTheDocument();
   });
 
   it('renders all required form fields', () => {

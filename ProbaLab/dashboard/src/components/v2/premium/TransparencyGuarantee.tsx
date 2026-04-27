@@ -7,9 +7,8 @@ interface Props {
 /**
  * Inline banner surfacing the monthly transparency guarantee.
  *
- * Rule: if CLV over the last 30 days becomes negative, the user
- * is credited with a free month. The icon is a lucide `Shield` —
- * no emoji.
+ * Rule: if the market signal over the last 30 days becomes negative,
+ * the user is credited with a free month. The icon is a lucide `Shield`.
  */
 export function TransparencyGuarantee({
   'data-testid': dataTestId = 'transparency-guarantee',
@@ -35,7 +34,7 @@ export function TransparencyGuarantee({
         </h3>
       </div>
       <p className="mx-auto mt-3 max-w-2xl text-sm" style={{ color: 'var(--text-muted)' }}>
-        Si le CLV 30 jours devient négatif, vous recevez automatiquement un{' '}
+        Si le signal marché 30 jours devient négatif, vous recevez automatiquement un{' '}
         <strong style={{ color: 'var(--text)' }}>mois offert</strong>. Nos chiffres
         sont publics, vérifiables, mis à jour toutes les 5 minutes.
       </p>

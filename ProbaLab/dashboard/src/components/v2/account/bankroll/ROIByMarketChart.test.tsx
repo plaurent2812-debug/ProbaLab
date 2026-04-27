@@ -26,9 +26,11 @@ const sample: ROIByMarketItem[] = [
 describe('ROIByMarketChart', () => {
   it('renders one row per market', () => {
     render(<ROIByMarketChart data={sample} />);
+    expect(screen.getByRole('heading', { name: /performance par marché/i })).toBeInTheDocument();
     for (const label of ['1X2', 'O/U', 'BTTS', 'DC', 'Score']) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
+    expect(screen.queryByText(/ROI/i)).not.toBeInTheDocument();
   });
 
   it('displays signed percentages for each row', () => {
@@ -59,12 +61,13 @@ describe('ROIByMarketChart', () => {
     render(<ROIByMarketChart data={sample} />);
     // Scoped to the 1X2 row so ambiguous digits (e.g. "12") in other rows
     // do not collide with this assertion.
-    expect(
-      screen.getByTestId('roi-row-1X2').textContent,
-    ).toMatch(/18\s*paris/);
-    expect(
-      screen.getByTestId('roi-row-O/U').textContent,
-    ).toMatch(/12\s*paris/);
+    expect(screen.getByTestId('roi-row-1X2').textContent).toMatch(
+      /18\s*paris.*11 gagnés.*6 perdus/,
+    );
+    expect(screen.getByTestId('roi-row-O/U').textContent).toMatch(
+      /12\s*paris.*7 gagnés.*5 perdus/,
+    );
+    expect(screen.getByTestId('roi-row-1X2').textContent).not.toMatch(/\bW\b|\bL\b/);
   });
 
   it('shows an empty state when there is no data', () => {

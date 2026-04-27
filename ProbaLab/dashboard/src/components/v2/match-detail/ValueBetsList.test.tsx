@@ -32,11 +32,11 @@ describe('ValueBetsList', () => {
   it('renders the section heading', () => {
     render(<ValueBetsList valueBets={bets} userRole="premium" />);
     expect(
-      screen.getByRole('heading', { name: /value bets/i }),
+      screen.getByRole('heading', { name: /opportunités avancées/i }),
     ).toBeInTheDocument();
   });
 
-  it('premium sees every value bet and no lock overlay', () => {
+  it('premium sees every advanced signal and no lock overlay', () => {
     render(<ValueBetsList valueBets={bets} userRole="premium" />);
     expect(screen.getAllByTestId('value-bet-row')).toHaveLength(bets.length);
     expect(screen.queryByTestId('lock-overlay')).not.toBeInTheDocument();
@@ -65,7 +65,7 @@ describe('ValueBetsList', () => {
     expect(lock.textContent).toMatch(/premium/i);
   });
 
-  it('free user with only one value bet has no lock', () => {
+  it('free user with only one advanced signal has no lock', () => {
     render(
       <ValueBetsList valueBets={[bets[0]]} userRole="free" />,
     );
@@ -79,10 +79,10 @@ describe('ValueBetsList', () => {
     expect(lock.textContent).toMatch(/compte/i);
   });
 
-  it('renders an empty state when no value bets are available', () => {
+  it('renders an empty state when no advanced signal is available', () => {
     render(<ValueBetsList valueBets={[]} userRole="premium" />);
     expect(
-      screen.getByText(/aucun value bet détecté/i),
+      screen.getByText(/aucun signal avancé détecté/i),
     ).toBeInTheDocument();
   });
 

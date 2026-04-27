@@ -43,7 +43,7 @@ beforeEach(() => {
 
 const EXISTING_RULE: NotificationRule = {
   id: 'rule-001',
-  name: 'Value bets haut edge',
+  name: 'Signaux forts',
   conditions: [
     { type: 'edge_min', value: 8 },
     { type: 'confidence', value: 'HIGH' },
@@ -90,6 +90,12 @@ describe('RuleBuilderModal', () => {
     expect(screen.getAllByTestId('rule-condition-row')).toHaveLength(1);
   });
 
+  it('uses bettor-friendly condition labels without drawdown jargon', () => {
+    render(wrap(<RuleBuilderModal open onOpenChange={vi.fn()} />));
+    expect(screen.getByRole('option', { name: /Baisse max du capital/i })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Drawdown bankroll/i })).not.toBeInTheDocument();
+  });
+
   it('prefills name, conditions, channels, action and logic in edit mode', () => {
     render(
       wrap(
@@ -101,7 +107,7 @@ describe('RuleBuilderModal', () => {
       ),
     );
     expect(screen.getByLabelText(/nom de la règle/i)).toHaveValue(
-      'Value bets haut edge',
+      'Signaux forts',
     );
     expect(screen.getAllByTestId('rule-condition-row')).toHaveLength(2);
     expect(screen.getByLabelText(/email/i)).toBeChecked();
@@ -256,7 +262,7 @@ describe('RuleBuilderModal', () => {
     });
     const payload = updateMutateAsync.mock.calls[0][0];
     expect(payload.id).toBe('rule-001');
-    expect(payload.name).toBe('Value bets haut edge');
+    expect(payload.name).toBe('Signaux forts');
     expect(payload.conditions).toHaveLength(2);
     expect(payload.channels).toContain('email');
 

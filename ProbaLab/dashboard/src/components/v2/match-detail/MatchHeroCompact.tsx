@@ -26,13 +26,20 @@ export function MatchHeroCompact({
   return (
     <header
       data-testid={dataTestId}
-      className="rounded-xl border border-slate-200 bg-white p-4"
+      className="rounded-[22px] p-4"
+      style={{
+        border: '1px solid rgba(148,163,184,0.18)',
+        background: 'var(--surface)',
+      }}
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[10px] uppercase tracking-wide text-slate-500">
+        <span
+          className="text-[10px] font-bold uppercase tracking-[0.16em]"
+          style={{ color: 'var(--primary)' }}
+        >
           {league_name}
         </span>
-        <span className="text-xs font-medium text-slate-600">
+        <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
           {formatKickoffCompact(kickoff_utc)}
         </span>
       </div>
@@ -46,18 +53,18 @@ export function MatchHeroCompact({
             className="h-10 w-10 shrink-0 object-contain"
           />
           <div className="flex flex-col gap-1">
-            <div className="text-sm font-semibold text-slate-900">
+            <div className="text-sm font-semibold" style={{ color: 'var(--text)' }}>
               {home.name}
             </div>
             <FormBadge form={home.form} size="sm" />
           </div>
         </div>
-        <div className="text-sm font-bold text-slate-500" aria-hidden="true">
+        <div className="text-sm font-bold" style={{ color: 'var(--text-faint)' }} aria-hidden="true">
           VS
         </div>
         <div className="flex items-center gap-2">
           <div className="flex flex-col items-end gap-1 text-right">
-            <div className="text-sm font-semibold text-slate-900">
+            <div className="text-sm font-semibold" style={{ color: 'var(--text)' }}>
               {away.name}
             </div>
             <FormBadge form={away.form} size="sm" />

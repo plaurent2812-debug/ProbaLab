@@ -97,6 +97,8 @@ def client(mock_supabase):
         patch("supabase.create_client", return_value=mock_supabase),
         patch("src.config.supabase", mock_supabase),
         patch("api.auth.supabase", mock_supabase),
+        patch("api.routers.predictions.supabase", mock_supabase),
+        patch("api.routers.performance.supabase", mock_supabase),
     ):
         from api.main import app
 

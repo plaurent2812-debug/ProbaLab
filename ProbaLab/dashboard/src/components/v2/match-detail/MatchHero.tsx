@@ -42,9 +42,13 @@ function TeamBlock({ team, align }: TeamBlockProps) {
         className="h-16 w-16 shrink-0 object-contain"
       />
       <div className={`flex flex-col gap-1 ${textAlign}`}>
-        <div className="text-lg font-semibold text-slate-900">{team.name}</div>
+        <div className="text-lg font-black tracking-[-0.04em]" style={{ color: 'var(--text)' }}>
+          {team.name}
+        </div>
         {team.rank != null && (
-          <div className="text-xs text-slate-500">#{team.rank}</div>
+          <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            #{team.rank}
+          </div>
         )}
         <div className={`mt-1 flex ${formAlign}`}>
           <FormBadge form={team.form} />
@@ -62,30 +66,40 @@ export function MatchHero({
   return (
     <header
       data-testid={dataTestId}
-      className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+      className="rounded-[28px] p-6"
+      style={{
+        border: '1px solid rgba(148,163,184,0.18)',
+        background:
+          'linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.012)), var(--surface)',
+      }}
     >
-      <div className="text-xs uppercase tracking-wide text-slate-500">
+      <div
+        className="text-xs font-bold uppercase tracking-[0.18em]"
+        style={{ color: 'var(--primary)' }}
+      >
         {league_name}
       </div>
       <div className="mt-4 flex items-center justify-between gap-6">
         <TeamBlock team={home} align="right" />
         <div className="flex min-w-[160px] flex-col items-center gap-1 text-center">
-          <div className="text-sm font-medium text-slate-700">
+          <div className="text-sm font-medium" style={{ color: 'var(--text)' }}>
             {formatKickoff(kickoff_utc)}
           </div>
           {stadium && (
-            <div className="flex items-center gap-1 text-xs text-slate-500">
+            <div className="flex items-center gap-1 text-xs" style={{ color: 'var(--text-muted)' }}>
               <MapPin className="h-3 w-3" aria-hidden="true" />
               <span>{stadium}</span>
             </div>
           )}
           {referee && (
-            <div className="flex items-center gap-1 text-xs text-slate-500">
+            <div className="flex items-center gap-1 text-xs" style={{ color: 'var(--text-muted)' }}>
               <UserCheck className="h-3 w-3" aria-hidden="true" />
               <span>{referee}</span>
             </div>
           )}
-          <div className="mt-2 text-2xl font-bold text-slate-900">VS</div>
+          <div className="mt-2 text-2xl font-black" style={{ color: 'var(--text-faint)' }}>
+            VS
+          </div>
         </div>
         <TeamBlock team={away} align="left" />
       </div>

@@ -36,7 +36,7 @@ beforeEach(() => {
 
 const VALUE_RULE: NotificationRule = {
   id: 'rule-001',
-  name: 'Value bets haut edge',
+  name: 'Signaux forts',
   conditions: [{ type: 'edge_min', value: 8 }],
   logic: 'AND',
   channels: ['email', 'telegram'],
@@ -46,7 +46,7 @@ const VALUE_RULE: NotificationRule = {
 
 const BANKROLL_RULE: NotificationRule = {
   id: 'rule-003',
-  name: 'Drawdown critique',
+  name: 'Baisse max critique',
   conditions: [{ type: 'bankroll_drawdown', value: 10 }],
   logic: 'AND',
   channels: ['email', 'telegram', 'push'],
@@ -75,7 +75,7 @@ describe('RuleRow', () => {
         />,
       ),
     );
-    expect(screen.getByText('Value bets haut edge')).toBeInTheDocument();
+    expect(screen.getByText('Signaux forts')).toBeInTheDocument();
   });
 
   it('renders QUAND / ET / NOTIFIER RuleChip labels', () => {
@@ -137,7 +137,7 @@ describe('RuleRow', () => {
       ),
     );
     const sw = screen.getByRole('switch', {
-      name: /activer drawdown critique/i,
+      name: /activer baisse max critique/i,
     });
     expect(sw).toHaveAttribute('aria-checked', 'false');
   });
@@ -154,7 +154,7 @@ describe('RuleRow', () => {
       ),
     );
     await user.click(
-      screen.getByRole('switch', { name: /activer value bets haut edge/i }),
+      screen.getByRole('switch', { name: /activer signaux forts/i }),
     );
     expect(toggleMutate).toHaveBeenCalledWith(false);
   });
@@ -172,7 +172,7 @@ describe('RuleRow', () => {
       ),
     );
     await user.click(
-      screen.getByRole('button', { name: /menu value bets haut edge/i }),
+      screen.getByRole('button', { name: /menu signaux forts/i }),
     );
     await user.click(screen.getByRole('menuitem', { name: /modifier/i }));
     expect(onEdit).toHaveBeenCalledWith(VALUE_RULE);
@@ -191,7 +191,7 @@ describe('RuleRow', () => {
       ),
     );
     await user.click(
-      screen.getByRole('button', { name: /menu value bets haut edge/i }),
+      screen.getByRole('button', { name: /menu signaux forts/i }),
     );
     await user.click(screen.getByRole('menuitem', { name: /supprimer/i }));
     expect(onDeleteRequest).toHaveBeenCalledWith(VALUE_RULE);
@@ -210,6 +210,8 @@ describe('RuleRow', () => {
     // Wallet icon is surfaced via data-lucide / aria-label on the wrapper.
     const icon = screen.getByTestId('rule-row-icon');
     expect(icon.getAttribute('data-icon')).toBe('wallet');
+    expect(screen.getByText(/Baisse max ≥ 10%/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Drawdown/i)).not.toBeInTheDocument();
   });
 
   it('renders a Star icon for safe kick-off rules', () => {

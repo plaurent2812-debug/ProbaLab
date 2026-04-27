@@ -18,7 +18,7 @@ export function PremiumCTA({ 'data-testid': dataTestId = 'premium-cta' }: Props)
         PREMIUM · 14,99€/mois
       </h3>
       <p className="mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
-        Value bets illimités, analyses IA, bankroll, alertes custom.
+        Pronos recommandés, analyses automatiques, suivi du capital et alertes.
       </p>
       <Link
         to="/premium"

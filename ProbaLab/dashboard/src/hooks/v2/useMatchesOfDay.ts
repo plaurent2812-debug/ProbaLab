@@ -134,7 +134,7 @@ function buildTopValueBet(row: BackendMatchRow): ValueBet | undefined {
     market: '1X2',
     edgePct: row.edge_pct,
     bestOdd: 0,
-    bestBook: 'Pinnacle',
+    bestBook: 'Betclic',
     kellyPct: 0,
   };
 }

@@ -37,6 +37,7 @@ from api.routers import admin as admin_router
 from api.routers import best_bets as best_bets_router
 from api.routers import email as email_router
 from api.routers import expert_picks as expert_picks_router
+from api.routers import mlops as mlops_router
 from api.routers import monitoring as monitoring_router
 from api.routers import news as news_router
 from api.routers import nhl, players, stripe_webhook, trigger
@@ -115,6 +116,7 @@ app.include_router(admin_router.router)
 app.include_router(best_bets_router.router)
 app.include_router(email_router.router)
 app.include_router(expert_picks_router.router)
+app.include_router(mlops_router.router)
 app.include_router(monitoring_router.router)
 app.include_router(news_router.router)
 app.include_router(performance_router.router)

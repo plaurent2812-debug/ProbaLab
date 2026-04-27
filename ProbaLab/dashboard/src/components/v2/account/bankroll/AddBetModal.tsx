@@ -11,7 +11,7 @@ export interface PrefilledFixture {
   market: string;
   selection: string;
   odds: number;
-  /** Stake suggestion from Kelly — optional prefill. */
+  /** Suggested stake — optional prefill. */
   stake?: number;
 }
 
@@ -41,7 +41,7 @@ const MARKET_OPTIONS = [
  * by `useAddBet`.
  *
  * `prefilledFixture` is used to drop in from a match page CTA ("Suivre
- * dans mon bankroll"). When omitted, the form starts empty except for
+ * dans mon capital"). When omitted, the form starts empty except for
  * the default market value.
  */
 export function AddBetModal({
@@ -97,7 +97,7 @@ export function AddBetModal({
       open={open}
       onOpenChange={onOpenChange}
       title="Ajouter un pari"
-      description="Enregistre un pari dans ton bankroll."
+      description="Enregistre un pari dans ton capital."
       data-testid={dataTestId}
       footer={
         <>

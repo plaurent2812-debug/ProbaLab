@@ -41,14 +41,14 @@ describe('NotificationsTab', () => {
 
   it('renders rules from the API', async () => {
     render(wrap(<NotificationsTab />));
-    await screen.findByText(/value bets haut edge/i);
+    await screen.findByText(/signaux forts/i);
     expect(screen.getByText(/safe du jour kick-off/i)).toBeInTheDocument();
   });
 
   it('opens the RuleBuilderModal when "Nouvelle règle" is clicked', async () => {
     const user = userEvent.setup();
     render(wrap(<NotificationsTab />));
-    await screen.findByText(/value bets haut edge/i);
+    await screen.findByText(/signaux forts/i);
     await user.click(
       screen.getByRole('button', { name: /\+?\s*nouvelle règle/i }),
     );
@@ -60,9 +60,9 @@ describe('NotificationsTab', () => {
   it('opens the RuleBuilderModal in edit mode when Modifier is clicked', async () => {
     const user = userEvent.setup();
     render(wrap(<NotificationsTab />));
-    await screen.findByText(/value bets haut edge/i);
+    await screen.findByText(/signaux forts/i);
     await user.click(
-      screen.getByRole('button', { name: /menu value bets haut edge/i }),
+      screen.getByRole('button', { name: /menu signaux forts/i }),
     );
     await user.click(screen.getByRole('menuitem', { name: /modifier/i }));
     expect(
@@ -112,7 +112,7 @@ describe('NotificationsTab', () => {
 
   it('has no axe violations', async () => {
     const { container } = render(wrap(<NotificationsTab />));
-    await screen.findByText(/value bets haut edge/i);
+    await screen.findByText(/signaux forts/i);
     expect(await axe(container)).toHaveNoViolations();
   });
 });

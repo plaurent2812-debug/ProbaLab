@@ -48,7 +48,7 @@ export function Hero() {
             className="gap-2 border-emerald-500/30 bg-emerald-500/5 text-emerald-400 backdrop-blur"
           >
             <Sparkles className="h-3 w-3" />
-            Nouveau · CLV public vs Pinnacle
+            Nouveau · analyses et probabilités en temps réel
           </Badge>
         </motion.div>
 
@@ -73,9 +73,8 @@ export function Hero() {
           variants={fadeUp}
           className="mx-auto mt-8 max-w-2xl text-balance text-lg text-slate-400 md:text-xl"
         >
-          Le seul pronostiqueur français qui publie son{' '}
-          <strong className="text-slate-200">Closing Line Value</strong> vs Pinnacle, en
-          temps réel. Pas de promesses, que des chiffres vérifiables.
+          Des probabilités sportives mises à jour avec les cotes du marché, des analyses
+          courtes, et des pronos recommandés quand le modèle détecte un signal fort.
         </motion.p>
 
         <motion.div

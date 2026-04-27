@@ -13,7 +13,7 @@ import type { CreateRuleInput } from '@/hooks/v2/useNotificationRules';
 import {
   mockMatches,
   mockPerformance,
-  mockSafePick,
+  mockSafePickResponse,
   mockMatchDetailById,
   mockAnalysisById,
   mockTrackRecordLive,
@@ -30,8 +30,32 @@ import {
 
 const API = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
 
+function toBackendMatch(match: (typeof mockMatches)[number]) {
+  return {
+    fixture_id: match.fixtureId,
+    sport: match.sport,
+    league_id: match.league.id,
+    league_name: match.league.name,
+    home_team: match.home.name,
+    away_team: match.away.name,
+    home_logo: match.home.logoUrl ?? null,
+    away_logo: match.away.logoUrl ?? null,
+    kickoff_utc: match.kickoffUtc,
+    prediction: {
+      proba_home: match.prob1x2.home * 100,
+      proba_draw: match.prob1x2.draw * 100,
+      proba_away: match.prob1x2.away * 100,
+      confidence_score: match.signals.includes('high_confidence') ? 8 : 6,
+    },
+    edge_pct: match.topValueBet?.edgePct ?? 0,
+    signals: match.signals.map((signal) =>
+      signal === 'high_confidence' ? 'confidence' : signal,
+    ),
+  };
+}
+
 export const handlers = [
-  http.get(`${API}/api/safe-pick`, () => HttpResponse.json(mockSafePick)),
+  http.get(`${API}/api/safe-pick`, () => HttpResponse.json(mockSafePickResponse)),
 
   http.get(`${API}/api/matches`, ({ request }) => {
     const url = new URL(request.url);
@@ -47,24 +71,23 @@ export const handlers = [
       matches = matches.filter((m) => m.signals.includes('value'));
     }
 
-    const bySport: Record<Sport, number> = {
-      football: matches.filter((m) => m.sport === 'football').length,
-      nhl: matches.filter((m) => m.sport === 'nhl').length,
-    };
-
-    const byLeague = matches.reduce<Record<string, number>>((acc, m) => {
-      acc[m.league.id] = (acc[m.league.id] ?? 0) + 1;
+    const groupsByLeague = matches.reduce<
+      Record<string, { league_id: string; league_name: string; matches: ReturnType<typeof toBackendMatch>[] }>
+    >((acc, m) => {
+      const key = m.league.id;
+      acc[key] ??= {
+        league_id: key,
+        league_name: m.league.name,
+        matches: [],
+      };
+      acc[key].matches.push(toBackendMatch(m));
       return acc;
     }, {});
 
     return HttpResponse.json({
       date: url.searchParams.get('date') ?? '2026-04-21',
-      matches,
-      counts: {
-        total: matches.length,
-        bySport,
-        byLeague,
-      },
+      total: matches.length,
+      groups: Object.values(groupsByLeague),
     });
   }),
 

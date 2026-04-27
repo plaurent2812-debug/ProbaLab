@@ -17,12 +17,12 @@ const FREE_FEATURES = [
 ];
 
 const PREMIUM_FEATURES = [
-  'Prédictions illimitées + value bets',
+  'Prédictions illimitées + pronos recommandés',
   'Tous marchés (BTTS, O/U, Handicaps, Score exact)',
-  'Bankroll + Kelly + ROI par marché',
+  'Suivi du capital + performance par marché',
   'Notifications Telegram / Push / Email',
   'Combos Safe / Fun / Jackpot',
-  'Analyses narratives Gemini',
+  'Analyses de match générées automatiquement',
 ];
 
 function FeatureList({ items }: { items: string[] }) {

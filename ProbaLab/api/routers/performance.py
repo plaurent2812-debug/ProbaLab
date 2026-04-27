@@ -12,11 +12,13 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, HTTPException, Query
 
+from api.cache import TTLCache
 from src.config import supabase
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["Performance"])
+_performance_summary_cache = TTLCache(ttl=300, name="performance_summary")
 
 
 @router.get(
@@ -551,6 +553,83 @@ def _compute_market_performance(days: int = 30) -> dict:
         }
 
     return dict(sorted(result.items(), key=lambda x: x[1]["roi"], reverse=True))
+
+
+def _weighted_roi(markets: dict) -> float:
+    total = sum((m.get("total") or 0) for m in markets.values())
+    if not total:
+        return 0.0
+    return round(
+        sum(float(m.get("roi") or 0.0) * int(m.get("total") or 0) for m in markets.values())
+        / total,
+        2,
+    )
+
+
+def _safe_performance(days: int) -> dict:
+    try:
+        data = get_performance(days=days)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        logger.warning("performance summary: get_performance failed for days=%s", days, exc_info=True)
+        return {}
+
+
+def _safe_market_roi(days: int) -> float:
+    try:
+        return _weighted_roi(_compute_market_performance(days=days))
+    except Exception:
+        logger.warning("performance summary: market ROI failed for days=%s", days, exc_info=True)
+        return 0.0
+
+
+@router.get(
+    "/performance/summary",
+    summary="V2 landing KPIs (ROI, accuracy, Brier 7J, bankroll)",
+    responses={500: {"description": "Internal server error"}},
+)
+def get_performance_summary(
+    window: int = Query(
+        30,
+        description="Rolling window in days. Only 7, 30 and 90 are supported.",
+        ge=7,
+        le=90,
+    ),
+):
+    """Return the exact KPI shape consumed by the V2 landing stat strip."""
+    if window not in (7, 30, 90):
+        raise HTTPException(status_code=422, detail="window must be one of 7, 30, 90")
+
+    return _performance_summary_cache.get_or_set(
+        key=f"window:{window}",
+        factory=lambda: _build_performance_summary(window),
+        ttl=300,
+    )
+
+
+def _build_performance_summary(window: int) -> dict:
+    perf_window = _safe_performance(window)
+    perf_7 = _safe_performance(7)
+    perf_14 = _safe_performance(14)
+
+    roi_window = _safe_market_roi(window)
+    roi_7 = _safe_market_roi(7)
+    roi_14 = _safe_market_roi(14)
+
+    accuracy_value = float(perf_window.get("accuracy_1x2") or 0.0)
+    accuracy_delta = round(
+        float(perf_7.get("accuracy_1x2") or 0.0) - float(perf_14.get("accuracy_1x2") or 0.0),
+        1,
+    )
+    brier_7 = float(perf_7.get("brier_score_1x2_normalized") or 0.0)
+    brier_14 = float(perf_14.get("brier_score_1x2_normalized") or 0.0)
+
+    return {
+        "roi30d": {"value": roi_window, "deltaVs7d": round(roi_7 - roi_14, 2)},
+        "accuracy": {"value": accuracy_value, "deltaVs7d": accuracy_delta},
+        "brier7d": {"value": brier_7, "deltaVs7d": round(brier_7 - brier_14, 3)},
+        "bankroll": {"value": round(1000.0 * (1.0 + roi_window / 100.0), 2), "currency": "EUR"},
+    }
 
 
 @router.get(

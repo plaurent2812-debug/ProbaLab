@@ -20,7 +20,7 @@ describe('PricingCards', () => {
 
   it('highlights Premium with the RECOMMANDÉ amber badge', () => {
     render(wrap(<PricingCards />));
-    expect(screen.getByText(/recommandé/i)).toBeInTheDocument();
+    expect(screen.getByText('RECOMMANDÉ')).toBeInTheDocument();
   });
 
   it('renders the Free CTA going to /register', () => {
@@ -39,9 +39,13 @@ describe('PricingCards', () => {
     render(wrap(<PricingCards />));
     // Free has at least one of these.
     expect(screen.getByText(/3 prédictions/i)).toBeInTheDocument();
-    // Premium has bankroll + notifications + combos.
-    expect(screen.getByText(/bankroll/i)).toBeInTheDocument();
+    // Premium has simple bettor-facing feature labels.
+    expect(screen.getByText(/pronos recommandés/i)).toBeInTheDocument();
+    expect(screen.getByText(/suivi du capital/i)).toBeInTheDocument();
     expect(screen.getByText(/notifications/i)).toBeInTheDocument();
+    expect(screen.queryByText(/bankroll/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Kelly/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Gemini/i)).not.toBeInTheDocument();
   });
 
   it('accepts a custom data-testid prop', () => {

@@ -7,8 +7,21 @@ interface Props {
   'data-testid'?: string;
 }
 
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function formatOdd(value: unknown): string {
+  return isFiniteNumber(value) ? value.toFixed(2) : '—';
+}
+
+function probabilityPercent(value: unknown): number {
+  if (!isFiniteNumber(value)) return 0;
+  return Math.round(Math.max(0, Math.min(1, value)) * 100);
+}
+
 export function SafeOfTheDayCard({ data, 'data-testid': dataTestId = 'safe-of-the-day-card' }: Props) {
-  if (!data) {
+  if (!data || !isFiniteNumber(data.odd) || typeof data.betLabel !== 'string') {
     return (
       <section
         data-testid={dataTestId}
@@ -21,15 +34,15 @@ export function SafeOfTheDayCard({ data, 'data-testid': dataTestId = 'safe-of-th
       </section>
     );
   }
-  const pct = Math.round(data.probability * 100);
+  const pct = probabilityPercent(data.probability);
   return (
     <section
       data-testid={dataTestId}
-      className="rounded-xl p-6 shadow-sm"
+      className="rounded-[24px] p-5"
       style={{
-        borderLeft: '3px solid var(--primary)',
+        border: '1px solid rgba(96,165,250,0.24)',
         background:
-          'linear-gradient(135deg, rgba(16,185,129,0.12) 0%, var(--surface) 70%)',
+          'radial-gradient(circle at 0% 0%, rgba(96,165,250,0.18), transparent 36%), linear-gradient(160deg, rgba(15,23,42,0.96), rgba(17,24,39,0.88))',
       }}
     >
       <div className="flex items-center justify-between mb-4">
@@ -38,7 +51,7 @@ export function SafeOfTheDayCard({ data, 'data-testid': dataTestId = 'safe-of-th
           style={{ color: 'var(--primary)' }}
         >
           <Star aria-hidden="true" size={14} />
-          SAFE · PRONOSTIC DU JOUR
+          PRONO · RECOMMANDÉ
         </span>
         <span
           className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
@@ -58,7 +71,7 @@ export function SafeOfTheDayCard({ data, 'data-testid': dataTestId = 'safe-of-th
           className="font-bold tabular-nums"
           style={{ fontSize: 32, color: 'var(--primary)', fontVariantNumeric: 'tabular-nums' }}
         >
-          {data.odd.toFixed(2)}
+          {formatOdd(data.odd)}
         </span>
         <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
           Probabilité {pct}%
@@ -78,9 +91,35 @@ export function SafeOfTheDayCard({ data, 'data-testid': dataTestId = 'safe-of-th
           style={{ width: `${pct}%`, background: 'var(--primary)' }}
         />
       </div>
-      <p className="mt-4 text-sm leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-        {data.justification}
-      </p>
+      {data.justification && (
+        <p className="mt-4 text-sm leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+          {data.justification}
+        </p>
+      )}
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        <div
+          className="rounded-xl p-3"
+          style={{ border: '1px solid var(--border)', background: 'rgba(255,255,255,0.03)' }}
+        >
+          <span className="block text-[11px]" style={{ color: 'var(--text-muted)' }}>
+            Niveau de risque
+          </span>
+          <strong className="mt-1 block text-sm" style={{ color: 'var(--primary)' }}>
+            Prudent
+          </strong>
+        </div>
+        <div
+          className="rounded-xl p-3"
+          style={{ border: '1px solid var(--border)', background: 'rgba(255,255,255,0.03)' }}
+        >
+          <span className="block text-[11px]" style={{ color: 'var(--text-muted)' }}>
+            Confiance
+          </span>
+          <strong className="mt-1 block text-sm" style={{ color: 'var(--text)' }}>
+            {pct}%
+          </strong>
+        </div>
+      </div>
       <Link
         to={`/matchs/${data.fixtureId}`}
         className="mt-4 inline-block text-sm font-medium focus-visible:outline focus-visible:outline-2"

@@ -84,7 +84,7 @@ export function MatchRow({
             }}
           >
             <Star aria-hidden="true" size={10} />
-            SAFE
+            Prono recommandé
           </span>
         )}
         {topValueBet && <ValueBadge edge={topValueBet.edgePct / 100} />}

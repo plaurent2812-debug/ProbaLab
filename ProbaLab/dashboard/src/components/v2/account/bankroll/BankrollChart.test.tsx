@@ -30,6 +30,8 @@ const curve: Array<{ date: string; balance: number }> = Array.from(
 describe('BankrollChart', () => {
   it('renders the four range toggles', () => {
     render(<BankrollChart curve={curve} />);
+    expect(screen.getByRole('heading', { name: /évolution du capital/i })).toBeInTheDocument();
+    expect(screen.queryByText(/bankroll/i)).not.toBeInTheDocument();
     for (const label of ['7j', '30j', '90j', 'Tout']) {
       expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
     }

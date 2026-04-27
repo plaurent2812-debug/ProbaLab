@@ -9,8 +9,8 @@ interface QA {
 
 const ENTRIES: QA[] = [
   {
-    q: 'Pourquoi CLV vs ROI ?',
-    a: "Le ROI mesure le résultat passé — le CLV mesure si nos cotes battent le marché à la fermeture. Un CLV > 0 prouve un edge durable : statistiquement, le ROI suit le CLV sur 12 mois. Les tipsters publient du ROI parce qu'il est biaisé par la chance ; nous publions les deux.",
+    q: 'Pourquoi afficher vos résultats ?',
+    a: "Parce qu'un bon service de pronostics doit être vérifiable. Nous affichons les performances passées, la qualité des probabilités et les mises à jour du modèle pour que vous puissiez juger sur des faits.",
   },
   {
     q: 'Puis-je annuler ?',
@@ -18,7 +18,7 @@ const ENTRIES: QA[] = [
   },
   {
     q: 'Vous vendez des pronos garantis ?',
-    a: "Non. Aucun pari n'est garanti — nous publions des probabilités calibrées (Brier 0,21 sur 30j) et vous aidez à miser uniquement quand un edge existe. Le bon ROI vient du nombre de paris +EV, pas du feeling.",
+    a: "Non. Aucun pari n'est garanti. ProbaLab aide à mieux décider avec des probabilités, des niveaux de confiance et des explications courtes, pas avec des promesses de gain.",
   },
 ];
 
@@ -26,7 +26,7 @@ const ENTRIES: QA[] = [
  * 3-card FAQ for the Premium landing.
  *
  * Short questions chosen to defuse the most common objections :
- *   1) Why CLV and not just ROI ?
+ *   1) Why public results ?
  *   2) Can I cancel ?
  *   3) Are you selling guaranteed tips ?
  *

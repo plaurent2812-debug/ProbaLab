@@ -21,10 +21,11 @@ export function StatsComparative({
   return (
     <section
       data-testid={dataTestId}
-      className="rounded-xl border border-slate-200 bg-white p-4"
+      className="rounded-[22px] p-4"
+      style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}
     >
       {label && (
-        <h3 className="mb-3 text-sm font-semibold text-slate-900">{label}</h3>
+        <h3 className="mb-3 text-sm font-semibold" style={{ color: 'var(--text)' }}>{label}</h3>
       )}
       <ul className="space-y-3">
         {stats.map((s) => {
@@ -42,30 +43,32 @@ export function StatsComparative({
               className="flex items-center gap-3 text-xs"
             >
               <span
-                className={`w-10 text-right font-semibold tabular-nums ${
-                  homeBest ? 'text-emerald-600' : 'text-slate-600'
-                }`}
+                className="w-10 text-right font-semibold tabular-nums"
+                style={{ color: homeBest ? 'var(--primary)' : 'var(--text-muted)' }}
               >
                 {format(s.home_value, s.unit)}
               </span>
-              <div className="flex h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
+              <div className="flex h-2 flex-1 overflow-hidden rounded-full" style={{ background: 'rgba(255,255,255,0.06)' }}>
                 <div
-                  className={homeBest ? 'bg-emerald-500' : 'bg-slate-400'}
-                  style={{ width: `${homePct}%` }}
+                  style={{
+                    width: `${homePct}%`,
+                    background: homeBest ? 'var(--primary)' : 'rgba(148,163,184,0.7)',
+                  }}
                 />
                 <div
-                  className={!homeBest ? 'bg-emerald-500' : 'bg-slate-400'}
-                  style={{ width: `${100 - homePct}%` }}
+                  style={{
+                    width: `${100 - homePct}%`,
+                    background: !homeBest ? 'var(--primary)' : 'rgba(148,163,184,0.7)',
+                  }}
                 />
               </div>
               <span
-                className={`w-10 text-left font-semibold tabular-nums ${
-                  !homeBest ? 'text-emerald-600' : 'text-slate-600'
-                }`}
+                className="w-10 text-left font-semibold tabular-nums"
+                style={{ color: !homeBest ? 'var(--primary)' : 'var(--text-muted)' }}
               >
                 {format(s.away_value, s.unit)}
               </span>
-              <span className="ml-2 min-w-[120px] text-slate-500">
+              <span className="ml-2 min-w-[120px]" style={{ color: 'var(--text-muted)' }}>
                 {s.label}
               </span>
             </li>

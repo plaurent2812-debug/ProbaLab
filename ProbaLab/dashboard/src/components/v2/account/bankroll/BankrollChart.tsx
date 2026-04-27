@@ -71,7 +71,7 @@ export function BankrollChart({
             margin: 0,
           }}
         >
-          Évolution bankroll
+          Évolution du capital
         </h3>
         <div
           role="group"

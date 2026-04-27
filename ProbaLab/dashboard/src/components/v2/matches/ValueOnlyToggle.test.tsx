@@ -25,9 +25,9 @@ describe('ValueOnlyToggle', () => {
     expect(onChange).toHaveBeenCalledWith(true);
   });
 
-  it('displays Value only label', () => {
+  it('displays strong signals label', () => {
     render(<ValueOnlyToggle value={false} onChange={() => {}} />);
-    expect(screen.getByRole('button', { name: /value/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /signaux forts/i })).toBeInTheDocument();
   });
 
   it('accepts data-testid prop', () => {

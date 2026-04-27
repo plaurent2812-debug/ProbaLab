@@ -42,8 +42,9 @@ describe('BankrollSettingsModal', () => {
     const dialog = screen.getByRole('dialog');
     expect(dialog).toHaveAttribute('aria-modal', 'true');
     expect(
-      screen.getByRole('heading', { level: 2, name: /paramètres du bankroll/i }),
+      screen.getByRole('heading', { level: 2, name: /paramètres du capital/i }),
     ).toBeInTheDocument();
+    expect(screen.queryByText(/bankroll/i)).not.toBeInTheDocument();
   });
 
   it('prefills fields with the values from useBankrollSettings', async () => {
@@ -51,7 +52,7 @@ describe('BankrollSettingsModal', () => {
     await waitFor(() => {
       expect(screen.getByLabelText(/mise initiale/i)).toHaveValue(1000);
     });
-    expect(screen.getByLabelText(/fraction de kelly/i)).toHaveValue('0.25');
+    expect(screen.getByLabelText(/niveau de mise automatique/i)).toHaveValue('0.25');
     // Slider value reflected in input
     expect(screen.getByLabelText(/plafond de mise/i)).toHaveValue('5');
   });
@@ -71,7 +72,7 @@ describe('BankrollSettingsModal', () => {
     await user.clear(initial);
     await user.type(initial, '2000');
 
-    const kelly = screen.getByLabelText(/fraction de kelly/i);
+    const kelly = screen.getByLabelText(/niveau de mise automatique/i);
     await user.selectOptions(kelly, '0.5');
 
     await user.click(screen.getByRole('button', { name: /enregistrer/i }));

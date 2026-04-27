@@ -70,6 +70,24 @@ describe('AppV2', () => {
     ).toBeInTheDocument();
   });
 
+  it('passes the authenticated admin role to the V2 header', async () => {
+    vi.spyOn(v2User, 'useV2User').mockReturnValue({
+      role: 'admin',
+      isVisitor: false,
+    });
+    renderWithProviders(
+      <MemoryRouter initialEntries={['/']}>
+        <AppV2Content />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole('link', { name: /^admin$/i })).toHaveAttribute(
+      'href',
+      '/admin',
+    );
+    expect(screen.getByLabelText(/statut : admin/i)).toBeInTheDocument();
+  });
+
   it('renders the NotificationsTab at /compte/notifications (not the stub)', async () => {
     vi.spyOn(v2User, 'useV2User').mockReturnValue({
       role: 'premium',

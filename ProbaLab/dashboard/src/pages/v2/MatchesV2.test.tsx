@@ -55,6 +55,20 @@ describe('MatchesV2', () => {
     expect(screen.getAllByTestId('match-row-desktop').length).toBeGreaterThan(0);
   });
 
+  it('frames the desktop page as a premium daily analysis dashboard', async () => {
+    renderAt(<MatchesV2 />);
+    await waitFor(() => {
+      expect(screen.getByTestId('matches-day-overview')).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole('heading', { name: /matchs à analyser/i })).toBeInTheDocument();
+    expect(screen.getByText(/lecture du jour/i)).toBeInTheDocument();
+    expect(screen.getByText(/pronos recommandés/i)).toBeInTheDocument();
+    expect(screen.getByText(/signaux modèle/i)).toBeInTheDocument();
+    expect(screen.getByText('Match prioritaire')).toBeInTheDocument();
+    expect(screen.queryByText(/value bet/i)).not.toBeInTheDocument();
+  });
+
   it('renders mobile layout under md breakpoint', async () => {
     setViewportWidth(375);
     renderAt(<MatchesV2 />);

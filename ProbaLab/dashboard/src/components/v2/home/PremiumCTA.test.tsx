@@ -14,6 +14,8 @@ describe('PremiumCTA', () => {
   it('renders heading, price and CTA link to /premium', () => {
     render(wrap(<PremiumCTA />));
     expect(screen.getByText(/14,99/)).toBeInTheDocument();
+    expect(screen.getByText(/suivi du capital/i)).toBeInTheDocument();
+    expect(screen.queryByText(/bankroll/i)).not.toBeInTheDocument();
     const cta = screen.getByRole('link', { name: /Activer l'abonnement/i });
     expect(cta).toHaveAttribute('href', '/premium');
   });

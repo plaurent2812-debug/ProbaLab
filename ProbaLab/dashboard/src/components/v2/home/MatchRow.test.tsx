@@ -24,14 +24,16 @@ describe('MatchRow', () => {
     expect(screen.getByText('58%')).toBeInTheDocument();
   });
 
-  it('shows SAFE chip when signal present', () => {
+  it('shows bettor-friendly recommended pick chip when safe signal is present', () => {
     renderRow(mockMatches[0]);
-    expect(screen.getByText(/SAFE/i)).toBeInTheDocument();
+    expect(screen.getByText(/Prono recommandé/i)).toBeInTheDocument();
+    expect(screen.queryByText(/SAFE/i)).not.toBeInTheDocument();
   });
 
-  it('shows VALUE badge with edge when top value bet present', () => {
+  it('shows model signal wording when top opportunity is present', () => {
     renderRow(mockMatches[2]); // Inter vs Milan: edgePct 7.2
     expect(screen.getByText(/\+7\.2%/)).toBeInTheDocument();
+    expect(screen.getByText(/SIGNAL/i)).toBeInTheDocument();
   });
 
   it('exposes proba bar with comprehensive aria-label', () => {

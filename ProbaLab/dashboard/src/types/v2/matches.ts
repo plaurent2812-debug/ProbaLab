@@ -29,7 +29,7 @@ export interface ValueBet {
   market: string; // ex: "BTTS Oui"
   edgePct: number; // ex: 7.2
   bestOdd: number; // ex: 1.92
-  bestBook: string; // ex: "Pinnacle"
+  bestBook: string; // ex: "Betclic"
   kellyPct: number; // ex: 2.4
 }
 

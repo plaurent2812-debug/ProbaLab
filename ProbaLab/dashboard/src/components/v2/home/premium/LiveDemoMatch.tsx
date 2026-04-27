@@ -105,7 +105,7 @@ export function LiveDemoMatch({ match }: Props) {
           transition={{ duration: 0.5, delay: 0.1 }}
           className="mt-3 text-slate-400"
         >
-          Un match du jour, probabilités calibrées, value bet repéré.
+          Un match du jour, probabilités lisibles, prono recommandé quand le signal est fort.
         </motion.p>
       </div>
 
@@ -137,7 +137,7 @@ export function LiveDemoMatch({ match }: Props) {
             </div>
             <Badge className="gap-1 border-amber-500/30 bg-amber-500/10 text-amber-400">
               <Zap className="h-3 w-3" />
-              Value bet · +{edge.toFixed(1)}%
+              Prono recommandé
             </Badge>
           </div>
 
@@ -199,7 +199,7 @@ export function LiveDemoMatch({ match }: Props) {
               </div>
               <div>
                 <div className="text-sm font-semibold text-white">
-                  Kelly fraction · Stats avancées · Alerte
+                  Analyse complète · Stats avancées · Alerte
                 </div>
                 <div className="text-xs text-slate-500">Réservé aux comptes Premium</div>
               </div>

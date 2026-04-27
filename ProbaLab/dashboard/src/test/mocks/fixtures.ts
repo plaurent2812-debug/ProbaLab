@@ -78,7 +78,7 @@ export const mockMatches: MatchRowData[] = [
       market: 'Over 2.5',
       edgePct: 7.2,
       bestOdd: 1.92,
-      bestBook: 'Pinnacle',
+      bestBook: 'Betclic',
       kellyPct: 2.4,
     },
   },
@@ -94,7 +94,27 @@ export const mockSafePick: SafePick = {
   odd: 1.85,
   probability: 0.58,
   justification:
-    "PSG enchaîne 5 victoires à domicile avec xG moyen 2.3. Lens absent de ses 3 cadres défensifs. Valeur cote 1.85 vs proba 58% → edge 7.3%.",
+    "PSG enchaîne 5 victoires à domicile avec xG moyen 2.3. Lens absent de ses 3 cadres défensifs. La cote 1.85 reste intéressante face à notre probabilité de 58% : signal modèle +7.3%.",
+};
+
+export const mockSafePickResponse = {
+  date: '2026-04-21',
+  safe_pick: {
+    type: 'single' as const,
+    fixture_id: 'fx-1',
+    odds: 1.85,
+    confidence: 0.58,
+    market: '1X2',
+    selection: 'home',
+    kickoff_utc: '2026-04-21T19:00:00Z',
+    league_id: 61,
+    league_name: 'Ligue 1',
+    home_team: 'PSG',
+    away_team: 'Lens',
+    sport: 'football',
+    odds_source: 'real',
+  },
+  fallback_message: null,
 };
 
 export const mockPerformance: PerformanceSummary = {
@@ -250,12 +270,12 @@ export const mockMatchDetailPsgLens: MatchDetailPayload = {
     confidence: 0.58,
     kelly_fraction: 0.042,
     edge: 0.076,
-    book_name: 'Pinnacle',
+    book_name: 'Betclic',
   },
   value_bets: [
     {
       market_key: '1x2.home',
-      label: 'Victoire PSG @ Pinnacle',
+      label: 'Victoire PSG @ Betclic',
       probability: 0.58,
       best_odds: 1.85,
       edge: 0.076,
@@ -279,7 +299,7 @@ export const mockAnalysisPsgLens: AnalysisPayload = {
   paragraphs: [
     "Paris Saint-Germain reste sur 4 victoires consécutives à domicile avec un xG moyen de 2,3 et une défense solide (3 clean sheets sur les 5 derniers).",
     "Lens peine à l'extérieur (1 victoire sur 5) et devra faire sans Danso, suspendu pour accumulation de cartons, ce qui fragilise la charnière centrale.",
-    "Statistiquement, le scénario attendu est un PSG dominant la possession (~62%) avec un score probable 2-1 ou 3-1. La cote 1,85 sur la victoire domicile offre un edge de 7,6% vs notre probabilité modèle de 58%.",
+    "Statistiquement, le scénario attendu est un PSG dominant la possession (~62%) avec un score probable 2-1 ou 3-1. La cote 1,85 sur la victoire domicile ressort avec un signal modèle de +7,6% face à notre probabilité de 58%.",
   ],
   generated_at: '2026-04-21T10:00:00Z',
   is_teaser: false,
@@ -483,14 +503,14 @@ export const mockNotificationChannels: NotificationChannelsStatus = {
 
 /**
  * Three exemplary rules covering the three main user intents :
- *  1. catch high-edge value bets (email + telegram).
+ *  1. catch strong model signals (email + telegram).
  *  2. remind the user of the kick-off of today's Safe pick.
- *  3. surface a bankroll drawdown with a pause suggestion.
+ *  3. surface a capital loss alert with a pause suggestion.
  */
 export const mockNotificationRules: NotificationRule[] = [
   {
     id: 'rule-001',
-    name: 'Value bets haut edge',
+    name: 'Signaux forts',
     conditions: [{ type: 'edge_min', value: 8 }],
     logic: 'AND',
     channels: ['email', 'telegram'],
@@ -508,7 +528,7 @@ export const mockNotificationRules: NotificationRule[] = [
   },
   {
     id: 'rule-003',
-    name: 'Drawdown critique',
+    name: 'Baisse max critique',
     conditions: [{ type: 'bankroll_drawdown', value: 10 }],
     logic: 'AND',
     channels: ['email', 'telegram', 'push'],

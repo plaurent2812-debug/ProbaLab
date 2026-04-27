@@ -19,32 +19,38 @@ const STATUS_LABEL: Record<CompositionsStatus, string> = {
 };
 
 const STATUS_BG: Record<CompositionsStatus, string> = {
-  confirmed: 'bg-emerald-100 text-emerald-800',
-  probable: 'bg-amber-100 text-amber-800',
-  unavailable: 'bg-slate-100 text-slate-600',
+  confirmed: 'rgba(16,185,129,0.14)',
+  probable: 'rgba(251,191,36,0.14)',
+  unavailable: 'rgba(148,163,184,0.12)',
+};
+
+const STATUS_COLOR: Record<CompositionsStatus, string> = {
+  confirmed: '#34d399',
+  probable: '#fbbf24',
+  unavailable: 'var(--text-muted)',
 };
 
 function TeamLineup({ name, lineup }: { name: string; lineup: Lineup }) {
   return (
     <div>
       <div className="mb-2 flex items-center justify-between">
-        <span className="text-xs font-semibold text-slate-800">{name}</span>
-        <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-medium tabular-nums text-slate-600">
+        <span className="text-xs font-semibold" style={{ color: 'var(--text)' }}>{name}</span>
+        <span className="rounded px-2 py-0.5 text-[10px] font-medium tabular-nums" style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)' }}>
           {lineup.formation}
         </span>
       </div>
-      <ul className="space-y-1 text-xs text-slate-700">
+      <ul className="space-y-1 text-xs" style={{ color: 'var(--text)' }}>
         {lineup.starters.map((p) => (
           <li
             key={p.number}
             className="flex items-center gap-2"
             data-testid="lineup-player"
           >
-            <span className="inline-block w-6 text-right tabular-nums text-slate-500">
+            <span className="inline-block w-6 text-right tabular-nums" style={{ color: 'var(--text-muted)' }}>
               {p.number}
             </span>
             <span className="font-medium">{p.name}</span>
-            <span className="text-slate-400">{p.position}</span>
+            <span style={{ color: 'var(--text-faint)' }}>{p.position}</span>
           </li>
         ))}
       </ul>
@@ -64,22 +70,24 @@ export function CompositionsSection({
   return (
     <section
       data-testid={dataTestId}
-      className="rounded-xl border border-slate-200 bg-white p-4"
+      className="rounded-[22px] p-4"
+      style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}
     >
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-          <Users className="h-4 w-4 text-slate-500" aria-hidden="true" />
+        <h3 className="flex items-center gap-2 text-sm font-semibold" style={{ color: 'var(--text)' }}>
+          <Users className="h-4 w-4" style={{ color: 'var(--text-muted)' }} aria-hidden="true" />
           Compositions
         </h3>
         <span
           data-testid="compositions-status"
-          className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${STATUS_BG[status]}`}
+          className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+          style={{ background: STATUS_BG[status], color: STATUS_COLOR[status] }}
         >
           {STATUS_LABEL[status]}
         </span>
       </div>
       {unavailable ? (
-        <p className="text-xs text-slate-500">
+        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
           Compositions non communiquées.
         </p>
       ) : (

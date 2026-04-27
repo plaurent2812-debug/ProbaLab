@@ -6,6 +6,7 @@
  */
 
 export * from './FormBadge';
+export * from './MatchDecisionHero';
 export * from './MatchHero';
 export * from './MatchHeroCompact';
 export * from './StatsComparative';

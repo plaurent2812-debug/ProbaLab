@@ -10,13 +10,15 @@ function wrap(ui: React.ReactElement) {
 }
 
 describe('PremiumHero', () => {
-  it('renders the emerald label, main headline and CLV subtitle', () => {
+  it('renders the label, main headline and plain-language analysis subtitle', () => {
     render(wrap(<PremiumHero />));
     expect(screen.getByText(/PROBALAB PREMIUM/i)).toBeInTheDocument();
     expect(
       screen.getByRole('heading', { level: 1, name: /parier avec une vraie probabilité/i }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/CLV/i)).toBeInTheDocument();
+    expect(screen.getByText(/analyses sportives/i)).toBeInTheDocument();
+    expect(screen.queryByText(/CLV/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Pinnacle/i)).not.toBeInTheDocument();
   });
 
   it('exposes a primary CTA linking to /register', () => {

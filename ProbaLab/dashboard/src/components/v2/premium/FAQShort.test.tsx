@@ -10,9 +10,12 @@ describe('FAQShort', () => {
     expect(items).toHaveLength(3);
   });
 
-  it('mentions CLV in at least one question', () => {
+  it('uses accessible performance wording without CLV jargon', () => {
     render(<FAQShort />);
-    expect(screen.getAllByText(/CLV/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText(/pourquoi afficher vos résultats/i)).toBeInTheDocument();
+    expect(screen.queryByText(/CLV/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Brier/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/edge/i)).not.toBeInTheDocument();
   });
 
   it('features the cancel question and the garanties question', () => {

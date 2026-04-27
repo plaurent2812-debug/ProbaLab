@@ -26,7 +26,7 @@ interface Props {
 }
 
 /**
- * Bankroll hero row — five KPI tiles summarising the user's bankroll.
+ * Bankroll hero row — five KPI tiles summarising the user's tracked capital.
  *
  * Responsive: 2 columns on mobile, 5 columns from `lg`. Uses the
  * shared StatTile primitive so the tones + typography stay aligned
@@ -49,37 +49,37 @@ export function KPIStrip5({
     >
       <StatTile
         data-testid="tile-bankroll"
-        label="Bankroll"
+        label="Capital suivi"
         value={euro.format(bankroll.current_balance)}
         delta={formatDelta(bankroll.current_balance, bankroll.initial_balance)}
         tone={toneForSigned(bankroll.current_balance - bankroll.initial_balance)}
       />
       <StatTile
         data-testid="tile-roi-30d"
-        label="ROI 30J"
+        label="Résultat 30J"
         value={`${bankroll.roi_30d >= 0 ? '+' : ''}${bankroll.roi_30d.toFixed(1)}%`}
         delta="30 derniers jours"
         tone={roiTone}
       />
       <StatTile
         data-testid="tile-win-rate"
-        label="Win rate"
+        label="Taux de réussite"
         value={`${bankroll.win_rate.toFixed(1)}%`}
-        delta={`${bankroll.wins}W / ${bankroll.losses}L`}
+        delta={`${bankroll.wins} gagnés / ${bankroll.losses} perdus`}
         tone="neutral"
       />
       <StatTile
         data-testid="tile-drawdown"
-        label="Drawdown"
+        label="Baisse max"
         value={`${bankroll.drawdown_max_pct.toFixed(1)}%`}
         delta="Max"
         tone={drawdownTone}
       />
       <StatTile
         data-testid="tile-kelly"
-        label="Kelly actif"
+        label="Mise auto"
         value={bankroll.kelly_fraction_active.toFixed(2)}
-        delta="Fraction"
+        delta="Niveau"
         tone="neutral"
       />
     </div>

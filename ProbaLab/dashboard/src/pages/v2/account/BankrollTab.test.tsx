@@ -143,6 +143,7 @@ describe('BankrollTab', () => {
 
     render(wrap(<BankrollTab />));
     expect(screen.getByTestId('bankroll-error')).toBeInTheDocument();
+    expect(screen.getByText(/Impossible de charger ton capital/i)).toBeInTheDocument();
   });
 
   it('renders an empty state message when there is no bet', () => {
@@ -152,6 +153,8 @@ describe('BankrollTab', () => {
 
     render(wrap(<BankrollTab />));
     expect(screen.getByTestId('bankroll-empty')).toBeInTheDocument();
+    expect(screen.getByText(/suivre ton capital/i)).toBeInTheDocument();
+    expect(screen.queryByText(/bankroll/i)).not.toBeInTheDocument();
   });
 
   it('exposes data-testid="bankroll-tab" on the root', () => {

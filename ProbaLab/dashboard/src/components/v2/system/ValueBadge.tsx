@@ -5,7 +5,7 @@ export interface ValueBadgeProps {
 
 export function ValueBadge({ edge, 'data-testid': dataTestId = 'value-badge' }: ValueBadgeProps) {
   const pct = (edge * 100).toFixed(1);
-  const label = `Value bet +${pct}%`;
+  const label = `Signal modèle +${pct}%`;
   return (
     <span
       data-testid={dataTestId}
@@ -25,7 +25,7 @@ export function ValueBadge({ edge, 'data-testid': dataTestId = 'value-badge' }: 
       }}
     >
       <span aria-hidden="true" style={{ fontWeight: 700, fontSize: 10 }}>
-        VALUE
+        SIGNAL
       </span>
       +{pct}%
     </span>

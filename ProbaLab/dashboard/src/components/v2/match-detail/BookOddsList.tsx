@@ -39,8 +39,8 @@ export function BookOddsList({
   'data-testid': dataTestId = 'book-odds-list',
 }: BookOddsListProps) {
   const heading = (
-    <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900">
-      <BookOpen className="h-4 w-4 text-slate-500" aria-hidden="true" />
+    <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold" style={{ color: 'var(--text)' }}>
+      <BookOpen className="h-4 w-4" style={{ color: 'var(--text-muted)' }} aria-hidden="true" />
       Cotes bookmakers
     </h3>
   );
@@ -49,10 +49,11 @@ export function BookOddsList({
     return (
       <section
         data-testid={dataTestId}
-        className="rounded-xl border border-slate-200 bg-white p-4"
+        className="rounded-[22px] p-4"
+        style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}
       >
         {heading}
-        <p className="text-xs text-slate-500">
+        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
           Aucune cote disponible pour le moment.
         </p>
       </section>
@@ -64,7 +65,8 @@ export function BookOddsList({
   return (
     <section
       data-testid={dataTestId}
-      className="rounded-xl border border-slate-200 bg-white p-4"
+      className="rounded-[22px] p-4"
+      style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}
     >
       {heading}
       <ul
@@ -80,14 +82,15 @@ export function BookOddsList({
               data-testid={rowTestId}
               data-best={isBest}
               aria-label={`${b.bookmaker}, cote ${b.odds.toFixed(2)}`}
-              className={`flex items-center gap-3 rounded-lg border p-3 text-sm ${
-                isBest
-                  ? 'border-emerald-500 bg-emerald-50'
-                  : 'border-slate-200 bg-white'
-              }`}
+              className="flex items-center gap-3 rounded-xl border p-3 text-sm"
+              style={{
+                borderColor: isBest ? 'var(--primary)' : 'var(--border)',
+                background: isBest ? 'rgba(16,185,129,0.08)' : 'rgba(255,255,255,0.03)',
+              }}
             >
               <span
-                className={`flex-1 ${isBest ? 'font-semibold text-slate-900' : 'text-slate-700'}`}
+                className="flex-1"
+                style={{ color: isBest ? 'var(--text)' : 'var(--text-muted)', fontWeight: isBest ? 700 : 500 }}
               >
                 {b.bookmaker}
               </span>

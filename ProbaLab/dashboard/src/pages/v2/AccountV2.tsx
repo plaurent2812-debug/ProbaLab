@@ -9,7 +9,7 @@ interface AccountTab {
 const TABS: readonly AccountTab[] = [
   { to: 'profil', label: 'Profil' },
   { to: 'abonnement', label: 'Abonnement' },
-  { to: 'bankroll', label: 'Bankroll' },
+  { to: 'bankroll', label: 'Capital' },
   { to: 'notifications', label: 'Notifications' },
 ];
 

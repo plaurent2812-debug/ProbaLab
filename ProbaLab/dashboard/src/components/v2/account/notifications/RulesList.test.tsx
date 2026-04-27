@@ -69,9 +69,9 @@ describe('RulesList', () => {
       ),
     );
     // Each fixture rule should appear.
-    await screen.findByText(/value bets haut edge/i);
+    await screen.findByText(/signaux forts/i);
     expect(screen.getByText(/safe du jour kick-off/i)).toBeInTheDocument();
-    expect(screen.getByText(/drawdown critique/i)).toBeInTheDocument();
+    expect(screen.getByText(/baisse max critique/i)).toBeInTheDocument();
   });
 
   it('renders an empty state when no rules are returned', async () => {
@@ -90,6 +90,10 @@ describe('RulesList', () => {
       ),
     );
     await screen.findByText(/aucune règle configurée/i);
+    expect(screen.getByText(/signal minimum/i)).toBeInTheDocument();
+    expect(screen.getByText(/baisse max/i)).toBeInTheDocument();
+    expect(screen.queryByText(/edge minimum/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/drawdown/i)).not.toBeInTheDocument();
   });
 
   it('calls onCreate when the "Nouvelle règle" button is clicked', async () => {
@@ -104,7 +108,7 @@ describe('RulesList', () => {
         />,
       ),
     );
-    await screen.findByText(/value bets haut edge/i);
+    await screen.findByText(/signaux forts/i);
     await user.click(
       screen.getByRole('button', { name: /\+?\s*nouvelle règle/i }),
     );
@@ -123,9 +127,9 @@ describe('RulesList', () => {
         />,
       ),
     );
-    await screen.findByText(/value bets haut edge/i);
+    await screen.findByText(/signaux forts/i);
     await user.click(
-      screen.getByRole('button', { name: /menu value bets haut edge/i }),
+      screen.getByRole('button', { name: /menu signaux forts/i }),
     );
     await user.click(screen.getByRole('menuitem', { name: /modifier/i }));
     expect(onEdit).toHaveBeenCalledTimes(1);
@@ -144,9 +148,9 @@ describe('RulesList', () => {
         />,
       ),
     );
-    await screen.findByText(/drawdown critique/i);
+    await screen.findByText(/baisse max critique/i);
     await user.click(
-      screen.getByRole('button', { name: /menu drawdown critique/i }),
+      screen.getByRole('button', { name: /menu baisse max critique/i }),
     );
     await user.click(screen.getByRole('menuitem', { name: /supprimer/i }));
     expect(onDeleteRequest).toHaveBeenCalledTimes(1);
@@ -198,7 +202,7 @@ describe('RulesList', () => {
         />,
       ),
     );
-    await screen.findByText(/value bets haut edge/i);
+    await screen.findByText(/signaux forts/i);
     expect(await axe(container)).toHaveNoViolations();
   });
 });

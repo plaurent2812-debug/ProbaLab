@@ -27,14 +27,16 @@ describe('RecoCard', () => {
     expect(hero).toHaveTextContent('2.10');
   });
 
-  it('renders the breakdown (confidence / kelly / edge)', () => {
+  it('renders the breakdown with bettor-friendly labels', () => {
     render(<RecoCard recommendation={reco} />);
-    // confidence: 74%
+    expect(screen.getByText(/Confiance/i)).toBeInTheDocument();
+    expect(screen.getByText(/Mise prudente/i)).toBeInTheDocument();
+    expect(screen.getByText(/Signal/i)).toBeInTheDocument();
     expect(screen.getByText(/74%/)).toBeInTheDocument();
-    // kelly: 3.5%
     expect(screen.getByText(/3\.5%/)).toBeInTheDocument();
-    // edge: +8%
     expect(screen.getByText(/\+8%/)).toBeInTheDocument();
+    expect(screen.queryByText(/Kelly/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Edge/i)).not.toBeInTheDocument();
   });
 
   it('renders the source book name', () => {
@@ -59,11 +61,12 @@ describe('RecoCard', () => {
     ).toBeInTheDocument();
   });
 
-  it('uses emerald gradient border-left styling', () => {
+  it('uses Sport Intelligence recommended pick styling', () => {
     render(<RecoCard recommendation={reco} />);
     const section = screen.getByTestId('reco-card');
-    expect(section.className).toMatch(/border/);
-    expect(section.className).toMatch(/emerald/);
+    expect(section.className).toMatch(/rounded-\[22px\]/);
+    expect(section.getAttribute('style')).toContain('rgba(96, 165, 250, 0.22)');
+    expect(screen.getByText(/prono recommandé/i)).toBeInTheDocument();
   });
 
   it('has no accessibility violations', async () => {

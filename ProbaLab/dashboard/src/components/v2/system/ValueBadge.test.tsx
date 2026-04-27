@@ -9,9 +9,10 @@ describe('ValueBadge', () => {
     expect(screen.getByText(/\+7\.2%/)).toBeInTheDocument();
   });
 
-  it('uses aria-label with VALUE prefix', () => {
+  it('uses aria-label with SIGNAL wording', () => {
     render(<ValueBadge edge={0.072} />);
-    expect(screen.getByLabelText(/value bet \+7\.2%/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/signal modèle \+7\.2%/i)).toBeInTheDocument();
+    expect(screen.getByText(/SIGNAL/i)).toBeInTheDocument();
   });
 
   it('rounds to one decimal', () => {

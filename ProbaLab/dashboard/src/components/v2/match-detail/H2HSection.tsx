@@ -46,13 +46,15 @@ export function H2HSection({
   return (
     <section
       data-testid={dataTestId}
-      className="rounded-xl border border-slate-200 bg-white p-4"
+      className="rounded-[22px] p-4"
+      style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}
     >
-      <h3 className="mb-3 text-sm font-semibold text-slate-900">Face à face</h3>
+      <h3 className="mb-3 text-sm font-semibold" style={{ color: 'var(--text)' }}>Face à face</h3>
       <div
         role="img"
         aria-label={ariaLabel}
-        className="flex h-3 overflow-hidden rounded-full bg-slate-100"
+        className="flex h-3 overflow-hidden rounded-full"
+        style={{ background: 'rgba(255,255,255,0.06)' }}
       >
         {homePct > 0 && (
           <div className="bg-emerald-500" style={{ width: `${homePct}%` }} />
@@ -64,7 +66,7 @@ export function H2HSection({
           <div className="bg-sky-500" style={{ width: `${awayPct}%` }} />
         )}
       </div>
-      <div className="mt-2 flex justify-between text-xs text-slate-600">
+      <div className="mt-2 flex justify-between text-xs" style={{ color: 'var(--text-muted)' }}>
         <span className="font-medium">
           {homeName} {home_wins}V
         </span>
@@ -74,14 +76,15 @@ export function H2HSection({
         </span>
       </div>
       {last_matches.length > 0 && (
-        <ul className="mt-4 space-y-2 border-t border-slate-100 pt-3">
+        <ul className="mt-4 space-y-2 border-t pt-3" style={{ borderColor: 'var(--border)' }}>
           {last_matches.map((m, i) => (
             <li
               key={`${m.date_utc}-${i}`}
               data-testid="h2h-row"
-              className="flex items-center justify-between text-xs text-slate-700"
+              className="flex items-center justify-between text-xs"
+              style={{ color: 'var(--text)' }}
             >
-              <span className="tabular-nums text-slate-500">
+              <span className="tabular-nums" style={{ color: 'var(--text-muted)' }}>
                 {formatDate(m.date_utc)}
               </span>
               <span className="font-medium">

@@ -80,7 +80,7 @@ export function BankrollTab() {
         <div
           data-testid="bankroll-skeleton"
           aria-busy="true"
-          aria-label="Chargement du bankroll"
+          aria-label="Chargement du capital"
           className="space-y-4"
         >
           <div className="h-24 animate-pulse rounded-xl bg-slate-100 dark:bg-slate-900" />
@@ -102,7 +102,7 @@ export function BankrollTab() {
         >
           <AlertCircle className="mt-0.5 h-4 w-4" aria-hidden="true" />
           <div>
-            <strong>Impossible de charger ton bankroll.</strong>
+            <strong>Impossible de charger ton capital.</strong>
             <p className="mt-1 text-rose-600 dark:text-rose-400">
               Réessaie plus tard ou rafraîchis la page.
             </p>
@@ -135,8 +135,8 @@ export function BankrollTab() {
             Aucun pari enregistré pour le moment.
           </p>
           <p className="mt-1">
-            Clique sur « + Ajouter un pari » pour commencer à suivre ta
-            bankroll.
+            Clique sur « + Ajouter un pari » pour commencer à suivre ton
+            capital.
           </p>
         </div>
       ) : (

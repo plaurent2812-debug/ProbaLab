@@ -36,7 +36,7 @@ beforeEach(() => {
 
 const RULE: NotificationRule = {
   id: 'rule-001',
-  name: 'Value bets haut edge',
+  name: 'Signaux forts',
   conditions: [{ type: 'edge_min', value: 8 }],
   logic: 'AND',
   channels: ['email'],
@@ -57,7 +57,7 @@ describe('DeleteRuleConfirm', () => {
       screen.getByRole('heading', { level: 2, name: /supprimer la règle/i }),
     ).toBeInTheDocument();
     // The name is surfaced inside the body copy.
-    expect(screen.getByText(/value bets haut edge/i)).toBeInTheDocument();
+    expect(screen.getByText(/signaux forts/i)).toBeInTheDocument();
   });
 
   it('calls useDeleteRule on confirm and closes the modal', async () => {

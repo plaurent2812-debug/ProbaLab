@@ -44,9 +44,12 @@ describe('SafeOfTheDayCard', () => {
     expect(screen.getByText(/FREE/)).toBeInTheDocument();
   });
 
-  it('renders the SAFE label with no emoji', () => {
+  it('renders the recommended pick label with analysis-first wording', () => {
     renderCard();
-    expect(screen.getByText(/SAFE · PRONOSTIC DU JOUR/i)).toBeInTheDocument();
+    expect(screen.getByText(/PRONO · RECOMMANDÉ/i)).toBeInTheDocument();
+    expect(screen.getByText(/Niveau de risque/i)).toBeInTheDocument();
+    expect(screen.getByText(/Confiance/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Risque bankroll/i)).not.toBeInTheDocument();
   });
 
   it('accepts a data-testid prop', () => {
@@ -62,5 +65,15 @@ describe('SafeOfTheDayCard', () => {
   it('renders an empty state when data is null', () => {
     render(<SafeOfTheDayCard data={null} />);
     expect(screen.getByText(/pas de pronostic safe/i)).toBeInTheDocument();
+  });
+
+  it('does not crash when odd is missing from a partial payload', () => {
+    const partial = { ...mockSafePick, odd: undefined as unknown as number };
+    expect(() => renderCard({ data: partial })).not.toThrow();
+  });
+
+  it('does not crash when probability is missing from a partial payload', () => {
+    const partial = { ...mockSafePick, probability: undefined as unknown as number };
+    expect(() => renderCard({ data: partial })).not.toThrow();
   });
 });
