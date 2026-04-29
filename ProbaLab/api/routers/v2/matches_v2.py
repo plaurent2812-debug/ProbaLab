@@ -340,11 +340,17 @@ def _fetch_nhl_rows(
             "home_team": fx.get("home_team"),
             "away_team": fx.get("away_team"),
             "status": fx.get("status"),
-            "home_goals": fx.get("home_goals") if fx.get("home_goals") is not None else fx.get("home_score"),
-            "away_goals": fx.get("away_goals") if fx.get("away_goals") is not None else fx.get("away_score"),
+            "home_goals": fx.get("home_goals")
+            if fx.get("home_goals") is not None
+            else fx.get("home_score"),
+            "away_goals": fx.get("away_goals")
+            if fx.get("away_goals") is not None
+            else fx.get("away_score"),
             "kickoff_utc": fx.get("date"),
             "prediction": prediction,
-            "confidence": _confidence_pct(prediction.get("confidence_score") if prediction else None),
+            "confidence": _confidence_pct(
+                prediction.get("confidence_score") if prediction else None
+            ),
             "_best_bets": pending_bets,
         }
         row["edge_pct"] = _compute_edge_pct(row)
