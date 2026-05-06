@@ -1,0 +1,37 @@
+@layer base {
+  :root {
+    /* Surfaces */
+    --background: 0 0% 4%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 6%;
+    --card-foreground: 0 0% 96%;
+    --popover: 0 0% 8%;
+    --popover-foreground: 0 0% 96%;
+
+    /* Primary brand */
+    --primary: 256 80% 65%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Accents semantic */
+    --success: 142 76% 56%;
+    --success-foreground: 0 0% 4%;
+    --warning: 38 92% 60%;
+    --warning-foreground: 0 0% 4%;
+    --danger: 0 84% 60%;
+    --danger-foreground: 0 0% 100%;
+
+    /* Borders / muted */
+    --muted: 0 0% 12%;
+    --muted-foreground: 0 0% 60%;
+    --border: 0 0% 16%;
+    --input: 0 0% 12%;
+    --ring: 256 80% 65%;
+
+    /* Radius */
+    --radius: 0.5rem;
+
+    /* Type */
+    --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Inter", sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+}
