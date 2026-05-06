@@ -6,8 +6,8 @@
     "skipLibCheck": true,
     "moduleResolution": "bundler",
     "allowSyntheticDefaultImports": true,
-    "strict": true,
     "composite": true,
+    "strict": true,
     "types": ["node"]
   },
   "include": ["vite.config.ts", "vitest.config.ts", "playwright.config.ts", "eslint.config.js"]

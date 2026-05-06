@@ -1,37 +1,48 @@
-@layer base {
-  :root {
-    /* Surfaces */
-    --background: 0 0% 4%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 6%;
-    --card-foreground: 0 0% 96%;
-    --popover: 0 0% 8%;
-    --popover-foreground: 0 0% 96%;
+@theme {
+  /* Surfaces — used as bg-background, text-foreground, bg-card, etc. */
+  --color-background: hsl(0 0% 4%);
+  --color-foreground: hsl(0 0% 98%);
+  --color-card: hsl(0 0% 6%);
+  --color-card-foreground: hsl(0 0% 96%);
+  --color-popover: hsl(0 0% 8%);
+  --color-popover-foreground: hsl(0 0% 96%);
 
-    /* Primary brand */
-    --primary: 256 80% 65%;
-    --primary-foreground: 0 0% 100%;
+  /* Brand */
+  --color-primary: hsl(256 80% 65%);
+  --color-primary-foreground: hsl(0 0% 100%);
+  --color-secondary: hsl(0 0% 14%);
+  --color-secondary-foreground: hsl(0 0% 96%);
+  --color-accent: hsl(0 0% 14%);
+  --color-accent-foreground: hsl(0 0% 96%);
 
-    /* Accents semantic */
-    --success: 142 76% 56%;
-    --success-foreground: 0 0% 4%;
-    --warning: 38 92% 60%;
-    --warning-foreground: 0 0% 4%;
-    --danger: 0 84% 60%;
-    --danger-foreground: 0 0% 100%;
+  /* Semantic */
+  --color-success: hsl(142 76% 56%);
+  --color-success-foreground: hsl(0 0% 4%);
+  --color-warning: hsl(38 92% 60%);
+  --color-warning-foreground: hsl(0 0% 4%);
+  --color-danger: hsl(0 84% 60%);
+  --color-danger-foreground: hsl(0 0% 100%);
+  --color-destructive: hsl(0 84% 60%);
+  --color-destructive-foreground: hsl(0 0% 100%);
 
-    /* Borders / muted */
-    --muted: 0 0% 12%;
-    --muted-foreground: 0 0% 60%;
-    --border: 0 0% 16%;
-    --input: 0 0% 12%;
-    --ring: 256 80% 65%;
+  /* Muted / borders / inputs */
+  --color-muted: hsl(0 0% 12%);
+  --color-muted-foreground: hsl(0 0% 60%);
+  --color-border: hsl(0 0% 16%);
+  --color-input: hsl(0 0% 12%);
+  --color-ring: hsl(256 80% 65%);
 
-    /* Radius */
-    --radius: 0.5rem;
+  /* Radii */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
 
-    /* Type */
-    --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Inter", sans-serif;
-    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  }
+  /* Type */
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Inter", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* Shadows for premium card depth (used in P2) */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.5), 0 2px 4px -2px rgb(0 0 0 / 0.5);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.5), 0 4px 6px -4px rgb(0 0 0 / 0.5);
 }
