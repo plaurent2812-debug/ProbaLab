@@ -1,0 +1,4 @@
+# P1 placeholder. Disallow indexing during construction.
+# Final robots.txt + sitemap routing comes in P6.
+User-agent: *
+Disallow: /
