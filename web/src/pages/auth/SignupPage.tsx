@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -17,6 +17,16 @@ export default function SignupPage() {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
+  const redirectTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (redirectTimer.current !== null) {
+        window.clearTimeout(redirectTimer.current);
+      }
+    };
+  }, []);
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
@@ -29,7 +39,10 @@ export default function SignupPage() {
       return;
     }
     setInfo("Compte créé. Vérifie tes emails pour confirmer ton adresse, puis connecte-toi.");
-    setTimeout(() => navigate(`/auth/login?next=${encodeURIComponent(next)}`), 2000);
+    redirectTimer.current = window.setTimeout(
+      () => navigate(`/auth/login?next=${encodeURIComponent(next)}`),
+      2000
+    );
   }
 
   async function onGoogle() {
