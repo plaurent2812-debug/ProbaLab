@@ -26,15 +26,20 @@ test.describe('Signup flow', () => {
     // Wait for confirmation status message
     await expect(page.getByRole('status')).toContainText(/vérifie tes emails/i, { timeout: 10_000 });
 
-    // Cleanup: lookup user id via admin API. Email is unique enough — fetch by email.
+    // Cleanup: lookup user id by querying auth.users directly via service role.
+    // Avoids listUsers() pagination (default 50/page, hard-capped server-side) which silently misses users on projects with many accounts.
     const { createClient } = await import('@supabase/supabase-js');
     const admin = createClient(
       process.env.VITE_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
       { auth: { autoRefreshToken: false, persistSession: false } }
     );
-    const { data } = await admin.auth.admin.listUsers({ perPage: 1000 });
-    const u = data.users.find((u) => u.email === email);
-    if (u) createdUserId = u.id;
+    const { data } = await admin
+      .schema('auth' as never)
+      .from('users')
+      .select('id')
+      .eq('email', email)
+      .maybeSingle();
+    if (data) createdUserId = (data as { id: string }).id;
   });
 });
