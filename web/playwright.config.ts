@@ -16,9 +16,6 @@ export default defineConfig({
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
-  // TypeScript configuration for e2e files (Node types, no vitest globals)
-  // Main app tsconfig excludes e2e/ — this separate config handles it.
-  // See tsconfig.e2e.json for the Node-aware tsconfig used by this config.
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
   ],

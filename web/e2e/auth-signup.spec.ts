@@ -33,7 +33,7 @@ test.describe('Signup flow', () => {
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
       { auth: { autoRefreshToken: false, persistSession: false } }
     );
-    const { data } = await admin.auth.admin.listUsers();
+    const { data } = await admin.auth.admin.listUsers({ perPage: 1000 });
     const u = data.users.find((u) => u.email === email);
     if (u) createdUserId = u.id;
   });
