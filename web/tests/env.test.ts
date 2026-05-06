@@ -6,7 +6,7 @@ describe('envSchema', () => {
   it('accepts a valid env object', () => {
     const result = envSchema.safeParse({
       VITE_SUPABASE_URL: 'https://test.supabase.co',
-      VITE_SUPABASE_ANON_KEY: 'eyJtest',
+      VITE_SUPABASE_ANON_KEY: 'eyJtest123456',
       VITE_API_URL: 'http://localhost:8000',
     });
     expect(result.success).toBe(true);
@@ -14,7 +14,7 @@ describe('envSchema', () => {
 
   it('rejects an env object missing VITE_SUPABASE_URL', () => {
     const result = envSchema.safeParse({
-      VITE_SUPABASE_ANON_KEY: 'eyJtest',
+      VITE_SUPABASE_ANON_KEY: 'eyJtest123456',
       VITE_API_URL: 'http://localhost:8000',
     });
     expect(result.success).toBe(false);
@@ -23,7 +23,7 @@ describe('envSchema', () => {
   it('rejects a non-URL VITE_SUPABASE_URL', () => {
     const result = envSchema.safeParse({
       VITE_SUPABASE_URL: 'not-a-url',
-      VITE_SUPABASE_ANON_KEY: 'eyJtest',
+      VITE_SUPABASE_ANON_KEY: 'eyJtest123456',
       VITE_API_URL: 'http://localhost:8000',
     });
     expect(result.success).toBe(false);
