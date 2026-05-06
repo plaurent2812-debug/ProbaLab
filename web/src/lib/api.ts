@@ -12,7 +12,11 @@ export class ApiError extends Error {
   }
 }
 
-export async function apiFetch<T = unknown>(path: string, init: RequestInit = {}): Promise<T> {
+export interface ApiInit extends Omit<RequestInit, 'headers'> {
+  headers?: Record<string, string>;
+}
+
+export async function apiFetch<T = unknown>(path: string, init: ApiInit = {}): Promise<T> {
   const env = validateEnv();
   const url = `${env.VITE_API_URL}${path}`;
 
@@ -21,7 +25,7 @@ export async function apiFetch<T = unknown>(path: string, init: RequestInit = {}
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...((init.headers as Record<string, string>) ?? {}),
+    ...(init.headers ?? {}),
   };
   if (session?.access_token) {
     headers.Authorization = `Bearer ${session.access_token}`;

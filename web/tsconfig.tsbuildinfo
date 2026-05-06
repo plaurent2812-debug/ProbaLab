@@ -1,1 +1,0 @@
-{"root":["./src/app.tsx","./src/env.ts","./src/main.tsx","./src/lib/api.ts","./src/lib/cn.ts","./src/lib/supabase.ts","./src/types/env.d.ts","./tests/env.test.ts","./tests/setup.ts","./tests/components/sanity.test.tsx","./tests/lib/api.test.ts"],"version":"5.9.3"}
