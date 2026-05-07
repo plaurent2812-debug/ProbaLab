@@ -1,4 +1,4 @@
-import { Link, NavLink } from 'react-router-dom';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
@@ -10,6 +10,12 @@ const NAV_ITEMS: { to: string; label: string }[] = [
 
 export function Header() {
   const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  async function handleSignOut() {
+    await signOut();
+    navigate('/auth/login', { replace: true });
+  }
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -43,7 +49,7 @@ export function Header() {
               <span className="hidden sm:inline text-sm text-muted-foreground truncate max-w-[180px]">
                 {user.email}
               </span>
-              <Button size="sm" variant="outline" onClick={() => void signOut()}>
+              <Button size="sm" variant="outline" onClick={() => void handleSignOut()}>
                 Déconnexion
               </Button>
             </>
