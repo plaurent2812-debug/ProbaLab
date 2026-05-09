@@ -69,10 +69,16 @@ def get_market_odds(real_odds: dict, m_name: str, fallback_proba: float) -> floa
 
 
 def _compute_edge(proba_model: float, odds: float) -> float:
-    """Edge = model implied probability - bookmaker implied probability."""
-    if odds <= 1.0 or proba_model <= 0:
-        return 0.0
-    return (proba_model / 100.0) - (1.0 / odds)
+    """Edge = model implied probability - bookmaker implied probability.
+
+    Thin wrapper over ``src.odds_math.edge_from_percent_proba`` so the
+    standardized definition is reused (master plan Phase 4.1). ``proba_model``
+    is in 0..100 percent form, kept here for backwards compatibility with
+    existing callers.
+    """
+    from src.odds_math import edge_from_percent_proba  # noqa: PLC0415
+
+    return edge_from_percent_proba(proba_model, odds)
 
 
 # ═══════════════════════════════════════════════════════════════════
