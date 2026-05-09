@@ -83,10 +83,15 @@ class OddsAPIQuotaExhausted(Exception):  # noqa: N818 — nom contractuel (cf. s
 
 
 def to_implied_prob(odds: float) -> float:
-    """Décimal → proba implicite (sans retrait overround)."""
-    if odds < 1.01:
-        raise ValueError(f"Invalid decimal odds: {odds} (must be >= 1.01)")
-    return 1.0 / odds
+    """Décimal → proba implicite (sans retrait overround).
+
+    Thin wrapper over ``src.odds_math.implied_prob`` so the standardized
+    definition is reused (master plan Phase 4.1). Kept under this name
+    because many callers in this module already import it.
+    """
+    from src.odds_math import implied_prob  # noqa: PLC0415
+
+    return implied_prob(odds)
 
 
 def _parse_h2h_market(
