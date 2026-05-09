@@ -87,7 +87,7 @@ export function Hero() {
             className="group gap-2 bg-emerald-500 text-black shadow-[0_0_0_1px_rgba(16,185,129,0.3),0_8px_24px_-8px_rgba(16,185,129,0.6)] transition-all hover:translate-y-[-1px] hover:bg-emerald-400"
           >
             <Link to="/premium">
-              Essayer Premium 7 jours gratuits
+              Essayer Premium 14 jours gratuits
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
             </Link>
           </Button>

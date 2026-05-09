@@ -35,7 +35,7 @@ export function HeroLanding({ 'data-testid': dataTestId = 'hero-landing' }: Prop
           className="rounded-md px-5 py-3 text-sm font-semibold focus-visible:outline focus-visible:outline-2"
           style={{ background: 'var(--primary)', color: '#0a0e1a' }}
         >
-          Essai gratuit 30 jours →
+          Essai gratuit 14 jours →
         </Link>
         <Link
           to="/premium"
