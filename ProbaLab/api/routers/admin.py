@@ -18,6 +18,7 @@ from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Requ
 from api.auth import verify_cron_auth, verify_internal_auth
 from api.schemas import RunPipelineRequest
 from src.config import supabase
+from src.monitoring.provider_health import recent_failures as recent_provider_failures
 
 
 def _require_internal_auth(
@@ -277,3 +278,43 @@ def admin_update_scores(
 
     target = date or _dt.now(timezone.utc).date().isoformat()
     return {"message": f"Score update started for {target}"}
+
+
+@router.get(
+    "/api/admin/data-health",
+    dependencies=[Depends(_require_internal_auth)],
+    summary="Provider data health snapshot (master plan Phase 2.4)",
+)
+def admin_data_health(
+    window_hours: Annotated[
+        int,
+        Query(
+            ge=1,
+            le=168,
+            description="Window for the failure scan (1h..168h, default 24h).",
+        ),
+    ] = 24,
+) -> dict:
+    """Surface recent provider failures so the admin can spot data outages
+    before users see empty pages.
+
+    Reads ``provider_health_log`` (write side: ``src.monitoring.provider_health``).
+    Degrades gracefully to zero counts if the table is unreachable — never 500.
+    """
+    failures = recent_provider_failures(hours=window_hours)
+
+    by_provider: dict[str, dict[str, int]] = {}
+    for row in failures:
+        prov = str(row.get("provider") or "unknown")
+        bucket = by_provider.setdefault(prov, {"failure_count": 0})
+        bucket["failure_count"] += 1
+
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "window_hours": window_hours,
+        "provider_failures": failures,
+        "summary": {
+            "total_failures": len(failures),
+            "by_provider": by_provider,
+        },
+    }
