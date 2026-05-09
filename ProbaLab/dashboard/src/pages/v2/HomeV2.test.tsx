@@ -62,6 +62,16 @@ describe('HomeV2', () => {
     expect(screen.getByTestId('premium-cta')).toBeInTheDocument();
   });
 
+  it('shows the proof strip explaining the model is tracked continuously', async () => {
+    mockUser({ role: 'premium', isVisitor: false });
+    renderWithProviders(<HomeV2 />);
+
+    await waitFor(() => expect(screen.getByText(/Résultat 30J/i)).toBeInTheDocument());
+    expect(screen.getByTestId('proof-strip')).toBeInTheDocument();
+    expect(screen.getByText(/modèle suivi en continu/i)).toBeInTheDocument();
+    expect(screen.getByTestId('proof-strip-body')).toHaveTextContent(/automatiquement/i);
+  });
+
   it('frames connected users around sport analysis and probabilities', async () => {
     mockUser({ role: 'premium', isVisitor: false });
     renderWithProviders(<HomeV2 />);

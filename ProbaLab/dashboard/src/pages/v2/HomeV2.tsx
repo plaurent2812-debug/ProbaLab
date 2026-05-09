@@ -5,6 +5,7 @@ import { useMatchesOfDay } from '@/hooks/v2/useMatchesOfDay';
 import { usePerformanceSummary } from '@/hooks/v2/usePerformanceSummary';
 import { PreviewBlurMatches } from '@/components/v2/home/PreviewBlurMatches';
 import { StatStrip } from '@/components/v2/home/StatStrip';
+import { ProofStrip } from '@/components/v2/home/ProofStrip';
 import { SafeOfTheDayCard } from '@/components/v2/home/SafeOfTheDayCard';
 import { MatchesList } from '@/components/v2/home/MatchesList';
 import { ValueBetsTeaser } from '@/components/v2/home/ValueBetsTeaser';
@@ -205,6 +206,7 @@ export function HomeV2() {
         </div>
       </section>
       <StatStrip data={perf.data} loading={perf.isLoading} />
+      <ProofStrip lastUpdateUtc={lastUpdateUtc()} />
       <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
         <div className="space-y-6">
           {!isDesktop && <SafeOfTheDayCard data={safe.data ?? null} />}
