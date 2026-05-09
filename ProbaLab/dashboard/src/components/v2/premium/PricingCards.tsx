@@ -139,11 +139,11 @@ export function PricingCards({
             className="mt-8 inline-flex w-full items-center justify-center gap-2 rounded-md px-4 py-3 text-sm font-semibold focus-visible:outline focus-visible:outline-2"
             style={{ background: 'var(--primary)', color: '#0a0e1a' }}
           >
-            Démarrer la trial 30j
+            Démarrer la trial 14j
             <ArrowRight size={16} aria-hidden="true" />
           </Link>
           <p className="mt-3 text-center text-xs" style={{ color: 'var(--text-muted)' }}>
-            30 jours gratuits · sans carte · résiliable en 1 clic
+            14 jours gratuits · sans carte · résiliable en 1 clic
           </p>
         </div>
       </div>

@@ -27,7 +27,7 @@ export function FinalCTA() {
           <div className="relative">
             <Badge className="mb-6 gap-1.5 border-emerald-500/30 bg-emerald-500/10 text-emerald-400">
               <Sparkles className="h-3 w-3" />
-              7 jours gratuits · Puis 14,99 € / mois
+              14 jours gratuits · Puis 14,99 € / mois
             </Badge>
             <h2 className="mx-auto max-w-2xl text-balance text-4xl font-bold tracking-tight text-white md:text-5xl">
               Arrêtez de parier au feeling.

@@ -21,7 +21,7 @@ describe('HeroLanding', () => {
 
   it('renders primary CTA to /register and secondary to /premium', () => {
     render(wrap(<HeroLanding />));
-    const primary = screen.getByRole('link', { name: /Essai gratuit 30 jours/i });
+    const primary = screen.getByRole('link', { name: /Essai gratuit 14 jours/i });
     expect(primary).toHaveAttribute('href', '/register');
     const secondary = screen.getByRole('link', { name: /Découvrir Premium/i });
     expect(secondary).toHaveAttribute('href', '/premium');

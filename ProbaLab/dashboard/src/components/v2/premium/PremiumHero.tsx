@@ -13,7 +13,7 @@ interface Props {
  * - Label "PROBALAB PREMIUM" in emerald.
  * - Main h1 (44px) carrying the positioning.
  * - Plain-language analysis subtitle.
- * - Primary CTA → `/register` (Essai gratuit 30 jours).
+ * - Primary CTA → `/register` (Essai gratuit 14 jours).
  * - Secondary CTA → smooth-scroll to the live track record section.
  * - A trust line closes the section (no card required, 1-click cancel).
  */
@@ -61,7 +61,7 @@ export function PremiumHero({
           className="inline-flex items-center gap-2 rounded-md px-5 py-3 text-sm font-semibold focus-visible:outline focus-visible:outline-2"
           style={{ background: 'var(--primary)', color: '#0a0e1a' }}
         >
-          Essai gratuit 30 jours
+          Essai gratuit 14 jours
           <ArrowRight size={16} aria-hidden="true" />
         </Link>
         <button
