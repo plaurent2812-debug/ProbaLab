@@ -19,9 +19,13 @@ describe('AppV2', () => {
         <AppV2Content />
       </MemoryRouter>
     );
-    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent(
-      /vraie probabilité/i,
-    );
+    // V2 routes are lazy-loaded behind <Suspense> (lesson 2026-04-30) and the
+    // Hero uses framer-motion. Under CI load the default 1 s findBy timeout
+    // sometimes loses the race with the Suspense fallback. 5 s is generous
+    // and still well under the test runner's per-test budget.
+    expect(
+      await screen.findByRole('heading', { level: 1 }, { timeout: 5000 }),
+    ).toHaveTextContent(/vraie probabilité/i);
   });
 
   it('renders MatchesV2 at /matchs', async () => {
