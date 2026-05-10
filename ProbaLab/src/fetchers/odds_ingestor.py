@@ -29,8 +29,47 @@ from src.fetchers.bookmaker_registry import (
     get_bookmaker_from_api_key,
     teams_match,
 )
+from src.monitoring.provider_health import log_call
 
 logger = logging.getLogger("football_ia.odds_ingestor")
+
+
+def _sport_from_key(sport_key: str) -> str | None:
+    """Map a The Odds API sport_key to our internal sport label.
+
+    Returns ``"football"`` for ``soccer_*`` keys, ``"nhl"`` for
+    ``icehockey_nhl``, ``None`` for anything else. ``log_call`` accepts
+    ``None`` so we never raise just because a new sport key shows up.
+    """
+    if sport_key.startswith("soccer_"):
+        return "football"
+    if sport_key.startswith("icehockey_"):
+        return "nhl"
+    return None
+
+
+def _parse_remaining(headers: Any) -> int | None:
+    """Return ``x-requests-remaining`` as int, or None when missing/invalid."""
+    raw = headers.get("x-requests-remaining") if headers else None
+    if raw is None:
+        return None
+    try:
+        return int(str(raw))
+    except (TypeError, ValueError):
+        return None
+
+
+def _safe_log_call(**kwargs: Any) -> None:
+    """Wrap log_call with a defensive try/except.
+
+    ``log_call`` already swallows its own errors, but the monkeypatched
+    version used in tests can intentionally raise — we keep the fetch path
+    bullet-proof against any monitoring misconfiguration.
+    """
+    try:
+        log_call(**kwargs)
+    except Exception:  # pragma: no cover - defensive
+        logger.warning("odds_ingestor: log_call failed", exc_info=True)
 
 
 def _resolve_fixture_id(
@@ -337,6 +376,12 @@ def fetch_odds(
     Raises:
         OddsAPIQuotaExhausted: si 429 ou header x-requests-remaining=0
         RuntimeError: après _MAX_RETRIES échecs consécutifs
+
+    Side effect:
+        Émet exactement une ligne `provider_health_log` à la sortie
+        (succès ou échec terminal) via ``provider_health.log_call``.
+        Une seule ligne est loggée même si plusieurs retries ont eu lieu,
+        pour refléter le résultat FINAL côté observabilité.
     """
     url = f"{ODDS_API_BASE}/sports/{sport_key}/odds"
     params: dict[str, Any] = {
@@ -348,17 +393,37 @@ def fetch_odds(
     if bookmakers:
         params["bookmakers"] = bookmakers
 
+    sport = _sport_from_key(sport_key)
+    start = time.monotonic()
     last_error: Exception | None = None
+    last_status: int | None = None
+    last_remaining: int | None = None
+
     for attempt in range(_MAX_RETRIES):
         try:
             resp = httpx.get(url, params=params, timeout=_HTTP_TIMEOUT)
         except Exception as exc:
             last_error = exc
+            last_status = None
             logger.warning("fetch_odds attempt %d exception: %s", attempt + 1, exc)
             time.sleep(_RETRY_DELAYS[attempt])
             continue
 
+        last_status = resp.status_code
+        last_remaining = _parse_remaining(resp.headers)
+
         if resp.status_code == 429:
+            _safe_log_call(
+                provider="the_odds_api",
+                sport=sport,
+                endpoint=url,
+                status_code=429,
+                row_count=None,
+                latency_ms=int((time.monotonic() - start) * 1000),
+                quota_remaining=last_remaining,
+                plan_label="the_odds_api_30_usd",
+                error="quota_exhausted",
+            )
             raise OddsAPIQuotaExhausted(f"The Odds API quota exhausted for sport={sport_key}")
 
         if resp.status_code >= 500:
@@ -373,23 +438,59 @@ def fetch_odds(
 
         # remaining-header check runs only on 2xx/4xx responses to avoid
         # CDN-stale 0-quota headers on 5xx turning transient errors fatal.
-        remaining_header = resp.headers.get("x-requests-remaining")
-        if remaining_header is not None and str(remaining_header) == "0":
+        if last_remaining == 0:
+            _safe_log_call(
+                provider="the_odds_api",
+                sport=sport,
+                endpoint=url,
+                status_code=resp.status_code,
+                row_count=None,
+                latency_ms=int((time.monotonic() - start) * 1000),
+                quota_remaining=0,
+                plan_label="the_odds_api_30_usd",
+                error="quota_exhausted",
+            )
             raise OddsAPIQuotaExhausted(f"x-requests-remaining=0 for sport={sport_key}")
 
         resp.raise_for_status()
-        if remaining_header is not None:
+        if last_remaining is not None:
             # defensive: logger misconfig must not fail the happy path
             try:
                 logger.info(
                     "The Odds API quota remaining=%s for sport=%s",
-                    remaining_header,
+                    last_remaining,
                     sport_key,
                 )
             except Exception:
                 pass
-        return resp.json()
+        payload = resp.json()
+        row_count = len(payload) if isinstance(payload, list) else 0
+        _safe_log_call(
+            provider="the_odds_api",
+            sport=sport,
+            endpoint=url,
+            status_code=resp.status_code,
+            row_count=row_count,
+            latency_ms=int((time.monotonic() - start) * 1000),
+            quota_remaining=last_remaining,
+            plan_label="the_odds_api_30_usd",
+            empty_is_ok=True,  # un jour sans match est légitime
+        )
+        return payload
 
+    # Terminal failure: max retries exhausted (5xx loops or transport errors).
+    err_label = type(last_error).__name__ if last_error is not None else "unknown"
+    err_message = str(last_error) if last_error is not None else ""
+    _safe_log_call(
+        provider="the_odds_api",
+        sport=sport,
+        endpoint=url,
+        status_code=last_status,
+        row_count=None,
+        latency_ms=int((time.monotonic() - start) * 1000),
+        plan_label="the_odds_api_30_usd",
+        error=f"{err_label}: {err_message}"[:200],
+    )
     raise RuntimeError(f"fetch_odds exhausted retries for sport={sport_key}: {last_error}")
 
 
