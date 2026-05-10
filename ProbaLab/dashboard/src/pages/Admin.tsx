@@ -2,11 +2,12 @@
 import { useState, useEffect } from 'react'
 import { Protected } from '@/lib/auth'
 import { triggerPipeline, triggerNHLPipeline, fetchPipelineStatus, stopPipeline } from '@/lib/api'
-import { Shield, Play, Loader2, Cpu, Terminal, Activity, Server, Database, StopCircle, Clock, Calendar, Users, Wrench, Globe, BarChart3 } from 'lucide-react'
+import { Shield, Play, Loader2, Cpu, Terminal, Activity, Server, Database, StopCircle, Clock, Calendar, Users, Wrench, Globe, BarChart3, HeartPulse } from 'lucide-react'
 import AdminUsers from '@/components/AdminUsers'
 import AdminOverview from '@/components/AdminOverview'
 import AdminLeagues from '@/components/AdminLeagues'
 import AdminTools from '@/components/AdminTools'
+import AdminDataHealth from '@/components/AdminDataHealth'
 import type { PipelineStatusResponse } from '@/types/api'
 
 const TABS = [
@@ -14,6 +15,7 @@ const TABS = [
     { id: 'users', label: 'Utilisateurs', icon: Users },
     { id: 'pipeline', label: 'Pipeline', icon: Cpu },
     { id: 'automations', label: 'Automatisations', icon: Clock },
+    { id: 'data-health', label: 'Data Health', icon: HeartPulse },
     { id: 'leagues', label: 'Ligues', icon: Globe },
     { id: 'tools', label: 'Outils', icon: Wrench },
 ] as const
@@ -426,6 +428,9 @@ function AdminDashboard() {
                         </div>
                     </div>
                 )}
+
+                {/* ── Tab: Data Health ── */}
+                {activeTab === 'data-health' && <AdminDataHealth />}
 
                 {/* ── Tab: Leagues ── */}
                 {activeTab === 'leagues' && <AdminLeagues />}
