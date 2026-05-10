@@ -22,6 +22,7 @@ from datetime import datetime, timedelta, timezone
 import httpx
 
 from src.config import logger, supabase
+from src.monitoring.provider_health import log_call
 from src.nhl.constants import NHL_TEAM_NAMES as TEAM_NAMES
 from src.nhl.constants import get_nhl_season_id
 
@@ -44,24 +45,89 @@ NHL_API = "https://api-web.nhle.com/v1"
 # ─── HTTP helpers ────────────────────────────────────────────────
 
 
+def _safe_log_nhl(**kwargs) -> None:
+    """Wrap log_call with a defensive try/except.
+
+    ``log_call`` already swallows its own errors; this extra guard makes
+    the fetch path bullet-proof against any monitoring misconfiguration
+    (e.g. a monkeypatched log_call in tests that intentionally raises).
+    """
+    try:
+        log_call(**kwargs)
+    except Exception:  # pragma: no cover - defensive
+        logger.warning("nhl_pipeline: log_call failed", exc_info=True)
+
+
 def _fetch_json(endpoint: str) -> dict | None:
-    """Fetch JSON from NHL API with retries."""
+    """Fetch JSON from NHL API with retries.
+
+    Side effect: emits exactly one ``provider_health_log`` row reflecting
+    the final outcome (success, terminal 4xx, retries exhausted, transport).
+    """
     url = f"{NHL_API}{endpoint}"
+    start = time.monotonic()
+    last_status: int | None = None
+    last_error: str | None = None
+
     for attempt in range(3):
         try:
             resp = httpx.get(url, timeout=15.0, follow_redirects=True)
-            if resp.status_code == 200:
-                return resp.json()
-            elif resp.status_code in (429, 500, 502, 503):
-                time.sleep(1.5 * (attempt + 1))
-            else:
-                logger.error(f"[NHL] HTTP {resp.status_code} on {endpoint}")
-                return None
-        except Exception:
+        except Exception as exc:
+            last_status = None
+            last_error = f"{type(exc).__name__}: {exc}"[:200]
             logger.warning(
                 "[NHL] Error fetching %s (attempt %d)", endpoint, attempt + 1, exc_info=True
             )
             time.sleep(1.0 * (attempt + 1))
+            continue
+
+        last_status = resp.status_code
+
+        if resp.status_code == 200:
+            payload = resp.json()
+            row_count = 1 if isinstance(payload, dict) and payload else 0
+            _safe_log_nhl(
+                provider="nhl_api",
+                sport="nhl",
+                endpoint=url,
+                status_code=200,
+                row_count=row_count,
+                latency_ms=int((time.monotonic() - start) * 1000),
+                plan_label="nhl_api_free",
+                empty_is_ok=True,
+            )
+            return payload
+
+        if resp.status_code in (429, 500, 502, 503):
+            last_error = f"HTTP {resp.status_code}"
+            time.sleep(1.5 * (attempt + 1))
+            continue
+
+        # Non-retriable 4xx (e.g. 404). Log once and return None.
+        logger.error(f"[NHL] HTTP {resp.status_code} on {endpoint}")
+        _safe_log_nhl(
+            provider="nhl_api",
+            sport="nhl",
+            endpoint=url,
+            status_code=resp.status_code,
+            row_count=None,
+            latency_ms=int((time.monotonic() - start) * 1000),
+            plan_label="nhl_api_free",
+            error=f"HTTP {resp.status_code}",
+        )
+        return None
+
+    # Retries exhausted: log terminal failure with last known status/error.
+    _safe_log_nhl(
+        provider="nhl_api",
+        sport="nhl",
+        endpoint=url,
+        status_code=last_status,
+        row_count=None,
+        latency_ms=int((time.monotonic() - start) * 1000),
+        plan_label="nhl_api_free",
+        error=last_error or "retries exhausted",
+    )
     return None
 
 
