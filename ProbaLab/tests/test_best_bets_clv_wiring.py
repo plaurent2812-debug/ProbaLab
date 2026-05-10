@@ -38,15 +38,51 @@ def _bet_row_1x2_away_win() -> dict:
     }
 
 
-def _bet_row_other_market() -> dict:
-    """Marché hors 1X2 (BTTS) — pas wired dans cette PR."""
+def _bet_row_unsupported_market() -> dict:
+    """Marché non supporté côté CLV (closing_odds n'a pas de ligne pour ça)."""
     return {
         "id": 44,
-        "bet_label": "PSG vs Lyon — BTTS Oui",
-        "market": "BTTS",
+        "bet_label": "PSG vs Lyon — Score exact 2-1",
+        "market": "Score exact",
         "sport": "football",
         "fixture_id": "101",
-        "odds": 1.85,
+        "odds": 8.50,
+        "result": "PENDING",
+    }
+
+
+def _bet_row_btts_yes() -> dict:
+    return {
+        "id": 50,
+        "bet_label": "PSG vs Lyon — BTTS Oui",
+        "market": "BTTS Oui",
+        "sport": "football",
+        "fixture_id": "101",
+        "odds": 1.80,
+        "result": "PENDING",
+    }
+
+
+def _bet_row_over_25() -> dict:
+    return {
+        "id": 51,
+        "bet_label": "PSG vs Lyon — Over 2.5 buts",
+        "market": "Over 2.5 buts",
+        "sport": "football",
+        "fixture_id": "101",
+        "odds": 1.90,
+        "result": "PENDING",
+    }
+
+
+def _bet_row_under_15() -> dict:
+    return {
+        "id": 52,
+        "bet_label": "PSG vs Lyon — Under 1.5 buts",
+        "market": "Under 1.5 buts",
+        "sport": "football",
+        "fixture_id": "101",
+        "odds": 4.20,
         "result": "PENDING",
     }
 
@@ -88,15 +124,84 @@ def test_record_pick_clv_safely_handles_1x2_away_win():
     assert captured[0]["selection"] == "away"
 
 
-def test_record_pick_clv_safely_skips_non_1x2_markets_in_this_pr():
-    """BTTS / Over / Double Chance → pas wired ici, donc pas d'appel."""
+def test_record_pick_clv_safely_skips_unsupported_markets():
+    """Marchés sans closing_odds mapping (Score exact, Double Chance…)
+    → pas d'appel. Map exhaustive : 1X2, BTTS, Over/Under 1.5/2.5/3.5."""
     from api.routers import best_bets
 
     captured: list[dict] = []
     with patch.object(best_bets, "record_pick_clv", side_effect=lambda **kw: captured.append(kw)):
-        best_bets._record_pick_clv_safely(_bet_row_other_market(), result_val="WIN")
+        best_bets._record_pick_clv_safely(_bet_row_unsupported_market(), result_val="WIN")
 
     assert captured == []
+
+
+def test_record_pick_clv_safely_handles_btts_oui():
+    from api.routers import best_bets
+
+    captured: list[dict] = []
+    with patch.object(best_bets, "record_pick_clv", side_effect=lambda **kw: captured.append(kw)):
+        best_bets._record_pick_clv_safely(_bet_row_btts_yes(), result_val="WIN")
+
+    assert len(captured) == 1
+    call = captured[0]
+    assert call["market"] == "btts"
+    assert call["selection"] == "yes"
+    assert call["displayed_odds"] == 1.80
+
+
+def test_record_pick_clv_safely_handles_btts_non():
+    from api.routers import best_bets
+
+    bet = {**_bet_row_btts_yes(), "market": "BTTS Non", "id": 53}
+    captured: list[dict] = []
+    with patch.object(best_bets, "record_pick_clv", side_effect=lambda **kw: captured.append(kw)):
+        best_bets._record_pick_clv_safely(bet, result_val="LOSS")
+
+    assert len(captured) == 1
+    assert captured[0]["market"] == "btts"
+    assert captured[0]["selection"] == "no"
+
+
+def test_record_pick_clv_safely_handles_over_25():
+    from api.routers import best_bets
+
+    captured: list[dict] = []
+    with patch.object(best_bets, "record_pick_clv", side_effect=lambda **kw: captured.append(kw)):
+        best_bets._record_pick_clv_safely(_bet_row_over_25(), result_val="WIN")
+
+    assert len(captured) == 1
+    call = captured[0]
+    assert call["market"] == "over_2_5"
+    assert call["selection"] == "over"
+
+
+def test_record_pick_clv_safely_handles_under_15():
+    """'Under 1.5 buts' → market='over_1_5' (même row closing), selection='under'."""
+    from api.routers import best_bets
+
+    captured: list[dict] = []
+    with patch.object(best_bets, "record_pick_clv", side_effect=lambda **kw: captured.append(kw)):
+        best_bets._record_pick_clv_safely(_bet_row_under_15(), result_val="WIN")
+
+    assert len(captured) == 1
+    call = captured[0]
+    assert call["market"] == "over_1_5"
+    assert call["selection"] == "under"
+
+
+def test_record_pick_clv_safely_handles_over_35():
+    """'Over 3.5 buts' → market='over_3_5', selection='over'."""
+    from api.routers import best_bets
+
+    bet = {**_bet_row_over_25(), "market": "Over 3.5 buts", "id": 54, "odds": 3.00}
+    captured: list[dict] = []
+    with patch.object(best_bets, "record_pick_clv", side_effect=lambda **kw: captured.append(kw)):
+        best_bets._record_pick_clv_safely(bet, result_val="WIN")
+
+    assert len(captured) == 1
+    assert captured[0]["market"] == "over_3_5"
+    assert captured[0]["selection"] == "over"
 
 
 def test_record_pick_clv_safely_skips_void_and_pending():
