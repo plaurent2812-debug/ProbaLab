@@ -28,7 +28,17 @@ logger = logging.getLogger(__name__)
 import requests
 from dotenv import load_dotenv
 
+from src.monitoring.provider_health import log_call
 from supabase import Client, create_client
+
+
+def _safe_log_api_football(**kwargs) -> None:
+    """Defensive wrapper around log_call. Monitoring must not break the fetcher."""
+    try:
+        log_call(**kwargs)
+    except Exception:  # pragma: no cover - defensive
+        logger.warning("results: log_call failed", exc_info=True)
+
 
 load_dotenv()
 
@@ -57,18 +67,40 @@ LIVE_STATUSES = {"1H", "2H", "HT", "ET", "P", "BT", "INT", "LIVE"}
 
 def fetch_fixture_from_api(api_fixture_id: int) -> dict | None:
     """Appelle l'API Football pour un fixture précis et retourne les données brutes."""
+    url = "https://v3.football.api-sports.io/fixtures"
+    start = time.monotonic()
     try:
         resp = requests.get(
-            "https://v3.football.api-sports.io/fixtures",
+            url,
             headers=API_HEADERS,
             params={"id": api_fixture_id},
             timeout=10,
         )
         data = resp.json()
         results = data.get("response", [])
+        _safe_log_api_football(
+            provider="api_football",
+            sport="football",
+            endpoint=url,
+            status_code=resp.status_code,
+            row_count=len(results) if isinstance(results, list) else 0,
+            latency_ms=int((time.monotonic() - start) * 1000),
+            plan_label="api_football_pro",
+            empty_is_ok=True,
+        )
         return results[0] if results else None
     except Exception as e:
         logger.error("  [API ERROR] fixture %s: %s", api_fixture_id, e)
+        _safe_log_api_football(
+            provider="api_football",
+            sport="football",
+            endpoint=url,
+            status_code=None,
+            row_count=None,
+            latency_ms=int((time.monotonic() - start) * 1000),
+            plan_label="api_football_pro",
+            error=f"{type(e).__name__}: {e}"[:200],
+        )
         return None
 
 
