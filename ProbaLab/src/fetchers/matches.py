@@ -1,13 +1,24 @@
 from __future__ import annotations
 
 import os
+import time
 
 import requests
 from dotenv import load_dotenv
 
 from src.config import logger
 from src.constants import LEAGUES_TO_FETCH
+from src.monitoring.provider_health import log_call
 from supabase import Client, create_client
+
+
+def _safe_log_api_football(**kwargs) -> None:
+    """Defensive wrapper around log_call. Monitoring must not break the fetcher."""
+    try:
+        log_call(**kwargs)
+    except Exception:  # pragma: no cover - defensive
+        logger.warning("matches: log_call failed", exc_info=True)
+
 
 # 1. Chargement des secrets
 load_dotenv()
@@ -47,12 +58,34 @@ def get_fixtures_by_date(league_id: int, date_from: str, date_to: str) -> list[d
         "timezone": "Europe/Paris",  # Intentional: API returns dates in CET/CEST for display consistency
     }
 
+    start = time.monotonic()
     try:
         response = requests.get(url_api, headers=headers, params=querystring)
         data = response.json()
-        return data.get("response", [])
+        rows = data.get("response", [])
+        _safe_log_api_football(
+            provider="api_football",
+            sport="football",
+            endpoint=url_api,
+            status_code=response.status_code,
+            row_count=len(rows) if isinstance(rows, list) else 0,
+            latency_ms=int((time.monotonic() - start) * 1000),
+            plan_label="api_football_pro",
+            empty_is_ok=True,
+        )
+        return rows
     except Exception as e:
         logger.error(f"Erreur API pour ligue {league_id}: {e}")
+        _safe_log_api_football(
+            provider="api_football",
+            sport="football",
+            endpoint=url_api,
+            status_code=None,
+            row_count=None,
+            latency_ms=int((time.monotonic() - start) * 1000),
+            plan_label="api_football_pro",
+            error=f"{type(e).__name__}: {e}"[:200],
+        )
         return []
 
 
