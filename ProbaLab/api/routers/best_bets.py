@@ -795,25 +795,44 @@ def get_best_bets(
 # ─── CLV wiring (master plan Phase 4.2) ──────────────────────────
 
 
-# Football 1X2 market label → (canonical market name, selection) used by
-# ``record_pick_clv`` to look up the closing line in closing_odds.
-# Scope of this PR is intentionally limited to 1X2 — BTTS, Over/Under and
-# Double Chance will be wired in follow-up PRs (each comes with its own
-# market normalization rules in closing_odds).
-_CLV_1X2_LABEL_MAP: dict[str, str] = {
-    "Victoire domicile": "home",
-    "Victoire extérieur": "away",
-    "Match nul": "draw",
-    "Nul": "draw",
+# Football market label → (closing_odds.market, closing_odds.selection) used
+# by ``record_pick_clv`` to look up the closing line.
+#
+# Schema source of truth: ``src.fetchers.odds_ingestor.parse_odds_response``.
+#   - 1X2 :     market="1x2", selection in {"home","draw","away"}
+#   - BTTS :    market="btts", selection in {"yes","no"}
+#   - Over/Under: market="over_1_5"|"over_2_5"|"over_3_5",
+#                 selection in {"over","under"}
+#
+# Double Chance, Score Exact, Half-time / Full-time, Buteurs : not stored in
+# closing_odds today (no closing line). Picks on those markets skip CLV.
+_CLV_LABEL_MAP: dict[str, tuple[str, str]] = {
+    # 1X2
+    "Victoire domicile": ("1x2", "home"),
+    "Victoire extérieur": ("1x2", "away"),
+    "Match nul": ("1x2", "draw"),
+    "Nul": ("1x2", "draw"),
+    # BTTS (Both Teams To Score)
+    "BTTS Oui": ("btts", "yes"),
+    "BTTS Non": ("btts", "no"),
+    # Totals — Over
+    "Over 1.5 buts": ("over_1_5", "over"),
+    "Over 2.5 buts": ("over_2_5", "over"),
+    "Over 3.5 buts": ("over_3_5", "over"),
+    # Totals — Under (same closing rows, opposite selection)
+    "Under 1.5 buts": ("over_1_5", "under"),
+    "Under 2.5 buts": ("over_2_5", "under"),
+    "Under 3.5 buts": ("over_3_5", "under"),
 }
 
 
 def _record_pick_clv_safely(bet: dict, *, result_val: str) -> None:
-    """Record per-pick CLV for a resolved football 1X2 best_bet.
+    """Record per-pick CLV for a resolved football best_bet.
 
     Called immediately after a bet is updated to WIN/LOSS. Skips:
       - VOID / PENDING (no useful CLV signal),
-      - non-1X2 markets (out of scope until further wiring PRs),
+      - markets without a closing_odds mapping (Double Chance, Score Exact,
+        Buteurs, …) — see ``_CLV_LABEL_MAP`` for the exhaustive list,
       - rows missing ``fixture_id`` or ``odds``.
 
     Never raises — CLV recording is observability, not correctness.
@@ -825,9 +844,10 @@ def _record_pick_clv_safely(bet: dict, *, result_val: str) -> None:
         return
 
     market_label = (bet.get("market") or "").strip()
-    selection = _CLV_1X2_LABEL_MAP.get(market_label)
-    if selection is None:
+    mapping = _CLV_LABEL_MAP.get(market_label)
+    if mapping is None:
         return
+    closing_market, selection = mapping
 
     fixture_id = bet.get("fixture_id")
     if fixture_id is None or fixture_id == "":
@@ -844,7 +864,7 @@ def _record_pick_clv_safely(bet: dict, *, result_val: str) -> None:
         record_pick_clv(
             best_bet_id=bet["id"],
             fixture_id=str(fixture_id),
-            market="1x2",
+            market=closing_market,
             selection=selection,
             displayed_odds=displayed_odds,
         )
