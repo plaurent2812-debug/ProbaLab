@@ -145,19 +145,31 @@ def _try_meta_blend(
             logger.info("Phase 2 meta-learner unavailable — no model files found, using pure stats")
             return False
 
-        # 1X2 blend
+        # 1X2 blend — preserve 4 decimals (master plan precision fix).
         if (
             meta_preds.get("proba_home_meta") is not None
             and meta_preds.get("proba_draw_meta") is not None
             and meta_preds.get("proba_away_meta") is not None
         ):
             blended_home = round(
-                WEIGHT_STATS * final["proba_home"] + WEIGHT_AI * meta_preds["proba_home_meta"]
+                WEIGHT_STATS * final["proba_home"] + WEIGHT_AI * meta_preds["proba_home_meta"],
+                4,
             )
             blended_draw = round(
-                WEIGHT_STATS * final["proba_draw"] + WEIGHT_AI * meta_preds["proba_draw_meta"]
+                WEIGHT_STATS * final["proba_draw"] + WEIGHT_AI * meta_preds["proba_draw_meta"],
+                4,
             )
-            blended_away = 100 - blended_home - blended_draw
+            blended_away = round(
+                WEIGHT_STATS * final["proba_away"] + WEIGHT_AI * meta_preds["proba_away_meta"],
+                4,
+            )
+            # Renormalize to sum exactly to 100 (modulo float).
+            total = blended_home + blended_draw + blended_away
+            if total > 0:
+                scale = 100.0 / total
+                blended_home = round(blended_home * scale, 4)
+                blended_draw = round(blended_draw * scale, 4)
+                blended_away = round(blended_away * scale, 4)
             final["proba_home"] = blended_home
             final["proba_draw"] = blended_draw
             final["proba_away"] = blended_away
@@ -165,7 +177,8 @@ def _try_meta_blend(
         # BTTS blend
         if meta_preds.get("proba_btts_meta") is not None and final.get("proba_btts") is not None:
             final["proba_btts"] = round(
-                WEIGHT_STATS * final["proba_btts"] + WEIGHT_AI * meta_preds["proba_btts_meta"]
+                WEIGHT_STATS * final["proba_btts"] + WEIGHT_AI * meta_preds["proba_btts_meta"],
+                4,
             )
 
         # Over 1.5 blend
@@ -174,7 +187,9 @@ def _try_meta_blend(
             and final.get("proba_over_15") is not None
         ):
             final["proba_over_15"] = round(
-                WEIGHT_STATS * final["proba_over_15"] + WEIGHT_AI * meta_preds["proba_over_15_meta"]
+                WEIGHT_STATS * final["proba_over_15"]
+                + WEIGHT_AI * meta_preds["proba_over_15_meta"],
+                4,
             )
 
         # Over 2.5 blend
@@ -184,7 +199,8 @@ def _try_meta_blend(
         ):
             final["proba_over_2_5"] = round(
                 WEIGHT_STATS * final["proba_over_2_5"]
-                + WEIGHT_AI * meta_preds["proba_over_25_meta"]
+                + WEIGHT_AI * meta_preds["proba_over_25_meta"],
+                4,
             )
 
         logger.info(
