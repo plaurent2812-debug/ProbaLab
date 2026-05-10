@@ -241,16 +241,26 @@ def _impute(X: NDArray[np.float32], model_name: str) -> NDArray[np.float32]:
     return X
 
 
-def predict_1x2(context: dict) -> dict[str, int] | None:
+def predict_1x2(context: dict) -> dict[str, float] | None:
     """Predict Home / Draw / Away probabilities using the XGBoost 1X2 model.
 
     Args:
         context: Match context dict (see :func:`build_feature_vector`).
 
     Returns:
-        Dict with keys ``ml_home``, ``ml_draw``, ``ml_away`` (each an
-        integer percentage), or ``None`` if the ``xgb_1x2`` model is not
-        loaded.
+        Dict with keys ``ml_home``, ``ml_draw``, ``ml_away`` (each a float
+        in the 0..100 percent scale, rounded to 4 decimals). The sum is
+        normalized to exactly 100 modulo flottant. Returns ``None`` if
+        the ``xgb_1x2`` model is not loaded.
+
+    Note (master plan precision fix):
+        Previously this returned dict[str, int] (round(p * 100)). The
+        integer arithmetic dropped ~0.005 of probability mass per pick
+        on average and degraded the Brier score in expectation. The
+        scale stays at 0..100 (compatible with the 328 downstream call
+        sites) but the values are now float with 4 decimals — enough
+        precision for Brier/ECE/CLV, narrow enough to fit cleanly in
+        ``numeric(7,4)`` columns (see migration 063).
     """
     if "xgb_1x2" not in _model_cache:
         return None
@@ -287,13 +297,22 @@ def predict_1x2(context: dict) -> dict[str, int] | None:
         )
         proba_map = {"A": probas[0], "D": probas[1], "H": probas[2]}
 
-    ml_home = round(proba_map.get("H", 0.33) * 100)
-    ml_draw = round(proba_map.get("D", 0.33) * 100)
-    ml_away = 100 - ml_home - ml_draw  # Ensure sum == 100
+    # Raw 0..100 % with 4 decimals preserved.
+    ml_home = round(float(proba_map.get("H", 0.33)) * 100, 4)
+    ml_draw = round(float(proba_map.get("D", 0.33)) * 100, 4)
+    ml_away = round(float(proba_map.get("A", 0.34)) * 100, 4)
+
+    # Renormalize so the three values sum to exactly 100.0 (modulo float).
+    total = ml_home + ml_draw + ml_away
+    if total > 0:
+        scale = 100.0 / total
+        ml_home = round(ml_home * scale, 4)
+        ml_draw = round(ml_draw * scale, 4)
+        ml_away = round(ml_away * scale, 4)
     return {"ml_home": ml_home, "ml_draw": ml_draw, "ml_away": ml_away}
 
 
-def predict_binary(model_name: str, context: dict) -> int | None:
+def predict_binary(model_name: str, context: dict) -> float | None:
     """Predict a binary outcome probability (e.g. BTTS, Over 2.5).
 
     Args:
@@ -302,8 +321,13 @@ def predict_binary(model_name: str, context: dict) -> int | None:
         context: Match context dict (see :func:`build_feature_vector`).
 
     Returns:
-        Probability of the positive class as an integer percentage
-        (0–100), or ``None`` if the requested model is not loaded.
+        Probability of the positive class as a float in [0, 100] with up
+        to 4 decimals, or ``None`` if the requested model is not loaded.
+
+    Note (master plan precision fix):
+        Returned ``int`` (round(p*100)) previously. Now ``float`` with 4
+        decimals so the calibrated probability survives to the DB. See
+        ``predict_1x2`` docstring for the rationale.
     """
     if model_name not in _model_cache:
         return None
@@ -319,12 +343,12 @@ def predict_binary(model_name: str, context: dict) -> int | None:
     if calibrators and len(calibrators) == 2:
         try:
             p_cal = calibrators[1].predict([probas[1]])[0]
-            return round(float(np.clip(p_cal, 0.01, 0.99)) * 100)
+            return round(float(np.clip(p_cal, 0.01, 0.99)) * 100, 4)
         except Exception:
             pass  # Fallback to raw
 
     # probas[1] = probabilité de la classe positive (True/1)
-    return round(float(probas[1]) * 100)
+    return round(float(probas[1]) * 100, 4)
 
 
 def predict_total_goals(context: dict) -> float | None:

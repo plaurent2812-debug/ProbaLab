@@ -189,7 +189,8 @@ class TestPredict1x2:
         assert "ml_away" in result
 
     @patch("src.models.ml_predictor._model_cache")
-    def test_probabilities_are_integers(self, mock_cache):
+    def test_probabilities_are_floats_in_0_100(self, mock_cache):
+        """Master plan precision fix: probabilités float (4 décimales) sur l'échelle 0..100."""
         model = _make_mock_model(n_classes=3)
         le = _make_mock_label_encoder(["A", "D", "H"])
         mock_cache.__contains__ = lambda self, k: k == "xgb_1x2"
@@ -203,9 +204,11 @@ class TestPredict1x2:
         )
 
         result = predict_1x2(_full_context())
-        assert isinstance(result["ml_home"], int)
-        assert isinstance(result["ml_draw"], int)
-        assert isinstance(result["ml_away"], int)
+        assert isinstance(result["ml_home"], float)
+        assert isinstance(result["ml_draw"], float)
+        assert isinstance(result["ml_away"], float)
+        for key in ("ml_home", "ml_draw", "ml_away"):
+            assert 0.0 <= result[key] <= 100.0
 
     @patch("src.models.ml_predictor._model_cache")
     def test_label_encoder_maps_correctly(self, mock_cache):
@@ -254,7 +257,8 @@ class TestPredictBinary:
         assert result is None
 
     @patch("src.models.ml_predictor._model_cache")
-    def test_returns_integer_percentage(self, mock_cache):
+    def test_returns_float_percentage(self, mock_cache):
+        """Master plan precision fix: float (4 décimales) sur l'échelle 0..100."""
         model = _make_mock_model(n_classes=2)
         payload = {"model": model, "imputer": None}
         mock_cache.__contains__ = lambda self, k: k == "xgb_btts"
@@ -262,8 +266,8 @@ class TestPredictBinary:
         mock_cache.get = lambda k, default=None: payload if k == "xgb_btts" else default
 
         result = predict_binary("xgb_btts", _full_context())
-        assert isinstance(result, int)
-        assert 0 <= result <= 100
+        assert isinstance(result, float)
+        assert 0.0 <= result <= 100.0
 
     @patch("src.models.ml_predictor._model_cache")
     def test_uses_positive_class_probability(self, mock_cache):
