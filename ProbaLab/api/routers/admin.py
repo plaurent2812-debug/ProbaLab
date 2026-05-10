@@ -18,6 +18,7 @@ from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Requ
 from api.auth import verify_cron_auth, verify_internal_auth
 from api.schemas import RunPipelineRequest
 from src.config import supabase
+from src.monitoring.daily_health_snapshot import run_daily_snapshot as run_daily_health_snapshot
 from src.monitoring.provider_health import recent_failures as recent_provider_failures
 
 
@@ -318,3 +319,46 @@ def admin_data_health(
             "by_provider": by_provider,
         },
     }
+
+
+@router.post(
+    "/api/admin/run-daily-health",
+    dependencies=[Depends(_require_internal_auth)],
+    summary="Trigger the daily health snapshot writer (master plan Phase 3)",
+)
+def admin_run_daily_health() -> dict:
+    """Run ``daily_health_snapshot.run_daily_snapshot`` and forward its result.
+
+    Designed to be called once a day by a cron (Trigger.dev, APScheduler,
+    GitHub Actions schedule). Never returns 500 :
+
+    - On writer status='OK' → 200 with body.
+    - On writer status='ERROR' → 503 (transient: cron can retry).
+    - On unexpected exception → 503 with status='ERROR'.
+    """
+    try:
+        result = run_daily_health_snapshot()
+    except Exception:
+        logger.exception("run_daily_health_snapshot raised")
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "ok": False,
+                "status": "ERROR",
+                "rows_inserted": 0,
+                "sports": [],
+            },
+        )
+
+    status_val = result.get("status", "ERROR")
+    payload = {
+        "ok": status_val == "OK",
+        "status": status_val,
+        "rows_inserted": int(result.get("rows_inserted", 0)),
+        "sports": list(result.get("sports", [])),
+    }
+
+    if status_val != "OK":
+        raise HTTPException(status_code=503, detail=payload)
+
+    return payload
