@@ -31,6 +31,7 @@ from api.schemas import (
     UpdateBetResultRequest,
 )
 from src.config import supabase
+from src.monitoring.pick_clv import record_pick_clv
 from src.nhl.constants import NHL_FINISHED_STATUSES
 from src.nhl.constants import NHL_NAME_TO_ABBREV as _NHL_NAME_TO_ABBREV
 
@@ -791,6 +792,66 @@ def get_best_bets(
     return result
 
 
+# ─── CLV wiring (master plan Phase 4.2) ──────────────────────────
+
+
+# Football 1X2 market label → (canonical market name, selection) used by
+# ``record_pick_clv`` to look up the closing line in closing_odds.
+# Scope of this PR is intentionally limited to 1X2 — BTTS, Over/Under and
+# Double Chance will be wired in follow-up PRs (each comes with its own
+# market normalization rules in closing_odds).
+_CLV_1X2_LABEL_MAP: dict[str, str] = {
+    "Victoire domicile": "home",
+    "Victoire extérieur": "away",
+    "Match nul": "draw",
+    "Nul": "draw",
+}
+
+
+def _record_pick_clv_safely(bet: dict, *, result_val: str) -> None:
+    """Record per-pick CLV for a resolved football 1X2 best_bet.
+
+    Called immediately after a bet is updated to WIN/LOSS. Skips:
+      - VOID / PENDING (no useful CLV signal),
+      - non-1X2 markets (out of scope until further wiring PRs),
+      - rows missing ``fixture_id`` or ``odds``.
+
+    Never raises — CLV recording is observability, not correctness.
+    The downstream ``record_pick_clv`` itself swallows DB errors; this
+    helper adds a defensive boundary so any future regression here
+    cannot break the resolver pipeline.
+    """
+    if result_val not in ("WIN", "LOSS"):
+        return
+
+    market_label = (bet.get("market") or "").strip()
+    selection = _CLV_1X2_LABEL_MAP.get(market_label)
+    if selection is None:
+        return
+
+    fixture_id = bet.get("fixture_id")
+    if fixture_id is None or fixture_id == "":
+        return
+
+    try:
+        displayed_odds = float(bet.get("odds") or 0)
+    except (TypeError, ValueError):
+        return
+    if displayed_odds <= 1.0:
+        return
+
+    try:
+        record_pick_clv(
+            best_bet_id=bet["id"],
+            fixture_id=str(fixture_id),
+            market="1x2",
+            selection=selection,
+            displayed_odds=displayed_odds,
+        )
+    except Exception:  # pragma: no cover - defensive
+        logger.warning("CLV recording failed for bet_id=%s", bet.get("id"), exc_info=True)
+
+
 @router.patch("/api/best-bets/{bet_id}/result", response_model=UpdateBetResultResponse)
 def update_bet_result(
     bet_id: int,
@@ -816,6 +877,10 @@ def update_bet_result(
             .eq("id", bet_id)
             .execute()
         )
+        # Record per-pick CLV (best-effort; never blocks the resolver).
+        rows = resp.data or []
+        if rows:
+            _record_pick_clv_safely(rows[0], result_val=result_val)
         return {"ok": True, "updated": resp.data}
     except Exception:
         logger.exception("update_bet_result failed for bet_id=%s", bet_id)
@@ -1071,6 +1136,7 @@ def resolve_best_bets(
                     .eq("id", bet["id"])
                     .execute()
                 )
+                _record_pick_clv_safely(bet, result_val=result_val)
                 resolved.append(
                     {
                         "id": bet["id"],
